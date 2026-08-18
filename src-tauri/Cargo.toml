@@ -1,6 +1,6 @@
 [package]
 name = "tabarak"
-version = "0.2.2"
+version = "0.2.3"
 description = "Tabarak - برنامج حسابات المحلات والمتاجر"
 authors = ["you"]
 edition = "2021"

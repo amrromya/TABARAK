@@ -215,7 +215,7 @@ export function LoginScreen({ onLogin }: { onLogin: (account: Account) => void }
         {licenseInfo && (() => {
           const expiry = new Date(licenseInfo.expiry_date);
           const now = new Date();
-          const daysLeft = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          const daysLeft = Math.floor((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
           const isExpired = daysLeft <= 0;
           const isWarning = daysLeft > 0 && daysLeft <= 30;
           return (

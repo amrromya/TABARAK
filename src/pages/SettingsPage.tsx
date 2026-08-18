@@ -697,7 +697,7 @@ export function SettingsPage() {
             {licenseInfo && (() => {
               const expiry = new Date(licenseInfo.expiry_date);
               const now = new Date();
-              const daysLeft = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              const daysLeft = Math.floor((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
               const isExpired = daysLeft <= 0;
               return (
                 <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: isExpired ? "#fef2f2" : daysLeft <= 30 ? "#fffbeb" : "#ecfdf5", color: isExpired ? "#991b1b" : daysLeft <= 30 ? "#92400e" : "#065f46", fontSize: 13 }}>
