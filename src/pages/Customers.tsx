@@ -81,11 +81,25 @@ export function Customers({
   const [expandedSaleItems, setExpandedSaleItems] = useState<SaleItem[]>([]);
 
   const [dropdownOpen, setDropdownOpen] = useState<number | null>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
 
   const [settings, setSettings] = useState<Settings | null>(null);
   const [printStatement, setPrintStatement] = useState<StatementMode>(null);
 
   const notify = useToast();
+
+  useEffect(() => {
+    if (dropdownOpen === null) return;
+    const handle = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".cust-dropdown-wrap")) {
+        setDropdownOpen(null);
+        setDropdownPos(null);
+      }
+    };
+    document.addEventListener("mousedown", handle, true);
+    return () => document.removeEventListener("mousedown", handle, true);
+  }, [dropdownOpen]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -226,6 +240,7 @@ export function Customers({
     mode: Exclude<StatementMode, null>,
   ) => {
     setDropdownOpen(null);
+    setDropdownPos(null);
     setStatementCustomer(customer);
     setStatementMode(mode);
     setDateFrom("");
@@ -472,7 +487,14 @@ export function Customers({
                       className="btn sm btn-statement"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setDropdownOpen(dropdownOpen === c.id ? null : c.id);
+                        if (dropdownOpen === c.id) {
+                          setDropdownOpen(null);
+                          setDropdownPos(null);
+                        } else {
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                          setDropdownPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+                          setDropdownOpen(c.id);
+                        }
                       }}
                     >
                       📑 الكشف
@@ -480,8 +502,8 @@ export function Customers({
                         {dropdownOpen === c.id ? "▲" : "▼"}
                       </span>
                     </button>
-                    {dropdownOpen === c.id && (
-                      <div className="cust-dropdown-menu">
+                    {dropdownOpen === c.id && dropdownPos && (
+                      <div className="cust-dropdown-menu" style={{ position: "fixed", top: dropdownPos.top, right: dropdownPos.right, zIndex: 9999 }}>
                         <button
                           type="button"
                           className="cust-dd-item"
@@ -653,6 +675,7 @@ export function Customers({
             setStatementMode(null);
           }}
           width="880px"
+          className="modal-wide"
         >
           <div className="stmt-header">
             <div className="stmt-customer-info">
@@ -954,6 +977,7 @@ export function Customers({
             setStatementMode(null);
           }}
           width="980px"
+          className="modal-wide"
         >
           <div className="stmt-header">
             <div className="stmt-customer-info">

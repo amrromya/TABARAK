@@ -1214,7 +1214,7 @@ nav::-webkit-scrollbar-thumb:hover {
   justify-content: center;
   padding: 5vh 16px;
   z-index: 100;
-  overflow-y: auto;
+  overflow: auto;
 }
 
 .modal {
@@ -1260,8 +1260,14 @@ nav::-webkit-scrollbar-thumb:hover {
 
 .modal-body {
   padding: 20px;
-  max-height: 70vh;
+  max-height: 80vh;
   overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.modal-wide .modal-body {
+  max-height: 85vh;
+  padding: 24px;
 }
 
 .modal-grid {
@@ -4598,16 +4604,14 @@ nav::-webkit-scrollbar-thumb:hover {
 }
 
 .cust-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  position: fixed;
   width: 270px;
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 14px;
   box-shadow: 0 20px 48px rgba(15, 23, 42, 0.22), 0 4px 10px rgba(15, 23, 42, 0.08);
   padding: 10px;
-  z-index: 9999 !important;
+  z-index: 9999;
   animation: stmt-dd-in 0.18s ease;
 }
 
@@ -4912,8 +4916,9 @@ nav::-webkit-scrollbar-thumb:hover {
 .stmt-table-wrap {
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  overflow: hidden;
+  overflow: auto;
   background: #fff;
+  margin-bottom: 12px;
 }
 
 .stmt-table {
@@ -5161,7 +5166,7 @@ nav::-webkit-scrollbar-thumb:hover {
 }
 
 .stmt-det-wrap {
-  max-height: 480px;
+  max-height: 600px;
   overflow: auto;
 }
 
@@ -6993,7 +6998,7 @@ nav::-webkit-scrollbar-thumb:hover {
 
   .modal-body {
     width: 95vw;
-    max-height: 90vh;
+    max-height: 85vh;
     padding: 16px;
   }
 
