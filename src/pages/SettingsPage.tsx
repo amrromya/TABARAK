@@ -13,6 +13,7 @@ const ALL_PERMISSIONS: { key: Permission; label: string; group: string }[] = [
   { key: "view_warehouses", label: "عرض المستودعات", group: "القوائم" },
   { key: "view_sales", label: "عرض المبيعات", group: "القوائم" },
   { key: "view_purchases", label: "عرض المشتريات", group: "القوائم" },
+  { key: "view_suppliers", label: "عرض الموردين", group: "القوائم" },
   { key: "view_customers", label: "عرض العملاء", group: "القوائم" },
   { key: "view_employees", label: "عرض الموظفين", group: "القوائم" },
   { key: "view_expenses", label: "عرض المصروفات", group: "القوائم" },
@@ -54,6 +55,7 @@ const ALL_MENUS: { key: string; label: string; icon: string }[] = [
   { key: "inventory", label: "المخزون", icon: "📦" },
   { key: "warehouses", label: "المستودعات", icon: "🏬" },
   { key: "purchases", label: "المشتريات", icon: "📥" },
+  { key: "suppliers", label: "الموردين", icon: "🚚" },
   { key: "customers", label: "العملاء والديون", icon: "🤝" },
   { key: "employees", label: "الموظفين", icon: "👥" },
   { key: "attendance", label: "الحضور والانصراف", icon: "🕐" },
@@ -171,6 +173,9 @@ export function SettingsPage() {
 
   const [activeSection, setActiveSection] = useState<SectionKey | null>(null);
 
+  const [passModal, setPassModal] = useState<{ section: SectionKey; password: string } | null>(null);
+  const [passInput, setPassInput] = useState("");
+
   const [showFeatures, setShowFeatures] = useState(false);
   const [featuresPass, setFeaturesPass] = useState("");
   const [featuresPassOk, setFeaturesPassOk] = useState(false);
@@ -264,14 +269,20 @@ export function SettingsPage() {
   const openSection = (s: SectionKey) => {
     const section = SECTIONS.find((x) => x.key === s);
     if (section?.password) {
-      const pass = prompt("أدخل رمز الدخول:");
-      if (pass === section.password) {
-        setActiveSection(s);
-      } else if (pass !== null) {
-        notify("الرمز خاطئ", "error");
-      }
+      setPassModal({ section: s, password: section.password });
+      setPassInput("");
     } else {
       setActiveSection(s);
+    }
+  };
+
+  const verifyPass = () => {
+    if (!passModal) return;
+    if (passInput === passModal.password) {
+      setActiveSection(passModal.section);
+      setPassModal(null);
+    } else if (passInput.length > 0) {
+      notify("الرمز خاطئ", "error");
     }
   };
 
@@ -899,6 +910,46 @@ export function SettingsPage() {
             </div>
             <div className="settings-modal-body">
               {renderSectionContent()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {passModal && (
+        <div className="settings-modal-overlay" onClick={() => setPassModal(null)}>
+          <div className="settings-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+            <div className="settings-modal-header" style={{ background: SECTIONS.find((x) => x.key === passModal.section)?.gradient || "linear-gradient(135deg, #6366f1, #4f46e5)" }}>
+              <span className="settings-modal-icon">🔒</span>
+              <h2>أدخل رمز الدخول</h2>
+              <button className="settings-modal-close" onClick={() => setPassModal(null)}>✕</button>
+            </div>
+            <div className="settings-modal-body" style={{ textAlign: "center", padding: "24px 20px" }}>
+              <p style={{ marginBottom: 16, fontSize: 13, color: "#6b7280" }}>للوصول إلى "{SECTIONS.find((x) => x.key === passModal.section)?.title}"</p>
+              <input
+                type="password"
+                value={passInput}
+                onChange={(e) => setPassInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") verifyPass(); }}
+                placeholder="••••"
+                maxLength={10}
+                autoFocus
+                style={{
+                  width: 180,
+                  padding: "12px 16px",
+                  borderRadius: 12,
+                  border: "2px solid #e5e7eb",
+                  fontSize: 20,
+                  letterSpacing: 10,
+                  textAlign: "center",
+                  outline: "none",
+                  textAlignLast: "center",
+                  direction: "ltr",
+                }}
+              />
+              <div style={{ marginTop: 20, display: "flex", gap: 8, justifyContent: "center" }}>
+                <button className="btn primary" onClick={verifyPass}>تأكيد</button>
+                <button className="btn" onClick={() => setPassModal(null)}>إلغاء</button>
+              </div>
             </div>
           </div>
         </div>

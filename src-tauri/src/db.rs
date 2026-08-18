@@ -70,6 +70,8 @@ fn migrate(conn: &Connection) -> Result<(), String> {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             phone TEXT,
+            address TEXT,
+            credit_limit REAL DEFAULT 0,
             notes TEXT,
             created_at TEXT DEFAULT (datetime('now','localtime'))
         );
@@ -384,6 +386,8 @@ fn migrate(conn: &Connection) -> Result<(), String> {
         "total_deficit",
         "REAL NOT NULL DEFAULT 0",
     )?;
+    ensure_column(conn, "suppliers", "address", "TEXT")?;
+    ensure_column(conn, "suppliers", "credit_limit", "REAL DEFAULT 0")?;
 
     // إنشاء موظف افتراضي "المدير العام" إذا لم يكن موجودًا
     conn.execute(

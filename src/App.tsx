@@ -31,6 +31,7 @@ import { MaintenanceTechnicians } from "./pages/maintenance/MaintenanceTechnicia
 import { ReceiptVouchers } from "./pages/ReceiptVouchers";
 import { PaymentVouchers } from "./pages/PaymentVouchers";
 import { WarehouseTransfers } from "./pages/WarehouseTransfers";
+import { SuppliersPage } from "./pages/SuppliersPage";
 import { Activation } from "./pages/Activation";
 import type { Account } from "./types";
 import { api } from "./api";
@@ -40,6 +41,7 @@ const NAV = [
   { key: "inventory", label: "المخزون", icon: "📦" },
   { key: "warehouses", label: "المستودعات", icon: "🏬" },
   { key: "purchases", label: "سجل المشتريات", icon: "📦" },
+  { key: "suppliers", label: "الموردين", icon: "🚚" },
   { key: "customers", label: "العملاء والديون", icon: "🤝" },
   { key: "employees", label: "الموظفين", icon: "👥" },
   { key: "attendance", label: "الحضور والانصراف", icon: "🕐" },
@@ -260,6 +262,7 @@ function Shell({ account }: { account: Account }) {
             onNewPurchase={() => openPosWindow("purchase-pos", undefined, account)}
           />
         )}
+        {safePage === "suppliers" && <SuppliersPage />}
         {safePage === "customers" && (
           <Customers
             onViewSale={(id) => openPosWindow("sales-pos", id, account)}

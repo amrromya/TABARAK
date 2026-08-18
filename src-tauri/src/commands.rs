@@ -570,7 +570,7 @@ pub fn get_product_movements(
 pub fn list_suppliers(state: State<AppState>) -> Result<Vec<Supplier>, String> {
     let conn = get_db(&state)?;
     let mut stmt = conn
-        .prepare("SELECT id, name, phone, notes FROM suppliers ORDER BY name COLLATE NOCASE")
+        .prepare("SELECT id, name, phone, address, credit_limit, notes FROM suppliers ORDER BY name COLLATE NOCASE")
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |r| {
@@ -578,7 +578,9 @@ pub fn list_suppliers(state: State<AppState>) -> Result<Vec<Supplier>, String> {
                 id: r.get(0)?,
                 name: r.get(1)?,
                 phone: r.get(2)?,
-                notes: r.get(3)?,
+                address: r.get(3)?,
+                credit_limit: r.get::<_, Option<f64>>(4)?.unwrap_or(0.0),
+                notes: r.get(5)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -592,8 +594,8 @@ pub fn create_supplier(state: State<AppState>, input: NewSupplier) -> Result<Sup
         return Err("اسم المورد مطلوب".into());
     }
     conn.execute(
-        "INSERT INTO suppliers (name, phone, notes) VALUES (?1, ?2, ?3)",
-        params![input.name.trim(), input.phone, input.notes],
+        "INSERT INTO suppliers (name, phone, address, credit_limit, notes) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![input.name.trim(), input.phone, input.address, input.credit_limit.unwrap_or(0.0), input.notes],
     )
     .map_err(|e| e.to_string())?;
     let id = conn.last_insert_rowid();
@@ -601,6 +603,29 @@ pub fn create_supplier(state: State<AppState>, input: NewSupplier) -> Result<Sup
         id,
         name: input.name.trim().to_string(),
         phone: input.phone,
+        address: input.address,
+        credit_limit: input.credit_limit.unwrap_or(0.0),
+        notes: input.notes,
+    })
+}
+
+#[tauri::command]
+pub fn update_supplier(state: State<AppState>, id: i64, input: NewSupplier) -> Result<Supplier, String> {
+    let conn = get_db(&state)?;
+    if input.name.trim().is_empty() {
+        return Err("اسم المورد مطلوب".into());
+    }
+    conn.execute(
+        "UPDATE suppliers SET name = ?1, phone = ?2, address = ?3, credit_limit = ?4, notes = ?5 WHERE id = ?6",
+        params![input.name.trim(), input.phone, input.address, input.credit_limit.unwrap_or(0.0), input.notes, id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(Supplier {
+        id,
+        name: input.name.trim().to_string(),
+        phone: input.phone,
+        address: input.address,
+        credit_limit: input.credit_limit.unwrap_or(0.0),
         notes: input.notes,
     })
 }
@@ -611,6 +636,150 @@ pub fn delete_supplier(state: State<AppState>, id: i64) -> Result<(), String> {
     conn.execute("DELETE FROM suppliers WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_supplier_account(state: State<AppState>, supplier_id: i64) -> Result<SupplierAccountSummary, String> {
+    let conn = get_db(&state)?;
+
+    let total_purchases: f64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(total), 0) FROM purchases WHERE supplier_id = ?1",
+            params![supplier_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let total_purchase_returns: f64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(total), 0) FROM purchase_returns WHERE supplier_id = ?1",
+            params![supplier_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let total_paid: f64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(amount), 0) FROM receipt_vouchers WHERE source_type = 'supplier' AND source_id = ?1",
+            params![supplier_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let total_received: f64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(amount), 0) FROM payment_vouchers WHERE dest_type = 'supplier' AND dest_id = ?1",
+            params![supplier_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let balance = total_purchases - total_purchase_returns - total_paid + total_received;
+
+    Ok(SupplierAccountSummary {
+        supplier_id,
+        total_purchases,
+        total_purchase_returns,
+        total_paid,
+        total_received,
+        balance,
+    })
+}
+
+#[derive(serde::Serialize)]
+pub struct SupplierAccountSummary {
+    pub supplier_id: i64,
+    pub total_purchases: f64,
+    pub total_purchase_returns: f64,
+    pub total_paid: f64,
+    pub total_received: f64,
+    pub balance: f64,
+}
+
+#[tauri::command]
+pub fn get_supplier_transactions(state: State<AppState>, supplier_id: i64) -> Result<Vec<SupplierTransaction>, String> {
+    let conn = get_db(&state)?;
+    let mut txns: Vec<SupplierTransaction> = Vec::new();
+
+    // المشتريات
+    {
+        let mut stmt = conn
+            .prepare("SELECT id, date, total, notes FROM purchases WHERE supplier_id = ?1 ORDER BY date DESC")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt.query_map(params![supplier_id], |r| {
+            Ok(SupplierTransaction {
+                date: r.get::<_, String>(1)?,
+                description: format!("مشتريات رقم P-{}", r.get::<_, i64>(0)?),
+                debit: r.get::<_, f64>(2)?,
+                credit: 0.0,
+                notes: r.get::<_, Option<String>>(3)?,
+            })
+        }).map_err(|e| e.to_string())?;
+        for r in rows { if let Ok(t) = r { txns.push(t); } }
+    }
+
+    // مردود المشتريات
+    {
+        let mut stmt = conn
+            .prepare("SELECT id, date, total, notes FROM purchase_returns WHERE supplier_id = ?1 ORDER BY date DESC")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt.query_map(params![supplier_id], |r| {
+            Ok(SupplierTransaction {
+                date: r.get::<_, String>(1)?,
+                description: format!("مردود مشتريات رقم {}", r.get::<_, i64>(0)?),
+                debit: 0.0,
+                credit: r.get::<_, f64>(2)?,
+                notes: r.get::<_, Option<String>>(3)?,
+            })
+        }).map_err(|e| e.to_string())?;
+        for r in rows { if let Ok(t) = r { txns.push(t); } }
+    }
+
+    // سندات القبض (مدفوعات للمورد)
+    {
+        let mut stmt = conn
+            .prepare("SELECT id, date, amount, notes FROM receipt_vouchers WHERE source_type = 'supplier' AND source_id = ?1 ORDER BY date DESC")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt.query_map(params![supplier_id], |r| {
+            Ok(SupplierTransaction {
+                date: r.get::<_, String>(1)?,
+                description: format!("سند قبض رقم {}", r.get::<_, i64>(0)?),
+                debit: 0.0,
+                credit: r.get::<_, f64>(2)?,
+                notes: r.get::<_, Option<String>>(3)?,
+            })
+        }).map_err(|e| e.to_string())?;
+        for r in rows { if let Ok(t) = r { txns.push(t); } }
+    }
+
+    // سندات الصرف (مبالغ من المورد)
+    {
+        let mut stmt = conn
+            .prepare("SELECT id, date, amount, notes FROM payment_vouchers WHERE dest_type = 'supplier' AND dest_id = ?1 ORDER BY date DESC")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt.query_map(params![supplier_id], |r| {
+            Ok(SupplierTransaction {
+                date: r.get::<_, String>(1)?,
+                description: format!("سند صرف رقم {}", r.get::<_, i64>(0)?),
+                debit: r.get::<_, f64>(2)?,
+                credit: 0.0,
+                notes: r.get::<_, Option<String>>(3)?,
+            })
+        }).map_err(|e| e.to_string())?;
+        for r in rows { if let Ok(t) = r { txns.push(t); } }
+    }
+
+    txns.sort_by(|a, b| b.date.cmp(&a.date));
+    Ok(txns)
+}
+
+#[derive(serde::Serialize)]
+pub struct SupplierTransaction {
+    pub date: String,
+    pub description: String,
+    pub debit: f64,
+    pub credit: f64,
+    pub notes: Option<String>,
 }
 
 // =============== العملاء ===============

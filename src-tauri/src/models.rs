@@ -41,6 +41,8 @@ pub struct Supplier {
     pub id: i64,
     pub name: String,
     pub phone: Option<String>,
+    pub address: Option<String>,
+    pub credit_limit: f64,
     pub notes: Option<String>,
 }
 
@@ -354,6 +356,8 @@ pub struct NewCategory {
 pub struct NewSupplier {
     pub name: String,
     pub phone: Option<String>,
+    pub address: Option<String>,
+    pub credit_limit: Option<f64>,
     pub notes: Option<String>,
 }
 

@@ -94,7 +94,13 @@ export const api = {
   listSuppliers: () => invoke<Supplier[]>("list_suppliers"),
   createSupplier: (input: NewSupplier) =>
     invoke<Supplier>("create_supplier", { input }),
+  updateSupplier: (id: number, input: NewSupplier) =>
+    invoke<Supplier>("update_supplier", { id, input }),
   deleteSupplier: (id: number) => invoke<void>("delete_supplier", { id }),
+  getSupplierAccount: (supplierId: number) =>
+    invoke<{ supplier_id: number; total_purchases: number; total_purchase_returns: number; total_paid: number; total_received: number; balance: number }>("get_supplier_account", { supplierId }),
+  getSupplierTransactions: (supplierId: number) =>
+    invoke<{ date: string; description: string; debit: number; credit: number; notes: string | null }[]>("get_supplier_transactions", { supplierId }),
 
   // العملاء والديون
   listCustomers: () => invoke<Customer[]>("list_customers"),

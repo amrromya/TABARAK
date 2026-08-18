@@ -34,6 +34,8 @@ export interface Supplier {
   id: number;
   name: string;
   phone: string | null;
+  address: string | null;
+  credit_limit: number;
   notes: string | null;
 }
 
@@ -492,6 +494,8 @@ export interface NewAttendance {
 export interface NewSupplier {
   name: string;
   phone?: string | null;
+  address?: string | null;
+  credit_limit?: number | null;
   notes?: string | null;
 }
 
@@ -539,6 +543,7 @@ export type Permission =
   | "view_warehouses"
   | "view_sales"
   | "view_purchases"
+  | "view_suppliers"
   | "view_customers"
   | "view_employees"
   | "view_expenses"
