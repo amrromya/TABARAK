@@ -117,6 +117,63 @@ export function Inventory({
     }
   };
 
+  const printBarcode = (p: Product) => {
+    let ps = { barcodePrinter: "", barcodeWidth: 50, barcodeHeight: 25, barcodeFontSize: 10, barcodeShowName: true, barcodeShowPrice: true, barcodeShowBarcode: true };
+    try { const raw = localStorage.getItem("tabarak_print_settings"); if (raw) ps = { ...ps, ...JSON.parse(raw) }; } catch {}
+    const barcodeValue = p.barcode || String(p.id);
+    const frame = document.createElement("iframe");
+    frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:none";
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument || frame.contentWindow?.document;
+    if (!doc) { document.body.removeChild(frame); return; }
+    doc.open();
+    doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+      <style>
+        @page{size:${ps.barcodeWidth}mm ${ps.barcodeHeight + (ps.barcodeShowName ? 12 : 0) + (ps.barcodeShowPrice ? 8 : 0)}mm;margin:0}
+        body{margin:0;padding:4px;font-family:system-ui,sans-serif;display:flex;justify-content:center;align-items:center}
+        .box{display:flex;flex-direction:column;align-items:center;gap:2px}
+        .name{font-size:${ps.barcodeFontSize + 2}px;font-weight:700}
+        .code{font-size:9px;color:#666;letter-spacing:1px}
+        .price{font-size:${ps.barcodeFontSize}px;font-weight:700;color:#0f8a5f}
+      </style></head><body>
+      <div class="box">
+        ${ps.barcodeShowName ? `<div class="name">${p.name}</div>` : ""}
+        <svg id="bc"></svg>
+        ${ps.barcodeShowBarcode ? `<div class="code">${barcodeValue}</div>` : ""}
+        ${ps.barcodeShowPrice ? `<div class="price">${p.sell_price.toFixed(2)} ج.م</div>` : ""}
+      </div>
+      <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.12.3/dist/JsBarcode.all.min.js"><\/script>
+      <script>
+        try {
+          JsBarcode("#bc", "${barcodeValue}", {
+            format: "CODE128",
+            width: ${Math.max(1, Math.floor(ps.barcodeWidth / 30))},
+            height: ${Math.min(ps.barcodeHeight * 2, 60)},
+            displayValue: false,
+            margin: 0
+          });
+          setTimeout(function(){
+            var pf = window.print;
+            ${ps.barcodePrinter ? `window.print = function(){
+              var iframe = document.createElement("iframe");
+              iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:none";
+              document.body.appendChild(iframe);
+              var idoc = iframe.contentDocument || iframe.contentWindow.document;
+              idoc.open();
+              idoc.write(document.documentElement.outerHTML);
+              idoc.close();
+              setTimeout(function(){ iframe.contentWindow.print(); }, 200);
+            };` : ""}
+            window.print();
+            window.print = pf;
+          }, 400);
+        } catch(e) { alert("خطأ في الباركود: " + e.message); }
+      <\/script>
+    </body></html>`);
+    doc.close();
+    setTimeout(() => document.body.removeChild(frame), 3000);
+  };
+
   const addCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCategory.trim()) return;
@@ -218,6 +275,9 @@ export function Inventory({
                   <td className="actions">
                     <button className="btn sm" onClick={() => openEdit(p)}>
                       تعديل
+                    </button>
+                    <button className="btn sm" onClick={() => printBarcode(p)}>
+                      🏷️ باركود
                     </button>
                     <button
                       className="btn sm danger"

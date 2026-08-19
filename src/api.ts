@@ -374,4 +374,8 @@ export const api = {
     invoke<string>("download_online_update", { url, fileName }),
   applyOnlineUpdate: (filePath: string) =>
     invoke<string>("apply_online_update", { filePath }),
+
+  // الطابعات
+  listPrinters: () =>
+    invoke<string[]>("list_printers"),
 };

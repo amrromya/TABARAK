@@ -195,6 +195,7 @@ pub fn run() {
             commands::check_online_update,
             commands::download_online_update,
             commands::apply_online_update,
+            commands::list_printers,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

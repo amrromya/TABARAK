@@ -7943,4 +7943,151 @@ nav::-webkit-scrollbar-thumb:hover {
   }
 }
 
+/* ========== Print Settings (settings modal) ========== */
+
+.print-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.print-section {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.print-section h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.print-fields {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.print-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 120px;
+}
+
+.print-field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.print-field select,
+.print-field input {
+  padding: 6px 10px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+  background: #fff;
+}
+
+.print-field select:focus,
+.print-field input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.print-toggles {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.print-sizes {
+  margin-top: 10px;
+}
+
+.print-sizes label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.print-size-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.print-size-chip {
+  padding: 5px 10px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.print-size-chip:hover {
+  border-color: #94a3b8;
+}
+
+.print-size-chip.active {
+  background: #0f172a;
+  color: #fff;
+  border-color: #0f172a;
+}
+
+.print-add-size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.print-add-size input {
+  padding: 6px 10px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.print-add-size input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.print-add-size span {
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.print-preview {
+  margin-top: 14px;
+  text-align: center;
+}
+
+.print-preview h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.barcode-preview-box {
+  margin: 0 auto;
+  transition: all 0.2s;
+}
 

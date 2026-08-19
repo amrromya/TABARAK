@@ -4301,3 +4301,20 @@ fn compare_versions(latest: &str, current: &str) -> bool {
     }
     false
 }
+
+// =============== الطابعات ===============
+
+#[tauri::command]
+pub fn list_printers() -> Result<Vec<String>, String> {
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", "Get-Printer | Select-Object -ExpandProperty Name"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let printers: Vec<String> = stdout
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+    Ok(printers)
+}

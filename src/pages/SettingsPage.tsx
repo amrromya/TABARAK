@@ -81,7 +81,7 @@ function saveAccounts(accounts: Account[]) {
   localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
 }
 
-type SectionKey = "store" | "warehouses" | "sync" | "branches" | "notifications" | "attendance_url" | "update" | "backup" | "reset" | "accounts" | "license";
+type SectionKey = "store" | "warehouses" | "sync" | "branches" | "notifications" | "attendance_url" | "printing" | "update" | "backup" | "reset" | "accounts" | "license";
 
 const FEATURES_KEY = "tabarak_features";
 
@@ -114,6 +114,7 @@ const SECTIONS: { key: SectionKey; icon: string; title: string; color: string; g
   { key: "branches", icon: "🏬", title: "الفروع", color: "#f59e0b", gradient: "linear-gradient(135deg, #f59e0b, #d97706)", password: "5506" },
   { key: "notifications", icon: "🔔", title: "اشعارات الحضور", color: "#ec4899", gradient: "linear-gradient(135deg, #ec4899, #db2777)" },
   { key: "attendance_url", icon: "📍", title: "رابط صفحة الحضور", color: "#14b8a6", gradient: "linear-gradient(135deg, #14b8a6, #0d9488)", password: "5506" },
+  { key: "printing", icon: "🖨️", title: "إعدادات الطباعة", color: "#64748b", gradient: "linear-gradient(135deg, #64748b, #475569)" },
   { key: "license", icon: "🔑", title: "تحديث التفعيل", color: "#6366f1", gradient: "linear-gradient(135deg, #6366f1, #4f46e5)" },
   { key: "update", icon: "📦", title: "تحديث البرنامج", color: "#0ea5e9", gradient: "linear-gradient(135deg, #0ea5e9, #0284c7)" },
   { key: "backup", icon: "💾", title: "النسخ الاحتياطي", color: "#06b6d4", gradient: "linear-gradient(135deg, #06b6d4, #0891b2)" },
@@ -172,6 +173,48 @@ export function SettingsPage() {
   const [newLicenseKey, setNewLicenseKey] = useState("");
 
   const [activeSection, setActiveSection] = useState<SectionKey | null>(null);
+  const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
+
+  // Print settings
+  const [printSettings, setPrintSettings] = useState<{
+    invoicePaper: string;
+    invoiceLandscape: boolean;
+    invoiceMargins: number;
+    invoiceHeader: boolean;
+    invoiceFooter: boolean;
+    barcodePrinter: string;
+    barcodeWidth: number;
+    barcodeHeight: number;
+    barcodeFontSize: number;
+    barcodeShowName: boolean;
+    barcodeShowPrice: boolean;
+    barcodeShowBarcode: boolean;
+    barcodeCustomSizes: { name: string; width: number; height: number }[];
+  }>(() => {
+    try {
+      const raw = localStorage.getItem("tabarak_print_settings");
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return {
+      invoicePaper: "A4",
+      invoiceLandscape: false,
+      invoiceMargins: 10,
+      invoiceHeader: true,
+      invoiceFooter: true,
+      barcodePrinter: "",
+      barcodeWidth: 50,
+      barcodeHeight: 25,
+      barcodeFontSize: 10,
+      barcodeShowName: true,
+      barcodeShowPrice: true,
+      barcodeShowBarcode: true,
+      barcodeCustomSizes: [] as { name: string; width: number; height: number }[],
+    };
+  });
+  const [selectedBarcodeSize, setSelectedBarcodeSize] = useState<string>("default");
+  const [newSizeName, setNewSizeName] = useState("");
+  const [newSizeW, setNewSizeW] = useState(50);
+  const [newSizeH, setNewSizeH] = useState(25);
 
   const [passModal, setPassModal] = useState<{ section: SectionKey; password: string } | null>(null);
   const [passInput, setPassInput] = useState("");
@@ -264,6 +307,7 @@ export function SettingsPage() {
     loadBranches();
     api.getAppVersion().then(setAppVersion).catch(() => {});
     api.getLicenseInfo().then(setLicenseInfo).catch(() => {});
+    api.listPrinters().then(setAvailablePrinters).catch(() => {});
   }, [notify, loadSync, loadBranches]);
 
   const openSection = (s: SectionKey) => {
@@ -795,6 +839,173 @@ export function SettingsPage() {
             </div>
             <p className="settings-note" style={{ marginTop: 10 }}>يُفضل إنشاء نسخة احتياطية قبل التحديث.</p>
           </>
+        );
+
+      case "printing":
+        const allBarcodeSizes = [
+          { name: "افتراضي", width: printSettings.barcodeWidth, height: printSettings.barcodeHeight },
+          ...printSettings.barcodeCustomSizes,
+        ];
+        const activeSize = allBarcodeSizes.find((s) => s.name === selectedBarcodeSize) || allBarcodeSizes[0];
+        return (
+          <div className="print-settings">
+            {/* Invoice print settings */}
+            <div className="print-section">
+              <h3>🧾 إعدادات طابعة الفواتير</h3>
+              <div className="print-fields">
+                <div className="print-field">
+                  <label>مقاس الورق</label>
+                  <select value={printSettings.invoicePaper} onChange={(e) => setPrintSettings({ ...printSettings, invoicePaper: e.target.value })}>
+                    <option value="A4">A4</option>
+                    <option value="A5">A5</option>
+                    <option value="80mm">80mm (termal)</option>
+                    <option value="58mm">58mm (termal)</option>
+                  </select>
+                </div>
+                <div className="print-field">
+                  <label>الاتجاه</label>
+                  <select value={printSettings.invoiceLandscape ? "landscape" : "portrait"} onChange={(e) => setPrintSettings({ ...printSettings, invoiceLandscape: e.target.value === "landscape" })}>
+                    <option value="portrait">عمودي</option>
+                    <option value="landscape">أفقي</option>
+                  </select>
+                </div>
+                <div className="print-field">
+                  <label>الهوامش (mm)</label>
+                  <input type="number" min={0} max={30} value={printSettings.invoiceMargins} onChange={(e) => setPrintSettings({ ...printSettings, invoiceMargins: Number(e.target.value) })} />
+                </div>
+              </div>
+              <div className="print-toggles">
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={printSettings.invoiceHeader} onChange={(e) => setPrintSettings({ ...printSettings, invoiceHeader: e.target.checked })} />
+                  عرض الهيدر
+                </label>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={printSettings.invoiceFooter} onChange={(e) => setPrintSettings({ ...printSettings, invoiceFooter: e.target.checked })} />
+                  عرض الفوتر
+                </label>
+              </div>
+            </div>
+
+            {/* Barcode print settings */}
+            <div className="print-section">
+              <h3>🏷️ إعدادات طابعة الباركود</h3>
+              <div className="print-fields">
+                <div className="print-field" style={{ minWidth: 200 }}>
+                  <label>الطابعة الافتراضية</label>
+                  <select value={printSettings.barcodePrinter} onChange={(e) => setPrintSettings({ ...printSettings, barcodePrinter: e.target.value })}>
+                    <option value="">— اختر طابعة —</option>
+                    {availablePrinters.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="print-fields">
+                <div className="print-field">
+                  <label>العرض (mm)</label>
+                  <input type="number" min={20} max={150} value={activeSize.width} onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (selectedBarcodeSize === "افتراضي") setPrintSettings({ ...printSettings, barcodeWidth: v });
+                    else setPrintSettings({ ...printSettings, barcodeCustomSizes: printSettings.barcodeCustomSizes.map((sz) => sz.name === selectedBarcodeSize ? { ...sz, width: v } : sz) });
+                  }} />
+                </div>
+                <div className="print-field">
+                  <label>الارتفاع (mm)</label>
+                  <input type="number" min={10} max={100} value={activeSize.height} onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (selectedBarcodeSize === "افتراضي") setPrintSettings({ ...printSettings, barcodeHeight: v });
+                    else setPrintSettings({ ...printSettings, barcodeCustomSizes: printSettings.barcodeCustomSizes.map((sz) => sz.name === selectedBarcodeSize ? { ...sz, height: v } : sz) });
+                  }} />
+                </div>
+                <div className="print-field">
+                  <label>حجم الخط (pt)</label>
+                  <input type="number" min={6} max={18} value={printSettings.barcodeFontSize} onChange={(e) => setPrintSettings({ ...printSettings, barcodeFontSize: Number(e.target.value) })} />
+                </div>
+              </div>
+              <div className="print-toggles">
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={printSettings.barcodeShowName} onChange={(e) => setPrintSettings({ ...printSettings, barcodeShowName: e.target.checked })} />
+                  عرض اسم الصنف
+                </label>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={printSettings.barcodeShowPrice} onChange={(e) => setPrintSettings({ ...printSettings, barcodeShowPrice: e.target.checked })} />
+                  عرض السعر
+                </label>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={printSettings.barcodeShowBarcode} onChange={(e) => setPrintSettings({ ...printSettings, barcodeShowBarcode: e.target.checked })} />
+                  عرض الباركود
+                </label>
+              </div>
+
+              {/* Size selector */}
+              <div className="print-sizes">
+                <label>المقاسات المحفوظة:</label>
+                <div className="print-size-chips">
+                  {allBarcodeSizes.map((s) => (
+                    <button key={s.name} type="button" className={`print-size-chip ${selectedBarcodeSize === s.name ? "active" : ""}`} onClick={() => setSelectedBarcodeSize(s.name)}>
+                      {s.name} ({s.width}×{s.height})
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Add new size */}
+              <div className="print-add-size">
+                <input value={newSizeName} onChange={(e) => setNewSizeName(e.target.value)} placeholder="اسم المقاس" style={{ flex: 1 }} />
+                <input type="number" min={20} max={150} value={newSizeW} onChange={(e) => setNewSizeW(Number(e.target.value))} style={{ width: 70 }} placeholder="العرض" />
+                <span>×</span>
+                <input type="number" min={10} max={100} value={newSizeH} onChange={(e) => setNewSizeH(Number(e.target.value))} style={{ width: 70 }} placeholder="الارتفاع" />
+                <button type="button" className="btn primary sm" onClick={() => {
+                  if (!newSizeName.trim()) { notify("أدخل اسم المقاس", "error"); return; }
+                  if (printSettings.barcodeCustomSizes.some((sz) => sz.name === newSizeName.trim())) { notify("المقاس موجود بالفعل", "error"); return; }
+                  const updated = { ...printSettings, barcodeCustomSizes: [...printSettings.barcodeCustomSizes, { name: newSizeName.trim(), width: newSizeW, height: newSizeH }] };
+                  setPrintSettings(updated);
+                  setSelectedBarcodeSize(newSizeName.trim());
+                  setNewSizeName("");
+                  notify("تم إضافة المقاس");
+                }}>+ إضافة</button>
+                {selectedBarcodeSize !== "افتراضي" && (
+                  <button type="button" className="btn danger sm" onClick={() => {
+                    const updated = { ...printSettings, barcodeCustomSizes: printSettings.barcodeCustomSizes.filter((sz) => sz.name !== selectedBarcodeSize) };
+                    setPrintSettings(updated);
+                    setSelectedBarcodeSize("افتراضي");
+                    notify("تم حذف المقاس");
+                  }}>حذف</button>
+                )}
+              </div>
+
+              {/* Preview */}
+              <div className="print-preview">
+                <h4>معاينة الباركود</h4>
+                <div className="barcode-preview-box" style={{ width: Math.min(activeSize.width * 2.5, 300), minHeight: activeSize.height * 2.5, border: "2px dashed #cbd5e1", borderRadius: 8, padding: 10, background: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                  {printSettings.barcodeShowName && (
+                    <div style={{ fontSize: printSettings.barcodeFontSize + 2, fontWeight: 700, color: "#1e293b" }}>اسم الصنف</div>
+                  )}
+                  {printSettings.barcodeShowBarcode && (
+                    <div style={{ display: "flex", gap: 1, alignItems: "flex-end", height: 30 }}>
+                      {Array.from({ length: 30 }).map((_, i) => (
+                        <div key={i} style={{ width: Math.max(1, Math.floor(activeSize.width / 30)), height: `${50 + Math.random() * 50}%`, background: "#1e293b", borderRadius: 1 }} />
+                      ))}
+                    </div>
+                  )}
+                  {printSettings.barcodeShowBarcode && (
+                    <div style={{ fontSize: 9, color: "#64748b", letterSpacing: 2 }}>1234567890</div>
+                  )}
+                  {printSettings.barcodeShowPrice && (
+                    <div style={{ fontSize: printSettings.barcodeFontSize, fontWeight: 700, color: "#0f8a5f" }}>150.00 ج.م</div>
+                  )}
+                </div>
+                <p className="settings-note" style={{ marginTop: 6 }}>المقاس الفعلي: {activeSize.width}mm × {activeSize.height}mm</p>
+              </div>
+            </div>
+
+            <div className="form-actions" style={{ marginTop: 8 }}>
+              <button type="button" className="btn primary" onClick={() => {
+                localStorage.setItem("tabarak_print_settings", JSON.stringify(printSettings));
+                notify("تم حفظ إعدادات الطباعة");
+              }}>💾 حفظ الإعدادات</button>
+            </div>
+          </div>
         );
 
       case "backup":
