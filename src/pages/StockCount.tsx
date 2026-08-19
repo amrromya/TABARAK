@@ -216,6 +216,12 @@ export function StockCount({ onBack }: { onBack: () => void }) {
           0,
         ),
     );
+    const totalBefore = round2(
+      lines.reduce((sum, l) => sum + l.system_qty * l.cost_price, 0),
+    );
+    const totalAfter = round2(
+      totalBefore + surplusValue - deficitValue,
+    );
     return {
       totalDifference,
       totalSurplus,
@@ -225,6 +231,8 @@ export function StockCount({ onBack }: { onBack: () => void }) {
       deficitCount,
       surplusValue,
       deficitValue,
+      totalBefore,
+      totalAfter,
     };
   }, [lines]);
 
@@ -980,6 +988,8 @@ export function StockCount({ onBack }: { onBack: () => void }) {
           </div>
         </aside>
       </div>
+
+
     </div>
   );
 }

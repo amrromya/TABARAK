@@ -24,9 +24,11 @@ const emptyForm: NewProduct = {
 export function Inventory({
   onOpenCount,
   onOpenCounts,
+  onOpenFullCount,
 }: {
   onOpenCount?: () => void;
   onOpenCounts?: () => void;
+  onOpenFullCount?: () => void;
 }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -35,13 +37,9 @@ export function Inventory({
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [form, setForm] = useState<NewProduct>(emptyForm);
-  const [adjusting, setAdjusting] = useState<Product | null>(null);
-  const [adjustQty, setAdjustQty] = useState(0);
+
   const [showCategory, setShowCategory] = useState(false);
   const [newCategory, setNewCategory] = useState("");
-  const [showOpeningBalance, setShowOpeningBalance] = useState(false);
-  const [openingBalances, setOpeningBalances] = useState<Record<number, number>>({});
-  const [obSearch, setObSearch] = useState("");
   const notify = useToast();
 
   const load = useCallback(async () => {
@@ -119,19 +117,6 @@ export function Inventory({
     }
   };
 
-  const saveAdjust = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!adjusting) return;
-    try {
-      await api.adjustStock(adjusting.id, adjustQty);
-      notify("تم تحديث المخزون");
-      setAdjusting(null);
-      load();
-    } catch (err) {
-      notify(String(err), "error");
-    }
-  };
-
   const addCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCategory.trim()) return;
@@ -152,44 +137,6 @@ export function Inventory({
     0,
   );
 
-  const openOpeningBalance = () => {
-    const map: Record<number, number> = {};
-    products.forEach((p) => {
-      map[p.id] = p.opening_balance ?? 0;
-    });
-    setOpeningBalances(map);
-    setObSearch("");
-    setShowOpeningBalance(true);
-  };
-
-  const saveOpeningBalances = async () => {
-    try {
-      const items = Object.entries(openingBalances).map(([id, val]) => ({
-        product_id: Number(id),
-        opening_balance: val,
-      }));
-      await api.setOpeningBalances(items);
-      notify("تم حفظ الأرصدة الافتتاحية");
-      setShowOpeningBalance(false);
-      load();
-    } catch (err) {
-      notify(String(err), "error");
-    }
-  };
-
-  const filteredObProducts = products.filter(
-    (p) =>
-      !obSearch ||
-      p.name.includes(obSearch) ||
-      (p.barcode ?? "").includes(obSearch),
-  );
-
-  const obTotal = Object.values(openingBalances).reduce((s, v) => s + v, 0);
-  const obValueTotal = products.reduce(
-    (s, p) => s + (openingBalances[p.id] ?? 0) * p.cost_price,
-    0,
-  );
-
   return (
     <div className="page">
       <div className="page-head">
@@ -207,8 +154,8 @@ export function Inventory({
           <button className="btn" onClick={onOpenCounts}>
             🔎 سجل الجرد
           </button>
-          <button className="btn accent" onClick={openOpeningBalance}>
-            📊 رصيد اول المدة
+          <button className="btn accent" onClick={onOpenFullCount}>
+            📊 جرد كلي
           </button>
           <button className="btn primary" onClick={openNew}>
             + منتج جديد
@@ -271,15 +218,6 @@ export function Inventory({
                   <td className="actions">
                     <button className="btn sm" onClick={() => openEdit(p)}>
                       تعديل
-                    </button>
-                    <button
-                      className="btn sm outline"
-                      onClick={() => {
-                        setAdjusting(p);
-                        setAdjustQty(0);
-                      }}
-                    >
-                      تسوية
                     </button>
                     <button
                       className="btn sm danger"
@@ -418,39 +356,6 @@ export function Inventory({
         </Modal>
       )}
 
-      {adjusting && (
-        <Modal
-          title={`تسوية مخزون: ${adjusting.name}`}
-          onClose={() => setAdjusting(null)}
-        >
-          <form onSubmit={saveAdjust} className="form-grid">
-            <Field label="الكمية الحالية">
-              <input value={qty(adjusting.quantity)} disabled />
-            </Field>
-            <Field label="التسوية (+ إضافة / - خصم)">
-              <input
-                type="number"
-                step="0.01"
-                value={adjustQty}
-                onChange={(e) => setAdjustQty(Number(e.target.value))}
-              />
-            </Field>
-            <div className="form-actions">
-              <button type="submit" className="btn primary">
-                حفظ التسوية
-              </button>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => setAdjusting(null)}
-              >
-                إلغاء
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
       {showCategory && (
         <Modal
           title="إضافة تصنيف جديد"
@@ -478,90 +383,6 @@ export function Inventory({
               </button>
             </div>
           </form>
-        </Modal>
-      )}
-
-      {showOpeningBalance && (
-        <Modal
-          title="📊 الرصيد الافتتاحي (رصيد اول المدة)"
-          onClose={() => setShowOpeningBalance(false)}
-        >
-          <div className="ob-modal-content">
-            <div className="ob-summary-bar">
-              <div className="ob-summary-item">
-                <span className="ob-summary-label">عدد المنتجات</span>
-                <span className="ob-summary-value">{filteredObProducts.length}</span>
-              </div>
-              <div className="ob-summary-item">
-                <span className="ob-summary-label">إجمالي الكميات</span>
-                <span className="ob-summary-value">{qty(obTotal)}</span>
-              </div>
-              <div className="ob-summary-item">
-                <span className="ob-summary-label">إجمالي القيمة ( себعة)</span>
-                <span className="ob-summary-value">{money(obValueTotal)}</span>
-              </div>
-            </div>
-            <input
-              className="search ob-search"
-              placeholder="بحث بالاسم أو الباركود..."
-              value={obSearch}
-              onChange={(e) => setObSearch(e.target.value)}
-              autoFocus
-            />
-            <div className="ob-table-wrap">
-              <table className="table ob-table">
-                <thead>
-                  <tr>
-                    <th>المنتج</th>
-                    <th>التصنيف</th>
-                    <th>الوحدة</th>
-                    <th>سعر الشراء</th>
-                    <th>الكمية الحالية</th>
-                    <th style={{ minWidth: 120 }}>الرصيد الافتتاحي</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredObProducts.map((p) => (
-                    <tr key={p.id}>
-                      <td className="strong">{p.name}</td>
-                      <td>{p.category_name ?? "—"}</td>
-                      <td>{p.unit ?? "—"}</td>
-                      <td>{money(p.cost_price)}</td>
-                      <td>{qty(p.quantity)}</td>
-                      <td>
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className="ob-input"
-                          value={openingBalances[p.id] ?? 0}
-                          onChange={(e) =>
-                            setOpeningBalances((prev) => ({
-                              ...prev,
-                              [p.id]: Number(e.target.value),
-                            }))
-                          }
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredObProducts.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="empty">لا توجد منتجات</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="form-actions">
-              <button className="btn primary" onClick={saveOpeningBalances}>
-                💾 حفظ الأرصدة الافتتاحية
-              </button>
-              <button className="btn" onClick={() => setShowOpeningBalance(false)}>
-                إلغاء
-              </button>
-            </div>
-          </div>
         </Modal>
       )}
     </div>

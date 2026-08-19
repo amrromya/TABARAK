@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
-import { Field, money, useToast } from "../../components/ui";
-import type {
-  CustomerSearchResult,
-  Employee,
-  NewServiceOrder as NewServiceOrderInput,
-} from "../../types";
+import { money, useToast } from "../../components/ui";
+import type { Employee, Product } from "../../types";
+
+interface PartLine {
+  product_id: number | null;
+  name: string;
+  qty: number;
+  sell_price: number;
+}
 
 export function NewServiceOrder({ onDone }: { onDone: (orderId: number) => void }) {
   const notify = useToast();
@@ -14,115 +17,141 @@ export function NewServiceOrder({ onDone }: { onDone: (orderId: number) => void 
   const [created, setCreated] = useState<{ id: number; orderNo: string } | null>(null);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
 
-  // Customer search
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<CustomerSearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerSearchResult | null>(null);
-  const [isNewCustomer, setIsNewCustomer] = useState(false);
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Form fields
+  // Customer
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+
+  // Device
   const [deviceType, setDeviceType] = useState("");
   const [deviceModel, setDeviceModel] = useState("");
   const [deviceColor, setDeviceColor] = useState("");
   const [accessories, setAccessories] = useState("");
-  const [complaint, setComplaint] = useState("");
-  const [notes, setNotes] = useState("");
-  const [assignedEmployee, setAssignedEmployee] = useState(0);
 
-  // Parts (optional)
-  const [parts, setParts] = useState<{ name: string; qty: number; price: number }[]>([]);
-  const [partName, setPartName] = useState("");
-  const [partQty, setPartQty] = useState(1);
-  const [partPrice, setPartPrice] = useState(0);
+  // Problem
+  const [complaint, setComplaint] = useState("");
+
+  // Parts
+  const [parts, setParts] = useState<PartLine[]>([]);
+  const [partSearch, setPartSearch] = useState("");
+  const [partResults, setPartResults] = useState<Product[]>([]);
+  const [searchingPart, setSearchingPart] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // New product inline
+  const [showNewProduct, setShowNewProduct] = useState(false);
+  const [newProdName, setNewProdName] = useState("");
+  const [newProdPrice, setNewProdPrice] = useState(0);
+
+  // Labor
+  const [laborCost, setLaborCost] = useState(0);
+  const [warrantyDays, setWarrantyDays] = useState(0);
+  const [assignedEmployee, setAssignedEmployee] = useState(0);
 
   useEffect(() => {
     (async () => {
       try {
-        const emps = await api.listEmployees();
+        const [emps, prods] = await Promise.all([api.listEmployees(), api.listProducts()]);
         setEmployees(emps);
+        setProducts(prods);
       } catch {}
       finally { setLoading(false); }
     })();
   }, []);
 
-  const onCustomerSearch = useCallback((q: string) => {
-    setCustomerSearch(q);
-    if (selectedCustomer && q !== selectedCustomer.name) {
-      setSelectedCustomer(null);
-      setIsNewCustomer(false);
-    }
+  // ---- Parts search ----
+  const onPartSearch = useCallback((q: string) => {
+    setPartSearch(q);
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (q.trim().length < 2) { setSearchResults([]); return; }
-    setSearching(true);
-    searchTimer.current = setTimeout(async () => {
-      try { setSearchResults(await api.searchCustomersForMaintenance(q.trim())); }
-      catch { setSearchResults([]); }
-      finally { setSearching(false); }
-    }, 300);
-  }, [selectedCustomer]);
+    if (q.trim().length < 1) { setPartResults([]); return; }
+    setSearchingPart(true);
+    searchTimer.current = setTimeout(() => {
+      const lower = q.trim().toLowerCase();
+      setPartResults(products.filter((p) => p.name.toLowerCase().includes(lower) || (p.barcode && p.barcode.includes(q.trim()))).slice(0, 8));
+      setSearchingPart(false);
+    }, 200);
+  }, [products]);
 
-  const selectCustomer = (c: CustomerSearchResult) => {
-    setSelectedCustomer(c);
-    setCustomerSearch(c.name);
-    setSearchResults([]);
-    setIsNewCustomer(false);
+  const addExistingPart = (p: Product) => {
+    setParts([...parts, { product_id: p.id, name: p.name, qty: 1, sell_price: p.sell_price }]);
+    setPartSearch("");
+    setPartResults([]);
   };
 
-  const addPart = () => {
-    if (!partName.trim()) { notify("أدخل اسم القطعة", "error"); return; }
-    setParts([...parts, { name: partName.trim(), qty: partQty, price: partPrice }]);
-    setPartName(""); setPartQty(1); setPartPrice(0);
+  const addNewProductPart = () => {
+    if (!newProdName.trim()) { notify("أدخل اسم الصنف", "error"); return; }
+    if (newProdPrice <= 0) { notify("أدخل سعر البيع", "error"); return; }
+    setParts([...parts, { product_id: null, name: newProdName.trim(), qty: 1, sell_price: newProdPrice }]);
+    setNewProdName("");
+    setNewProdPrice(0);
+    setShowNewProduct(false);
+  };
+
+  const updatePartQty = (i: number, qty: number) => {
+    setParts(parts.map((p, idx) => idx === i ? { ...p, qty: Math.max(1, qty) } : p));
+  };
+
+  const updatePartPrice = (i: number, price: number) => {
+    setParts(parts.map((p, idx) => idx === i ? { ...p, sell_price: price } : p));
   };
 
   const removePart = (i: number) => setParts(parts.filter((_, idx) => idx !== i));
 
-  const totalParts = parts.reduce((s, p) => s + p.price * p.qty, 0);
+  const totalParts = parts.reduce((s, p) => s + p.sell_price * p.qty, 0);
+  const grandTotal = totalParts + laborCost;
 
+  // ---- Submit ----
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!customerName.trim()) { notify("يجب إدخال اسم العميل", "error"); return; }
     if (!deviceType.trim()) { notify("يجب إدخال نوع الجهاز", "error"); return; }
     if (!complaint.trim()) { notify("يجب إدخال وصف المشكلة", "error"); return; }
-    if (!selectedCustomer && !customerName.trim()) { notify("يجب إدخال اسم العميل", "error"); return; }
 
     setSaving(true);
     try {
-      const input: NewServiceOrderInput = {
-        customer_id: selectedCustomer?.id ?? null,
-        customer_name: selectedCustomer ? null : customerName.trim() || null,
+      // Create service order
+      const result = await api.createServiceOrder({
+        customer_name: customerName.trim(),
         customer_phone: customerPhone.trim() || null,
         device_type: deviceType.trim(),
         device_model: deviceModel.trim() || null,
         device_color: deviceColor.trim() || null,
         accessories: accessories.trim() || null,
-        customer_complaint: complaint.trim() || null,
-        technician_notes: notes.trim() || null,
+        customer_complaint: complaint.trim(),
         parts_cost: totalParts || null,
-      };
-      const result = await api.createServiceOrder(input);
+        labor_cost: laborCost || null,
+        warranty_days: warrantyDays || null,
+      });
 
-      // Assign employee if selected
+      // Assign employee
       if (assignedEmployee && result.id) {
         try {
-          await api.assignTechnician(result.id, { technician_id: assignedEmployee, work_type: "استلام وصيانة" });
-        } catch (e) {
-          console.error("Failed to assign technician:", e);
-          notify("تم إنشاء الأمر لكن فشل تعيين الموظف: " + String(e), "error");
-        }
+          await api.assignTechnician(result.id, { technician_id: assignedEmployee, work_type: "صيانة" });
+        } catch {}
       }
 
-      // Add parts if any
+      // Add parts
       for (const p of parts) {
         try {
+          let pid = p.product_id;
+          // If new product, create it first (negative stock until purchase)
+          if (!pid) {
+            const createdProd = await api.createProduct({
+              name: p.name,
+              cost_price: p.sell_price,
+              sell_price: p.sell_price,
+              quantity: -p.qty,
+              min_quantity: 0,
+            });
+            pid = createdProd.id;
+          }
           await api.addServicePart(result.id, {
+            product_id: pid,
             part_name: p.name,
             quantity: p.qty,
-            cost_price: p.price,
-            sell_price: p.price,
+            cost_price: p.sell_price,
+            sell_price: p.sell_price,
           });
         } catch {}
       }
@@ -136,6 +165,67 @@ export function NewServiceOrder({ onDone }: { onDone: (orderId: number) => void 
     }
   };
 
+  // ---- Print Order ----
+  const printOrder = () => {
+    if (!created) return;
+    const frame = document.createElement("iframe");
+    frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:none";
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument || frame.contentWindow?.document;
+    if (!doc) { document.body.removeChild(frame); return; }
+    const partsHtml = parts.map((p, i) =>
+      `<tr><td>${i + 1}</td><td>${p.name}</td><td>${p.qty}</td><td>${money(p.sell_price)}</td><td>${money(p.sell_price * p.qty)}</td></tr>`
+    ).join("");
+    doc.open();
+    doc.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+      <style>
+        body{font-family:'Segoe UI',system-ui,sans-serif;padding:20px;margin:0;color:#1f2937;font-size:13px}
+        h2{text-align:center;color:#0f172a;border-bottom:3px solid #0f172a;padding-bottom:8px;margin-bottom:16px}
+        .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+        .info-box{border:1px solid #e5e7eb;border-radius:8px;padding:10px}
+        .info-box .lbl{color:#6b7280;font-size:11px;margin-bottom:2px}
+        .info-box .val{font-weight:700;font-size:14px}
+        table{width:100%;border-collapse:collapse;margin:12px 0}
+        th,td{border:1px solid #d1d5db;padding:6px 10px;text-align:right;font-size:12px}
+        th{background:#f1f5f9;font-weight:700}
+        .total-row{background:#f0fdf4;font-weight:700}
+        .summary{margin-top:12px;text-align:left;font-size:14px}
+        .summary .line{display:flex;justify-content:space-between;margin:4px 0}
+        .summary .grand{border-top:2px solid #0f172a;padding-top:6px;font-size:16px;color:#0f8a5f}
+        .footer{margin-top:24px;border-top:1px dashed #d1d5db;padding-top:10px;color:#6b7280;font-size:11px;text-align:center}
+      </style></head><body>
+      <h2>🔧 أمر صيانة — ${created.orderNo}</h2>
+      <div class="info-grid">
+        <div class="info-box"><div class="lbl">العميل</div><div class="val">${customerName}</div></div>
+        <div class="info-box"><div class="lbl">الهاتف</div><div class="val">${customerPhone || "—"}</div></div>
+        <div class="info-box"><div class="lbl">الجهاز</div><div class="val">${deviceType} ${deviceModel}</div></div>
+        <div class="info-box"><div class="lbl">اللون</div><div class="val">${deviceColor || "—"}</div></div>
+      </div>
+      <div style="margin-bottom:12px"><strong>المتعلقات:</strong> ${accessories || "—"}</div>
+      <div style="margin-bottom:12px"><strong>وصف المشكلة:</strong> ${complaint}</div>
+      ${parts.length > 0 ? `
+        <h3 style="margin:12px 0 6px">قطع الغيار</h3>
+        <table>
+          <thead><tr><th>#</th><th>القطعة</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+          <tbody>${partsHtml}
+            <tr class="total-row"><td colSpan={4}>إجمالي القطع</td><td>${money(totalParts)}</td></tr>
+          </tbody>
+        </table>` : ""}
+      <div class="summary">
+        <div class="line"><span>قطع الغيار:</span><span>${money(totalParts)}</span></div>
+        <div class="line"><span>أجرا الصيانة:</span><span>${money(laborCost)}</span></div>
+        <div class="line grand"><span>الإجمالي:</span><span>${money(grandTotal)}</span></div>
+      </div>
+      ${assignedEmployee > 0 ? `<div style="margin-top:12px"><strong>الموظف:</strong> ${employees.find(e => e.id === assignedEmployee)?.name}</div>` : ""}
+      ${warrantyDays > 0 ? `<div style="margin-top:6px"><strong>مدة الضمان:</strong> ${warrantyDays} يوم</div>` : ""}
+      <div class="footer">شكراً لثقتكم بنا — صيانة تبارك</div>
+    </body></html>`);
+    doc.close();
+    frame.contentWindow?.focus();
+    frame.contentWindow?.print();
+    setTimeout(() => document.body.removeChild(frame), 1000);
+  };
+
   // ---- Print Barcode ----
   const printBarcode = () => {
     if (!created) return;
@@ -146,68 +236,34 @@ export function NewServiceOrder({ onDone }: { onDone: (orderId: number) => void 
     if (!doc) { document.body.removeChild(frame); return; }
     doc.open();
     doc.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
-      <style>body{font-family:system-ui,sans-serif;padding:10px;margin:0;text-align:center;font-size:12px}
-      .box{border:2px solid #000;padding:10px;margin:0 auto;max-width:300px}
-      .num{font-size:14px;font-weight:700;letter-spacing:2px;margin:6px 0}
-      .info{font-size:11px;margin:3px 0;color:#333}</style></head><body>
+      <style>
+        body{font-family:system-ui,sans-serif;padding:10px;margin:0;text-align:center;font-size:12px}
+        .box{border:2px solid #000;padding:12px;margin:0 auto;max-width:300px}
+        .title{font-weight:800;font-size:14px;margin-bottom:6px;color:#0f172a}
+        .num{font-size:16px;font-weight:800;letter-spacing:3px;color:#0f8a5f;margin:6px 0}
+        .info{font-size:11px;margin:3px 0;color:#333;line-height:1.5}
+        .total{font-size:13px;font-weight:700;margin-top:8px;color:#b91c1c}
+      </style></head><body>
       <div class="box">
-        <div style="font-weight:700;font-size:13px">تبارك — صيانة</div>
+        <div class="title">تبارك — صيانة</div>
         <div class="num">${created.orderNo}</div>
-        <div class="info">${customerSearch || customerName}</div>
-        <div class="info">${deviceType} ${deviceModel}</div>
-        <div class="info">${new Date().toLocaleDateString("ar-EG")}</div>
-      </div></body></html>`);
-    doc.close();
-    frame.contentWindow?.focus();
-    frame.contentWindow?.print();
-    setTimeout(() => document.body.removeChild(frame), 1000);
-  };
-
-  // ---- Print Receipt ----
-  const printReceipt = () => {
-    if (!created) return;
-    const frame = document.createElement("iframe");
-    frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:none";
-    document.body.appendChild(frame);
-    const doc = frame.contentDocument || frame.contentWindow?.document;
-    if (!doc) { document.body.removeChild(frame); return; }
-    const partsHtml = parts.map((p, i) => `<tr><td>${i + 1}</td><td>${p.name}</td><td>${p.qty}</td><td>${money(p.price)}</td><td>${money(p.price * p.qty)}</td></tr>`).join("");
-    doc.open();
-    doc.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
-      <style>body{font-family:system-ui,sans-serif;padding:15px;margin:0;font-size:12px;color:#1f2937}
-      h2{text-align:center;color:#0f8a5f;border-bottom:2px solid #0f8a5f;padding-bottom:6px}
-      .row{display:flex;justify-content:space-between;margin:3px 0}
-      .lbl{color:#6b7280}table{width:100%;border-collapse:collapse;margin:8px 0}
-      th,td{border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px}
-      th{background:#f3f4f6;font-weight:700}
-      .total{font-weight:700;border-top:2px solid #333}
-      .footer{margin-top:16px;border-top:1px dashed #ccc;padding-top:8px;color:#6b7280;font-size:10px;text-align:center}
-      .sig{margin-top:30px;display:flex;justify-content:space-between}
-      .sig-line{border-top:1px solid #333;width:200px;text-align:center;padding-top:4px;font-size:11px}</style></head><body>
-      <h2>إيصال استلام جهاز</h2>
-      <div style="text-align:center;color:#6b7280;margin-bottom:10px">رقم: <strong style="color:#0f8a5f">${created.orderNo}</strong></div>
-      <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:10px">
-        <div class="row"><span class="lbl">العميل:</span><strong>${selectedCustomer?.name || customerName}</strong></div>
-        <div class="row"><span class="lbl">الهاتف:</span><strong>${selectedCustomer?.phone || customerPhone}</strong></div>
-        <div class="row"><span class="lbl">الجهاز:</span><strong>${deviceType} ${deviceModel}</strong></div>
-        <div class="row"><span class="lbl">اللون:</span><strong>${deviceColor || "—"}</strong></div>
-        <div class="row"><span class="lbl">المتعلقات:</span><strong>${accessories || "—"}</strong></div>
+        <div class="info">العميل: ${customerName}</div>
+        <div class="info">الجهاز: ${deviceType} ${deviceModel}</div>
+        <div class="info">المشكلة: ${complaint}</div>
+        <div class="total">الإجمالي: ${money(grandTotal)}</div>
+        <div class="info" style="margin-top:6px;color:#6b7280">${new Date().toLocaleDateString("ar-EG")}</div>
       </div>
-      <div style="margin:8px 0"><strong>وصف المشكلة:</strong> ${complaint}</div>
-      ${parts.length > 0 ? `<table><thead><tr><th>#</th><th>القطعة</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>${partsHtml}</tbody></table>` : ""}
-      <div style="margin-top:8px"><strong>المبلغ الإجمالي:</strong> <strong style="color:#0f8a5f">${money(totalParts)}</strong></div>
-      ${notes ? `<div style="margin-top:8px"><strong>ملاحظات:</strong> ${notes}</div>` : ""}
-      <div class="sig"><div class="sig-line">توقيع المستلم</div><div class="sig-line">توقيع الموظف</div></div>
-      <div class="footer">شكراً لثقتكم بنا — صيانة تبارك</div></body></html>`);
+    </body></html>`);
     doc.close();
     frame.contentWindow?.focus();
     frame.contentWindow?.print();
     setTimeout(() => document.body.removeChild(frame), 1000);
   };
 
+  // ---- Loading ----
   if (loading) {
     return (
-      <div className="page">
+      <div className="page nso2-page">
         <div className="page-head"><h1>أمر صيانة جديد</h1></div>
         <p style={{ textAlign: "center", padding: 40 }}>جارٍ التحميل...</p>
       </div>
@@ -217,15 +273,15 @@ export function NewServiceOrder({ onDone }: { onDone: (orderId: number) => void 
   // ---- Success Screen ----
   if (created) {
     return (
-      <div className="page">
+      <div className="page nso2-page">
         <div className="page-head"><h1>تم الإنشاء بنجاح</h1></div>
-        <div className="settings-card" style={{ maxWidth: 480, margin: "40px auto", textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
-          <h2 style={{ marginBottom: 4 }}>تم إنشاء أمر الصيانة</h2>
-          <p style={{ color: "#6b7280", marginBottom: 20, fontSize: 15 }}>{created.orderNo}</p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <button className="btn primary" onClick={printReceipt}>🖨️ طباعة الإيصال</button>
-            <button className="btn" onClick={printBarcode}>🏷️ طباعة الباركود</button>
+        <div className="nso-success">
+          <div className="nso-success-icon">✅</div>
+          <h2>تم إنشاء أمر الصيانة</h2>
+          <p className="nso-success-no">{created.orderNo}</p>
+          <div className="nso-success-actions">
+            <button className="btn primary" onClick={printOrder}>🖨️ طباعة الأمر</button>
+            <button className="btn" onClick={printBarcode}>🏷️ طباعة باركود</button>
             <button className="btn" onClick={() => onDone(created.id)}>العودة لأوامر الصيانة</button>
           </div>
         </div>
@@ -234,187 +290,240 @@ export function NewServiceOrder({ onDone }: { onDone: (orderId: number) => void 
   }
 
   return (
-    <div className="page">
-      <div className="page-head"><h1>أمر صيانة جديد</h1></div>
+    <div className="page nso2-page">
+      <div className="page-head">
+        <h1>🔧 أمر صيانة جديد</h1>
+      </div>
 
-      <form onSubmit={submit} className="nso-layout">
-        <div className="nso-form-col">
+      <form onSubmit={submit} className="nso2-layout">
+        {/* ===== Left Column (Form) ===== */}
+        <div className="nso2-form">
 
           {/* بيانات العميل */}
-          <div className="settings-card">
-            <h3>👤 بيانات العميل</h3>
-            <Field label="بحث عن عميل">
-              <div className="nso-search-wrap">
-                <input
-                  value={customerSearch}
-                  onChange={(e) => onCustomerSearch(e.target.value)}
-                  placeholder="اكتب اسم أو رقم هاتف..."
-                />
-                {searching && <span className="nso-search-spinner" />}
-              </div>
-              {searchResults.length > 0 && (
-                <div className="nso-customer-results">
-                  {searchResults.map((c) => (
-                    <button key={c.id} type="button" className="nso-customer-item" onClick={() => selectCustomer(c)}>
-                      <span className="nso-customer-avatar">{c.name.charAt(0)}</span>
-                      <span className="nso-customer-info">
-                        <strong>{c.name}</strong>
-                        {c.phone && <small>{c.phone}</small>}
-                      </span>
-                    </button>
-                  ))}
+          <div className="nso2-section">
+            <div className="nso2-section-head">
+              <span className="nso2-section-icon">👤</span>
+              <span className="nso2-section-title">بيانات العميل</span>
+            </div>
+            <div className="nso2-section-body">
+              <div className="nso2-row">
+                <div className="nso2-field">
+                  <label>اسم العميل / العمل *</label>
+                  <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="الاسم الكامل" />
                 </div>
-              )}
-            </Field>
-
-            {selectedCustomer && (
-              <div className="nso-selected-customer">
-                <span className="nso-check-icon">✓</span>
-                <div>
-                  <strong>{selectedCustomer.name}</strong>
-                  {selectedCustomer.phone && <small>{selectedCustomer.phone}</small>}
+                <div className="nso2-field">
+                  <label>رقم الهاتف</label>
+                  <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="05xxxxxxxx" />
                 </div>
               </div>
-            )}
-
-            {!selectedCustomer && (
-              <button type="button" className="btn nso-toggle-btn" onClick={() => setIsNewCustomer(!isNewCustomer)}>
-                {isNewCustomer ? "✕ إلغاء" : "＋ عميل جديد"}
-              </button>
-            )}
-
-            {isNewCustomer && !selectedCustomer && (
-              <div className="nso-new-customer-fields">
-                <div className="nso-fields-row">
-                  <Field label="اسم العميل *">
-                    <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="الاسم الكامل" />
-                  </Field>
-                  <Field label="رقم الهاتف">
-                    <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="05xxxxxxxx" />
-                  </Field>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
 
           {/* بيانات الجهاز */}
-          <div className="settings-card">
-            <h3>📱 بيانات الجهاز</h3>
-            <div className="nso-fields-row">
-              <Field label="نوع الجهاز *">
-                <input value={deviceType} onChange={(e) => setDeviceType(e.target.value)} placeholder="موبايل، لابتوب، تابلت..." />
-              </Field>
-              <Field label="الموديل">
-                <input value={deviceModel} onChange={(e) => setDeviceModel(e.target.value)} placeholder="iPhone 15, Samsung S24..." />
-              </Field>
+          <div className="nso2-section">
+            <div className="nso2-section-head">
+              <span className="nso2-section-icon">📱</span>
+              <span className="nso2-section-title">بيانات الجهاز</span>
             </div>
-            <div className="nso-fields-row">
-              <Field label="اللون">
-                <input value={deviceColor} onChange={(e) => setDeviceColor(e.target.value)} />
-              </Field>
-              <Field label="المتعلقات المستلمة">
-                <input value={accessories} onChange={(e) => setAccessories(e.target.value)} placeholder="شاحن، سماعة..." />
-              </Field>
+            <div className="nso2-section-body">
+              <div className="nso2-row">
+                <div className="nso2-field">
+                  <label>نوع الجهاز *</label>
+                  <input value={deviceType} onChange={(e) => setDeviceType(e.target.value)} placeholder="موبايل، لابتوب، تابلت..." />
+                </div>
+                <div className="nso2-field">
+                  <label>الموديل</label>
+                  <input value={deviceModel} onChange={(e) => setDeviceModel(e.target.value)} placeholder="iPhone 15, Samsung S24..." />
+                </div>
+              </div>
+              <div className="nso2-row">
+                <div className="nso2-field">
+                  <label>اللون</label>
+                  <input value={deviceColor} onChange={(e) => setDeviceColor(e.target.value)} placeholder="أسود، أزرق..." />
+                </div>
+                <div className="nso2-field">
+                  <label>المتعلقات المستلمة</label>
+                  <input value={accessories} onChange={(e) => setAccessories(e.target.value)} placeholder="شاحن، سماعة، غلاف..." />
+                </div>
+              </div>
             </div>
           </div>
 
           {/* وصف المشكلة */}
-          <div className="settings-card">
-            <h3>🔧 وصف المشكلة</h3>
-            <Field label="شكوى العميل *">
-              <textarea value={complaint} onChange={(e) => setComplaint(e.target.value)} rows={3} placeholder="وصف المشكلة كما يذكرها العميل" />
-            </Field>
-            <Field label="الملاحظات">
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="ملاحظات إضافية..." />
-            </Field>
+          <div className="nso2-section">
+            <div className="nso2-section-head">
+              <span className="nso2-section-icon">🔧</span>
+              <span className="nso2-section-title">وصف المشكلة</span>
+            </div>
+            <div className="nso2-section-body">
+              <div className="nso2-field">
+                <label>شكوى العميل *</label>
+                <textarea value={complaint} onChange={(e) => setComplaint(e.target.value)} rows={3} placeholder="وصف المشكلة كما يذكرها العميل" />
+              </div>
+            </div>
           </div>
 
           {/* قطع الغيار */}
-          <div className="settings-card">
-            <h3>🔩 قطع الغيار (اختياري)</h3>
-            {parts.length > 0 && (
-              <div className="table-wrap" style={{ marginBottom: 12 }}>
-                <table className="table">
-                  <thead><tr><th>#</th><th>القطعة</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th><th></th></tr></thead>
-                  <tbody>
-                    {parts.map((p, i) => (
-                      <tr key={i}>
-                        <td>{i + 1}</td>
-                        <td className="strong">{p.name}</td>
-                        <td>{p.qty}</td>
-                        <td>{money(p.price)}</td>
-                        <td className="strong">{money(p.price * p.qty)}</td>
-                        <td><button type="button" className="btn danger sm" onClick={() => removePart(i)}>حذف</button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <div className="nso-parts-adder">
-              <input value={partName} onChange={(e) => setPartName(e.target.value)} placeholder="اسم القطعة" style={{ flex: 2 }} />
-              <input type="number" min={1} value={partQty} onChange={(e) => setPartQty(Number(e.target.value))} style={{ flex: 1 }} />
-              <input type="number" min={0} step="0.01" value={partPrice || ""} onChange={(e) => setPartPrice(Number(e.target.value))} placeholder="السعر" style={{ flex: 1 }} />
-              <button type="button" className="btn" onClick={addPart}>+ إضافة</button>
+          <div className="nso2-section">
+            <div className="nso2-section-head">
+              <span className="nso2-section-icon">🔩</span>
+              <span className="nso2-section-title">قطع الغيار</span>
             </div>
-            {totalParts > 0 && (
-              <div style={{ marginTop: 8, textAlign: "left", color: "#6b7280" }}>
-                إجمالي القطع: <strong style={{ color: "#0f8a5f" }}>{money(totalParts)}</strong>
+            <div className="nso2-section-body">
+              {/* Search bar */}
+              <div className="nso2-part-search">
+                <input
+                  value={partSearch}
+                  onChange={(e) => onPartSearch(e.target.value)}
+                  placeholder="🔍 ابحث عن صنف..."
+                />
+                {searchingPart && <span className="nso2-search-spinner" />}
+                {partResults.length > 0 && (
+                  <div className="nso2-part-results">
+                    {partResults.map((p) => (
+                      <button key={p.id} type="button" className="nso2-part-result-item" onClick={() => addExistingPart(p)}>
+                        <span className="nso2-part-result-name">{p.name}</span>
+                        <span className="nso2-part-result-price">{money(p.sell_price)}</span>
+                        <span className="nso2-part-result-stock">{p.quantity} في المخزون</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Add new product */}
+              <div className="nso2-new-prod-toggle">
+                <button type="button" className="btn sm" onClick={() => setShowNewProduct(!showNewProduct)}>
+                  {showNewProduct ? "✕ إلغاء" : "＋ صنف جديد"}
+                </button>
+              </div>
+              {showNewProduct && (
+                <div className="nso2-new-prod-form">
+                  <div className="nso2-row">
+                    <div className="nso2-field">
+                      <label>اسم الصنف *</label>
+                      <input value={newProdName} onChange={(e) => setNewProdName(e.target.value)} placeholder="اسم الصنف الجديد" />
+                    </div>
+                    <div className="nso2-field" style={{ maxWidth: 160 }}>
+                      <label>سعر البيع *</label>
+                      <input type="number" min={0} step="0.01" value={newProdPrice || ""} onChange={(e) => setNewProdPrice(Number(e.target.value))} placeholder="0" />
+                    </div>
+                    <button type="button" className="btn primary sm" onClick={addNewProductPart} style={{ alignSelf: "flex-end", height: 38 }}>إضافة</button>
+                  </div>
+                  <p className="nso2-hint">سيتم تسجيل الصنف بالمخزون برصيد سالب حتى يتم إنشاء فاتورة شراء له</p>
+                </div>
+              )}
+
+              {/* Parts table */}
+              {parts.length > 0 && (
+                <div className="nso2-parts-table">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>الصنف</th>
+                        <th>الكمية</th>
+                        <th>سعر البيع</th>
+                        <th>الإجمالي</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {parts.map((p, i) => (
+                        <tr key={i}>
+                          <td>{i + 1}</td>
+                          <td className="strong">{p.name}</td>
+                          <td>
+                            <input type="number" min={1} value={p.qty} onChange={(e) => updatePartQty(i, Number(e.target.value))} className="nso2-inline-input" />
+                          </td>
+                          <td>
+                            <input type="number" min={0} step="0.01" value={p.sell_price} onChange={(e) => updatePartPrice(i, Number(e.target.value))} className="nso2-inline-input" />
+                          </td>
+                          <td className="strong">{money(p.sell_price * p.qty)}</td>
+                          <td>
+                            <button type="button" className="btn danger sm" onClick={() => removePart(i)}>حذف</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* الموظف المسؤول */}
-          <div className="settings-card">
-            <h3>👷 الموظف المسؤول</h3>
-            <Field label="الموظف القائم بالاستلام والصيانة">
-              <select value={assignedEmployee} onChange={(e) => setAssignedEmployee(Number(e.target.value))}>
-                <option value={0}>-- اختر موظف --</option>
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>{emp.name}</option>
-                ))}
-              </select>
-            </Field>
+          {/* الموظف */}
+          <div className="nso2-section">
+            <div className="nso2-section-head">
+              <span className="nso2-section-icon">👷</span>
+              <span className="nso2-section-title">الموظف المسؤول</span>
+            </div>
+            <div className="nso2-section-body">
+              <div className="nso2-row">
+                <div className="nso2-field">
+                  <label>الموظف القائم بالصيانة</label>
+                  <select value={assignedEmployee} onChange={(e) => setAssignedEmployee(Number(e.target.value))}>
+                    <option value={0}>-- اختر موظف --</option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>{emp.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="nso2-field" style={{ maxWidth: 140 }}>
+                  <label>أجرة الصيانة</label>
+                  <input type="number" min={0} step="0.01" value={laborCost || ""} onChange={(e) => setLaborCost(Number(e.target.value))} placeholder="0" />
+                </div>
+                <div className="nso2-field" style={{ maxWidth: 120 }}>
+                  <label>مدة الضمان (يوم)</label>
+                  <input type="number" min={0} value={warrantyDays || ""} onChange={(e) => setWarrantyDays(Number(e.target.value))} placeholder="اختياري" />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* ملخص */}
-        <div className="nso-sidebar">
-          <div className="nso-summary-card">
+        {/* ===== Right Sidebar (Summary) ===== */}
+        <div className="nso2-sidebar">
+          <div className="nso2-summary">
             <h4>ملخص الأمر</h4>
-            <div className="nso-summary-rows">
-              <div className="nso-summary-row">
+            <div className="nso2-summary-rows">
+              <div className="nso2-summary-row">
                 <span>قطع الغيار</span>
                 <strong>{money(totalParts)}</strong>
               </div>
-              <div className="nso-summary-divider" />
-              <div className="nso-summary-row nso-total">
+              <div className="nso2-summary-row">
+                <span>أجرة الصيانة</span>
+                <strong>{money(laborCost)}</strong>
+              </div>
+              <div className="nso2-summary-divider" />
+              <div className="nso2-summary-row nso2-total">
                 <span>الإجمالي</span>
-                <strong>{money(totalParts)}</strong>
+                <strong>{money(grandTotal)}</strong>
               </div>
             </div>
-            {selectedCustomer && (
-              <div className="nso-summary-badge nso-badge-green">
-                <span>✓</span> {selectedCustomer.name}
+
+            {customerName && (
+              <div className="nso2-badge nso2-badge-green">
+                <span>👤</span> {customerName}
               </div>
             )}
             {deviceType && (
-              <div className="nso-summary-badge nso-badge-blue">
+              <div className="nso2-badge nso2-badge-blue">
                 <span>📱</span> {deviceType}{deviceModel ? ` - ${deviceModel}` : ""}
               </div>
             )}
             {assignedEmployee > 0 && (
-              <div className="nso-summary-badge nso-badge-purple">
+              <div className="nso2-badge nso2-badge-purple">
                 <span>👷</span> {employees.find(e => e.id === assignedEmployee)?.name}
               </div>
             )}
           </div>
 
-          <div className="nso-actions">
-            <button type="submit" className="btn primary nso-submit-btn" disabled={saving}>
-              {saving ? "جارٍ الحفظ..." : "إنشاء أمر الصيانة"}
+          <div className="nso2-actions">
+            <button type="submit" className="btn primary nso2-submit" disabled={saving}>
+              {saving ? "جارٍ الحفظ..." : "💾 حفظ أمر الصيانة"}
             </button>
-            <button type="button" className="btn nso-cancel-btn" onClick={() => onDone(0)} disabled={saving}>
+            <button type="button" className="btn" onClick={() => onDone(0)} disabled={saving}>
               إلغاء
             </button>
           </div>

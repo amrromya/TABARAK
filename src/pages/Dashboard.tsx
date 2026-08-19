@@ -16,7 +16,6 @@ function getFeatures(): { maintenance: boolean; attendance: boolean } {
 export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string) => void; onOpenPos: (type: "sales-pos" | "purchase-pos") => void }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [showAccounting, setShowAccounting] = useState(false);
-  const [showMaintenance, setShowMaintenance] = useState(false);
   const [features, setFeatures] = useState(getFeatures());
   const notify = useToast();
 
@@ -128,7 +127,7 @@ export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string
           <span className="qa-arrow">←</span>
         </button>
         {features.maintenance && (
-        <button className="quick-action-card maintenance-action" onClick={() => setShowMaintenance(true)}>
+        <button className="quick-action-card maintenance-action" onClick={() => onNavigate("maint_home")}>
           <div className="qa-icon-wrap maintenance-icon-bg">
             <span className="qa-icon">🔧</span>
           </div>
@@ -178,74 +177,6 @@ export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string
         </div>
       )}
 
-      {showMaintenance && (
-        <div className="modal-overlay" onClick={() => setShowMaintenance(false)}>
-          <div className="modal maintenance-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-head">
-              <h2>🔧 الصيانة</h2>
-              <button className="modal-close" onClick={() => setShowMaintenance(false)}>✕</button>
-            </div>
-            <div className="maintenance-grid">
-              <button className="maintenance-card mc-dashboard" onClick={() => { setShowMaintenance(false); onNavigate("maint_dashboard"); }}>
-                <div className="mc-icon-wrap">📊</div>
-                <div className="mc-info">
-                  <span className="mc-title">لوحة تحكم الصيانة</span>
-                  <span className="mc-desc">نظرة عامة على حالة الطلبات</span>
-                </div>
-                <span className="mc-arrow">←</span>
-              </button>
-              <button className="maintenance-card mc-new" onClick={() => { setShowMaintenance(false); onNavigate("maint_new"); }}>
-                <div className="mc-icon-wrap">➕</div>
-                <div className="mc-info">
-                  <span className="mc-title">أمر صيانة جديد</span>
-                  <span className="mc-desc">إنشاء طلب صيانة جديد</span>
-                </div>
-                <span className="mc-arrow">←</span>
-              </button>
-              <button className="maintenance-card mc-orders" onClick={() => { setShowMaintenance(false); onNavigate("maint_orders"); }}>
-                <div className="mc-icon-wrap">📋</div>
-                <div className="mc-info">
-                  <span className="mc-title">أوامر الصيانة</span>
-                  <span className="mc-desc">قائمة جميع أوامر الصيانة</span>
-                </div>
-                <span className="mc-arrow">←</span>
-              </button>
-              <button className="maintenance-card mc-customers" onClick={() => { setShowMaintenance(false); onNavigate("maint_customers"); }}>
-                <div className="mc-icon-wrap">🤝</div>
-                <div className="mc-info">
-                  <span className="mc-title">عملاء الصيانة</span>
-                  <span className="mc-desc">إدارة عملاء الصيانة</span>
-                </div>
-                <span className="mc-arrow">←</span>
-              </button>
-              <button className="maintenance-card mc-techs" onClick={() => { setShowMaintenance(false); onNavigate("maint_techs"); }}>
-                <div className="mc-icon-wrap">👥</div>
-                <div className="mc-info">
-                  <span className="mc-title">موظفو الصيانة</span>
-                  <span className="mc-desc">إدارة الفنيين وحملات العمل</span>
-                </div>
-                <span className="mc-arrow">←</span>
-              </button>
-              <button className="maintenance-card mc-reports" onClick={() => { setShowMaintenance(false); onNavigate("maint_reports"); }}>
-                <div className="mc-icon-wrap">📈</div>
-                <div className="mc-info">
-                  <span className="mc-title">تقارير الصيانة</span>
-                  <span className="mc-desc">إحصائيات وتقارير الصيانة</span>
-                </div>
-                <span className="mc-arrow">←</span>
-              </button>
-              <button className="maintenance-card mc-settings" onClick={() => { setShowMaintenance(false); onNavigate("maint_settings"); }}>
-                <div className="mc-icon-wrap">⚙️</div>
-                <div className="mc-info">
-                  <span className="mc-title">إعدادات الصيانة</span>
-                  <span className="mc-desc">ضبط إعدادات نظام الصيانة</span>
-                </div>
-                <span className="mc-arrow">←</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="cards-grid">
         {cards.map((c) => (

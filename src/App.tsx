@@ -16,6 +16,7 @@ import { Pos } from "./pages/Pos";
 import { PurchasePos } from "./pages/PurchasePos";
 import { StockCount } from "./pages/StockCount";
 import { StockCounts } from "./pages/StockCounts";
+import { FullInventoryCount } from "./pages/FullInventoryCount";
 import { Attendance } from "./pages/Attendance";
 import { SplashScreen } from "./components/SplashScreen";
 import { AutoLogin } from "./components/AutoLogin";
@@ -28,6 +29,7 @@ import { MaintenanceSettings } from "./pages/maintenance/MaintenanceSettings";
 import { MaintenanceReports } from "./pages/maintenance/MaintenanceReports";
 import { MaintenanceCustomers } from "./pages/maintenance/MaintenanceCustomers";
 import { MaintenanceTechnicians } from "./pages/maintenance/MaintenanceTechnicians";
+import { MaintenanceHome } from "./pages/maintenance/MaintenanceHome";
 import { ReceiptVouchers } from "./pages/ReceiptVouchers";
 import { PaymentVouchers } from "./pages/PaymentVouchers";
 import { WarehouseTransfers } from "./pages/WarehouseTransfers";
@@ -56,6 +58,7 @@ const POS_WINDOWS: Record<string, { title: string }> = {
   "purchase-pos": { title: "فاتورة مشتريات - تبارك" },
   "count-pos": { title: "فاتورة جرد مؤقت - تبارك" },
   "counts-list": { title: "سجل فواتير الجرد - تبارك" },
+  "full-count": { title: "جرد كلي - تبارك" },
 };
 
 const opening = new Set<string>();
@@ -107,6 +110,14 @@ async function openCountsWindow(account?: Account) {
   params.set("popup", "1");
   if (accountJson) params.set("account", accountJson);
   await openTool("counts-list", undefined, undefined, params.toString());
+}
+
+async function openFullCountWindow(account?: Account) {
+  const accountJson = account ? JSON.stringify(account) : "";
+  const params = new URLSearchParams();
+  params.set("popup", "1");
+  if (accountJson) params.set("account", accountJson);
+  await openTool("full-count", undefined, undefined, params.toString());
 }
 
 function Shell({ account }: { account: Account }) {
@@ -185,6 +196,10 @@ function Shell({ account }: { account: Account }) {
     );
   }
 
+  if (label === "full-count") {
+    return <FullInventoryCount onBack={() => getCurrentWindow().close()} />;
+  }
+
   const canAccess = (menuKey: string) => {
     if (!account || !account.visibleMenus) return false;
     return account.visibleMenus.includes(menuKey);
@@ -248,6 +263,7 @@ function Shell({ account }: { account: Account }) {
           <Inventory
             onOpenCount={() => openCountWindow(undefined, account)}
             onOpenCounts={() => openCountsWindow(account)}
+            onOpenFullCount={() => openFullCountWindow(account)}
           />
         )}
         {safePage === "warehouses" && <Warehouses />}
@@ -276,6 +292,7 @@ function Shell({ account }: { account: Account }) {
         {safePage === "warehouse_transfers" && <WarehouseTransfers />}
         {safePage === "reports" && <Reports />}
         {safePage === "settings" && <SettingsPage />}
+        {safePage === "maint_home" && <MaintenanceHome onNavigate={setPage} onBack={() => setPage("dashboard")} />}
         {safePage === "maint_dashboard" && <MaintenanceDashboard />}
         {safePage === "maint_new" && <NewServiceOrder onDone={(id) => setPage("maint_detail_" + id)} />}
         {safePage === "maint_orders" && <ServiceOrders onNew={() => setPage("maint_new")} onView={(id) => setPage("maint_detail_" + id)} />}
