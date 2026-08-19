@@ -81,7 +81,9 @@ export function StockCount({ onBack }: { onBack: () => void }) {
   const filteredProducts = useMemo(() => {
     return products
       .filter((p) =>
-        warehouseId ? String(p.warehouse_id ?? "") === warehouseId : true,
+        warehouseId
+          ? !p.warehouse_id || String(p.warehouse_id) === warehouseId
+          : true,
       )
       .filter((p) => {
         if (!search.trim()) return true;
