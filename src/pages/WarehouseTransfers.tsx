@@ -8,6 +8,7 @@ import {
   today,
   useToast,
 } from "../components/ui";
+import { t } from "../i18n";
 
 interface TransferItem {
   product_id: number;
@@ -87,7 +88,7 @@ export function WarehouseTransfers() {
     const p = products.find((x: any) => x.id === Number(selProduct));
     if (!p) return;
     if (items.some((i) => i.product_id === p.id)) {
-      notify("الصنف مضاف مسبقاً", "error");
+      notify(t("itemAlreadyAdded"), "error");
       return;
     }
     setItems([...items, {
@@ -107,15 +108,15 @@ export function WarehouseTransfers() {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fromWarehouseId || !toWarehouseId) {
-      notify("اختر المستودعين", "error");
+      notify(t("selectBothWarehouses"), "error");
       return;
     }
     if (fromWarehouseId === toWarehouseId) {
-      notify("لا يمكن التحويل إلى نفس المستودع", "error");
+      notify(t("cannotTransferToSame"), "error");
       return;
     }
     if (transferType === "products" && items.length === 0) {
-      notify("أضف صنف واحد على الأقل", "error");
+      notify(t("addItemFirst"), "error");
       return;
     }
     try {
@@ -131,7 +132,7 @@ export function WarehouseTransfers() {
           quantity: i.quantity,
         })) : [],
       });
-      notify("تم إنشاء التحويل");
+      notify(t("transferCreated"));
       setShowForm(false);
       resetForm();
       load();
@@ -141,10 +142,10 @@ export function WarehouseTransfers() {
   };
 
   const remove = async (id: number) => {
-    if (!(await confirmDialog("هل تريد حذف التحويل؟"))) return;
+    if (!(await confirmDialog(t("confirmDeleteTransfer")))) return;
     try {
       await api.deleteWarehouseTransfer(id);
-      notify("تم الحذف");
+      notify(t("transferDeleted"));
       load();
     } catch (e) {
       notify(String(e), "error");
@@ -154,11 +155,11 @@ export function WarehouseTransfers() {
   return (
     <div className="page">
       <div className="page-head">
-        <h1>🔄 التحويلات بين المستودعات</h1>
+        <h1>{t("warehouseTransfersTitle")}</h1>
         <div className="head-actions">
           <input
             className="search"
-            placeholder="بحث برقم التحويل..."
+            placeholder={t("searchByTransferNo")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -169,24 +170,24 @@ export function WarehouseTransfers() {
               setShowForm(true);
             }}
           >
-            ➕ تحويل جديد
+            {t("newTransferBtn")}
           </button>
         </div>
       </div>
 
       <div className="toolbar-info">
         <span>
-          عدد التحويلات: <b>{transfers.length}</b>
+          {t("transferCount")}: <b>{transfers.length}</b>
         </span>
       </div>
 
       {loading ? (
         <div className="settings-card" style={{ textAlign: "center", padding: 40 }}>
-          <p>جارٍ التحميل...</p>
+          <p>{t("loading")}</p>
         </div>
       ) : transfers.length === 0 ? (
         <div className="settings-card" style={{ textAlign: "center", padding: 40 }}>
-          <p style={{ fontSize: 16, color: "#6b7280" }}>لا توجد تحويلات.</p>
+          <p style={{ fontSize: 16, color: "#6b7280" }}>{t("noTransfers")}</p>
         </div>
       ) : (
         <div className="table-wrap">
@@ -194,13 +195,13 @@ export function WarehouseTransfers() {
             <thead>
               <tr>
                 <th>#</th>
-                <th>رقم التحويل</th>
-                <th>التاريخ</th>
-                <th>من مستودع</th>
-                <th>إلى مستودع</th>
-                <th>النوع</th>
-                <th>المبلغ</th>
-                <th>الملاحظات</th>
+                <th>{t("transferNo")}</th>
+                <th>{t("date")}</th>
+                <th>{t("fromWarehouse")}</th>
+                <th>{t("toWarehouse")}</th>
+                <th>{t("typeLabel")}</th>
+                <th>{t("amount")}</th>
+                <th>{t("notes")}</th>
                 <th></th>
               </tr>
             </thead>
@@ -218,14 +219,14 @@ export function WarehouseTransfers() {
                       color: t.transfer_type === "products" ? "#1d4ed8" : "#b45309",
                       padding: "2px 8px", borderRadius: 10, fontSize: 11,
                     }}>
-                      {t.transfer_type === "products" ? "بضاعة" : "مالي"}
+                      {t.transfer_type === "products" ? t("goodsLabel") : t("financialLabel")}
                     </span>
                   </td>
                   <td>{t.amount > 0 ? money(t.amount) : "—"}</td>
                   <td style={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.notes ?? "—"}</td>
                   <td>
                     <button className="btn sm danger" onClick={() => remove(t.id)}>
-                      حذف
+                      {t("delete")}
                     </button>
                   </td>
                 </tr>
@@ -236,41 +237,41 @@ export function WarehouseTransfers() {
       )}
 
       {showForm && (
-        <Modal title="تحويل جديد بين المستودعات" onClose={() => setShowForm(false)} width="650px">
+        <Modal title={t("newTransferTitle")} onClose={() => setShowForm(false)} width="650px">
           <form onSubmit={save}>
             <div className="form-grid">
-              <Field label="التاريخ *">
+              <Field label={t("dateFieldRequired")}>
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
               </Field>
-              <Field label="نوع التحويل">
+              <Field label={t("transferTypeField")}>
                 <select value={transferType} onChange={(e) => setTransferType(e.target.value)}>
-                  <option value="products">تحويل أصناف (بضاعة)</option>
-                  <option value="financial">تحويل مالي (أرصدة نقدية)</option>
+                  <option value="products">{t("productTransferOption")}</option>
+                  <option value="financial">{t("financialTransferOption")}</option>
                 </select>
               </Field>
-              <Field label="من مستودع *">
+              <Field label={t("fromWarehouse") + " *"}>
                 <select value={fromWarehouseId} onChange={(e) => setFromWarehouseId(e.target.value)}>
-                  <option value="">— اختر —</option>
+                  <option value="">{t("selectWarehouseOption")}</option>
                   {warehouses.map((w: any) => (
                     <option key={w.id} value={w.id}>{w.name}</option>
                   ))}
                 </select>
               </Field>
-              <Field label="إلى مستودع *">
+              <Field label={t("toWarehouse") + " *"}>
                 <select value={toWarehouseId} onChange={(e) => setToWarehouseId(e.target.value)}>
-                  <option value="">— اختر —</option>
+                  <option value="">{t("selectWarehouseOption")}</option>
                   {warehouses.filter((w: any) => String(w.id) !== fromWarehouseId).map((w: any) => (
                     <option key={w.id} value={w.id}>{w.name}</option>
                   ))}
                 </select>
               </Field>
               {transferType === "financial" && (
-                <Field label="المبلغ المالي *">
+                <Field label={t("financialAmountField")}>
                   <input type="number" min={0} step="0.01" value={amount || ""} onChange={(e) => setAmount(Number(e.target.value))} />
                 </Field>
               )}
-              <Field label="ملاحظات">
-                <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="ملاحظات..." />
+              <Field label={t("notes")}>
+                <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("transferNotesPlaceholder")} />
               </Field>
             </div>
 
@@ -278,9 +279,9 @@ export function WarehouseTransfers() {
               <>
                 <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
                   <div style={{ flex: 2, minWidth: 180 }}>
-                    <Field label="اختر الصنف">
+                    <Field label={t("selectProductForTransfer")}>
                       <select value={selProduct} onChange={(e) => setSelProduct(e.target.value)}>
-                        <option value="">— اختر صنف —</option>
+                        <option value="">{t("selectProductOption")}</option>
                         {products.map((p: any) => (
                           <option key={p.id} value={p.id}>{p.name} (متوفر: {p.quantity})</option>
                         ))}
@@ -288,11 +289,11 @@ export function WarehouseTransfers() {
                     </Field>
                   </div>
                   <div style={{ flex: 1, minWidth: 100 }}>
-                    <Field label="الكمية">
+                    <Field label={t("quantity")}>
                       <input type="number" min={0.01} step="0.01" value={selQty} onChange={(e) => setSelQty(Number(e.target.value))} />
                     </Field>
                   </div>
-                  <button type="button" className="btn sm" onClick={addItem} style={{ marginBottom: 2 }}>➕ إضافة</button>
+                  <button type="button" className="btn sm" onClick={addItem} style={{ marginBottom: 2 }}>{t("addBtn")}</button>
                 </div>
 
                 {items.length > 0 && (
@@ -300,9 +301,9 @@ export function WarehouseTransfers() {
                     <table className="table">
                       <thead>
                         <tr>
-                          <th>الصنف</th>
-                          <th>الكمية</th>
-                          <th>المتوفر</th>
+                          <th>{t("productCol")}</th>
+                          <th>{t("quantity")}</th>
+                          <th>{t("availableCol")}</th>
                           <th></th>
                         </tr>
                       </thead>
@@ -341,8 +342,8 @@ export function WarehouseTransfers() {
             )}
 
             <div className="form-actions" style={{ marginTop: 16 }}>
-              <button type="submit" className="btn primary">✅ حفظ التحويل</button>
-              <button type="button" className="btn" onClick={() => setShowForm(false)}>إلغاء</button>
+              <button type="submit" className="btn primary">{t("saveTransfer")}</button>
+              <button type="button" className="btn" onClick={() => setShowForm(false)}>{t("cancel")}</button>
             </div>
           </form>
         </Modal>
@@ -352,7 +353,7 @@ export function WarehouseTransfers() {
         <div className="wh-summary-bar">
           <div className="wh-summary-header">
             <span className="wh-summary-icon">💰</span>
-            <span className="wh-summary-title">أرصدة الصندوق النقدية ( الفعلية )</span>
+            <span className="wh-summary-title">{t("cashBalanceSummary")}</span>
           </div>
           <div className="wh-summary-grid">
             {warehouseStatsList.map((ws) => (
@@ -360,15 +361,15 @@ export function WarehouseTransfers() {
                 <div className="wh-card-name">🏬 {ws.name}</div>
                 <div className="wh-card-stats">
                   <div className="wh-card-stat">
-                    <span className="wh-card-label">وارد (نقد + سندات)</span>
+                    <span className="wh-card-label">{t("inbound")}</span>
                     <span className="wh-card-value wh-green">{money(ws.cashIn)}</span>
                   </div>
                   <div className="wh-card-stat">
-                    <span className="wh-card-label">صادر (مشتريات + سندات)</span>
+                    <span className="wh-card-label">{t("outbound")}</span>
                     <span className="wh-card-value wh-red">{money(ws.cashOut)}</span>
                   </div>
                   <div className="wh-card-stat wh-balance-row">
-                    <span className="wh-card-label">الرصيد</span>
+                    <span className="wh-card-label">{t("balanceLabel")}</span>
                     <span className={`wh-card-value ${ws.balance < 0 ? "wh-red" : "wh-green"}`}>
                       {ws.balance < 0 ? "−" : ""}{money(Math.abs(ws.balance))}
                     </span>
@@ -377,18 +378,18 @@ export function WarehouseTransfers() {
               </div>
             ))}
             <div className="wh-summary-card wh-total-card">
-              <div className="wh-card-name">💰 إجمالي الصناديق</div>
+              <div className="wh-card-name">{t("totalCashBoxes")}</div>
               <div className="wh-card-stats">
                 <div className="wh-card-stat">
-                  <span className="wh-card-label">وارد</span>
+                  <span className="wh-card-label">{t("inboundShort")}</span>
                   <span className="wh-card-value wh-green">{money(warehouseStatsList.reduce((s, w) => s + w.cashIn, 0))}</span>
                 </div>
                 <div className="wh-card-stat">
-                  <span className="wh-card-label">صادر</span>
+                  <span className="wh-card-label">{t("outboundShort")}</span>
                   <span className="wh-card-value wh-red">{money(warehouseStatsList.reduce((s, w) => s + w.cashOut, 0))}</span>
                 </div>
                 <div className="wh-card-stat wh-balance-row">
-                  <span className="wh-card-label">الرصيد</span>
+                  <span className="wh-card-label">{t("balanceLabel")}</span>
                   {(() => {
                     const total = warehouseStatsList.reduce((s, w) => s + w.balance, 0);
                     return (

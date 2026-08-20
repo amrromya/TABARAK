@@ -1,4 +1,4 @@
-use crate::db::money;
+use crate::utils::money;
 use crate::maintenance_models::*;
 use crate::AppState;
 use chrono::Local;
@@ -28,10 +28,6 @@ pub struct NewChecklistItem {
 }
 
 // =============== Helper functions ===============
-
-fn now_str() -> String {
-    Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
-}
 
 fn today_str() -> String {
     Local::now().format("%Y-%m-%d").to_string()
@@ -107,38 +103,6 @@ fn add_audit_log(
     )
     .map_err(|e| e.to_string())?;
     Ok(())
-}
-
-fn get_order_summary(conn: &Connection, id: i64) -> Result<ServiceOrderSummary, String> {
-    conn.query_row(
-        "SELECT so.id, so.order_no, c.name, c.phone, so.device_type, so.device_brand, so.device_model,
-                so.status, so.total_cost, so.amount_paid, (so.total_cost - so.amount_paid) AS remaining,
-                so.warranty_end, so.original_order_id, so.created_at, so.updated_at
-         FROM service_orders so
-         LEFT JOIN customers c ON c.id = so.customer_id
-         WHERE so.id = ?1",
-        params![id],
-        |r| {
-            Ok(ServiceOrderSummary {
-                id: r.get(0)?,
-                order_no: r.get(1)?,
-                customer_name: r.get(2)?,
-                customer_phone: r.get(3)?,
-                device_type: r.get(4)?,
-                device_brand: r.get(5)?,
-                device_model: r.get(6)?,
-                status: r.get(7)?,
-                total_cost: r.get(8)?,
-                amount_paid: r.get(9)?,
-                remaining: r.get(10)?,
-                warranty_end: r.get(11)?,
-                original_order_id: r.get(12)?,
-                created_at: r.get(13)?,
-                updated_at: r.get(14)?,
-            })
-        },
-    )
-    .map_err(|e| e.to_string())
 }
 
 fn get_full_order(conn: &Connection, id: i64) -> Result<ServiceOrder, String> {

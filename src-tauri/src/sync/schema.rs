@@ -1,5 +1,6 @@
 use rusqlite::Connection;
 use serde_json::Value;
+use crate::utils::ensure_column;
 
 pub const SYNC_TABLES: &[&str] = &[
     // 1. Reference tables (no foreign keys)
@@ -70,28 +71,6 @@ pub fn add_sync_columns(conn: &Connection) -> Result<(), String> {
         ));
     }
     
-    Ok(())
-}
-
-fn ensure_column(
-    conn: &Connection,
-    table: &str,
-    column: &str,
-    ddl: &str,
-) -> Result<(), String> {
-    let sql = format!("PRAGMA table_info({table})");
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let exists = stmt
-        .query_map([], |r| r.get::<_, String>(1))
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?
-        .iter()
-        .any(|n| n == column);
-    if !exists {
-        let sql = format!("ALTER TABLE {table} ADD COLUMN {column} {ddl}");
-        conn.execute(&sql, []).map_err(|e| e.to_string())?;
-    }
     Ok(())
 }
 

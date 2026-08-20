@@ -80,31 +80,17 @@ fn compute_checksum(license: &LicenseData) -> String {
         "{}|{}|{}|{}|{}",
         license.hwid, license.customer_name, license.expiry_date, license.features, license.created_at
     );
-    // استخدام مفتاح سري داخلي للتوقيع (غير قابل للاختراق)
-    let secret = "t4b4r4k_s3cr3t_k3y_2025!";
+    // مفتاح سري مقسّم لأجزاء صعبة التعقب
+    let p1 = "t4b";
+    let p2 = "4r4k";
+    let p3 = "_s3cr";
+    let p4 = "3t_k";
+    let p5 = "3y_2025!";
+    let secret = format!("{}{}{}{}{}", p1, p2, p3, p4, p5);
     let combined = format!("{}|{}", payload, secret);
     let mut hasher = Sha256::new();
     hasher.update(combined.as_bytes());
     hex::encode(hasher.finalize())
-}
-
-pub fn create_license_data(
-    hwid: &str,
-    customer_name: &str,
-    expiry_date: &str,
-    features: &str,
-) -> LicenseData {
-    let created_at = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    let mut license = LicenseData {
-        hwid: hwid.to_string(),
-        customer_name: customer_name.to_string(),
-        expiry_date: expiry_date.to_string(),
-        features: features.to_string(),
-        created_at,
-        checksum: String::new(),
-    };
-    license.checksum = compute_checksum(&license);
-    license
 }
 
 pub fn verify_license_data(license: &LicenseData) -> Result<bool, String> {

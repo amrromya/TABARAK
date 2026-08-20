@@ -2,6 +2,7 @@
 use crate::AppState;
 use rusqlite::backup::Backup;
 use rusqlite::{params, Connection, OpenFlags};
+use sha2::Digest;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -261,9 +262,9 @@ pub fn get_warehouse_cash_balances(
         result.push(WarehouseCashBalance {
             warehouse_id: wh_id,
             warehouse_name: wh_name,
-            cash_in: crate::db::money(cash_in),
-            cash_out: crate::db::money(cash_out),
-            balance: crate::db::money(balance),
+            cash_in: crate::utils::money(cash_in),
+            cash_out: crate::utils::money(cash_out),
+            balance: crate::utils::money(balance),
         });
     }
 
@@ -282,8 +283,8 @@ pub fn warehouse_stats(state: State<AppState>, id: i64) -> Result<WarehouseStats
         )
         .map_err(|e| e.to_string())?;
     Ok(WarehouseStats {
-        quantity: crate::db::money(quantity.unwrap_or(0.0)),
-        value: crate::db::money(value.unwrap_or(0.0)),
+        quantity: crate::utils::money(quantity.unwrap_or(0.0)),
+        value: crate::utils::money(value.unwrap_or(0.0)),
     })
 }
 
@@ -324,6 +325,59 @@ pub fn list_products(
         })
         .map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_products_paged(
+    state: State<AppState>,
+    search: Option<String>,
+    page: i64,
+    page_size: i64,
+) -> Result<(Vec<Product>, i64), String> {
+    let conn = get_db(&state)?;
+    let ps = if page_size <= 0 { 50 } else { page_size };
+    let offset = (page - 1) * ps;
+
+    let total: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM products p
+             WHERE (?1 IS NULL OR p.name LIKE '%' || ?1 || '%' OR p.barcode LIKE '%' || ?1 || '%')",
+            params![search],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let sql = "
+        SELECT p.id, p.name, p.barcode, p.category_id, c.name, p.warehouse_id, w.name, p.unit,
+               p.cost_price, p.sell_price, p.quantity, p.min_quantity, p.opening_balance
+        FROM products p
+        LEFT JOIN categories c ON c.id = p.category_id
+        LEFT JOIN warehouses w ON w.id = p.warehouse_id
+        WHERE (?1 IS NULL OR p.name LIKE '%' || ?1 || '%' OR p.barcode LIKE '%' || ?1 || '%')
+        ORDER BY p.name COLLATE NOCASE
+        LIMIT ?2 OFFSET ?3";
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![search, ps, offset], |r| {
+            Ok(Product {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                barcode: r.get(2)?,
+                category_id: r.get(3)?,
+                category_name: r.get(4)?,
+                warehouse_id: r.get(5)?,
+                warehouse_name: r.get(6)?,
+                unit: r.get(7)?,
+                cost_price: r.get(8)?,
+                sell_price: r.get(9)?,
+                quantity: r.get(10)?,
+                min_quantity: r.get(11)?,
+                opening_balance: r.get(12)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    let products = rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+    Ok((products, total))
 }
 
 fn next_barcode_value(conn: &Connection) -> Result<String, String> {
@@ -1110,7 +1164,7 @@ pub fn create_sale(state: State<AppState>, input: NewSale) -> Result<Sale, Strin
 
     let mut total = 0.0;
     for it in &input.items {
-        let subtotal = crate::db::money(it.quantity * it.sell_price);
+        let subtotal = crate::utils::money(it.quantity * it.sell_price);
         let cost_price: f64 = tx
             .query_row(
                 "SELECT cost_price FROM products WHERE id = ?1",
@@ -1132,8 +1186,8 @@ pub fn create_sale(state: State<AppState>, input: NewSale) -> Result<Sale, Strin
         total += subtotal;
     }
 
-    let total = crate::db::money(total);
-    let net_total = crate::db::money(total - input.discount + additional);
+    let total = crate::utils::money(total);
+    let net_total = crate::utils::money(total - input.discount + additional);
     let invoice_no = format!("FS-{:06}", sale_id);
     tx.execute(
         "UPDATE sales SET invoice_no = ?1, total = ?2, net_total = ?3 WHERE id = ?4",
@@ -1245,7 +1299,7 @@ pub fn update_sale(
 
     let mut total = 0.0;
     for it in &input.items {
-        let subtotal = crate::db::money(it.quantity * it.sell_price);
+        let subtotal = crate::utils::money(it.quantity * it.sell_price);
         let cost_price: f64 = tx
             .query_row(
                 "SELECT cost_price FROM products WHERE id = ?1",
@@ -1267,8 +1321,8 @@ pub fn update_sale(
         total += subtotal;
     }
 
-    let total = crate::db::money(total);
-    let net_total = crate::db::money(total - input.discount + additional);
+    let total = crate::utils::money(total);
+    let net_total = crate::utils::money(total - input.discount + additional);
     tx.execute(
         "UPDATE sales SET total = ?1, net_total = ?2 WHERE id = ?3",
         params![total, net_total, id],
@@ -1482,7 +1536,7 @@ pub fn create_purchase(state: State<AppState>, input: NewPurchase) -> Result<Pur
         if it.quantity <= 0.0 {
             return Err("الكمية يجب أن تكون أكبر من صفر".into());
         }
-        let subtotal = crate::db::money(it.quantity * it.cost_price);
+        let subtotal = crate::utils::money(it.quantity * it.cost_price);
         tx.execute(
             "INSERT INTO purchase_items (purchase_id, product_id, quantity, cost_price)
              VALUES (?1, ?2, ?3, ?4)",
@@ -1497,7 +1551,7 @@ pub fn create_purchase(state: State<AppState>, input: NewPurchase) -> Result<Pur
         total += subtotal;
     }
 
-    let total = crate::db::money(total + additional - discount);
+    let total = crate::utils::money(total + additional - discount);
     tx.execute(
         "UPDATE purchases SET total = ?1 WHERE id = ?2",
         params![total, purchase_id],
@@ -1596,7 +1650,7 @@ pub fn update_purchase(
         if it.quantity <= 0.0 {
             return Err("الكمية يجب أن تكون أكبر من صفر".into());
         }
-        let subtotal = crate::db::money(it.quantity * it.cost_price);
+        let subtotal = crate::utils::money(it.quantity * it.cost_price);
         tx.execute(
             "INSERT INTO purchase_items (purchase_id, product_id, quantity, cost_price)
              VALUES (?1, ?2, ?3, ?4)",
@@ -1611,7 +1665,7 @@ pub fn update_purchase(
         total += subtotal;
     }
 
-    let total = crate::db::money(total + additional - discount);
+    let total = crate::utils::money(total + additional - discount);
     tx.execute(
         "UPDATE purchases SET total = ?1 WHERE id = ?2",
         params![total, id],
@@ -1885,7 +1939,7 @@ pub fn create_purchase_return(
         if it.quantity <= 0.0 {
             return Err("الكمية يجب أن تكون أكبر من صفر".into());
         }
-        let subtotal = crate::db::money(it.quantity * it.cost_price);
+        let subtotal = crate::utils::money(it.quantity * it.cost_price);
         tx.execute(
             "INSERT INTO purchase_return_items (return_id, product_id, quantity, cost_price)
              VALUES (?1, ?2, ?3, ?4)",
@@ -1900,7 +1954,7 @@ pub fn create_purchase_return(
         total += subtotal;
     }
 
-    let total = crate::db::money(total + additional - discount);
+    let total = crate::utils::money(total + additional - discount);
     let invoice_no = format!("MR-{:06}", return_id);
     tx.execute(
         "UPDATE purchase_returns SET total = ?1, invoice_no = ?2 WHERE id = ?3",
@@ -2168,7 +2222,7 @@ pub fn create_sale_return(
                 |r| r.get(0),
             )
             .map_err(|_| "منتج غير موجود".to_string())?;
-        let subtotal = crate::db::money(it.quantity * it.sell_price);
+        let subtotal = crate::utils::money(it.quantity * it.sell_price);
         let cost_price: f64 = tx
             .query_row(
                 "SELECT cost_price FROM products WHERE id = ?1",
@@ -2190,7 +2244,7 @@ pub fn create_sale_return(
         total += subtotal;
     }
 
-    let total = crate::db::money(total + additional - discount);
+    let total = crate::utils::money(total + additional - discount);
     let invoice_no = format!("MSR-{:06}", return_id);
     tx.execute(
         "UPDATE sale_returns SET total = ?1, invoice_no = ?2 WHERE id = ?3",
@@ -3191,6 +3245,52 @@ pub fn save_settings(state: State<AppState>, settings: Settings) -> Result<Setti
     get_settings(state)
 }
 
+// =============== كلمات المرور ===============
+
+#[tauri::command]
+pub fn verify_section_password(state: State<AppState>, password: String) -> Result<bool, String> {
+    let conn = get_db(&state)?;
+    let stored: Option<String> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'section_password'",
+            [],
+            |r| r.get(0),
+        )
+        .ok();
+    let expected = stored.unwrap_or_else(|| "5506".to_string());
+    Ok(password == expected)
+}
+
+#[tauri::command]
+pub fn change_section_password(
+    state: State<AppState>,
+    current_password: String,
+    new_password: String,
+) -> Result<(), String> {
+    let conn = get_db(&state)?;
+    let stored: Option<String> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'section_password'",
+            [],
+            |r| r.get(0),
+        )
+        .ok();
+    let expected = stored.unwrap_or_else(|| "5506".to_string());
+    if current_password != expected {
+        return Err("كلمة المرور الحالية خاطئة".into());
+    }
+    if new_password.len() < 4 {
+        return Err("كلمة المرور الجديدة يجب أن تكون 4 أحرف على الأقل".into());
+    }
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('section_password', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![new_password],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // =============== النسخ الاحتياطي ===============
 
 #[tauri::command]
@@ -3369,17 +3469,17 @@ pub fn get_dashboard(state: State<AppState>) -> Result<Dashboard, String> {
         .map_err(|e| e.to_string())?;
 
     Ok(Dashboard {
-        today_sales: crate::db::money(today_sales),
-        today_purchases: crate::db::money(today_purchases),
-        today_expenses: crate::db::money(today_expenses),
-        today_profit: crate::db::money(today_sales - today_cost - today_expenses),
+        today_sales: crate::utils::money(today_sales),
+        today_purchases: crate::utils::money(today_purchases),
+        today_expenses: crate::utils::money(today_expenses),
+        today_profit: crate::utils::money(today_sales - today_cost - today_expenses),
         product_count,
         low_stock_count,
         recent_sales_count,
         total_suppliers,
         total_customers,
-        total_debts: crate::db::money(total_debts),
-        cash_in_hand: crate::db::money(
+        total_debts: crate::utils::money(total_debts),
+        cash_in_hand: crate::utils::money(
             opening + cash_collected + payments - purchases_total - expenses_total,
         ),
     })
@@ -3436,12 +3536,12 @@ pub fn get_profit_loss(state: State<AppState>, range: DateRange) -> Result<Profi
 
     let _ = params;
     Ok(ProfitLoss {
-        sales_total: crate::db::money(net_sales),
-        cost_total: crate::db::money(cost_total),
-        gross_profit: crate::db::money(net_sales - cost_total),
-        expenses_total: crate::db::money(expenses_total),
-        purchases_total: crate::db::money(purchases_total),
-        net_profit: crate::db::money(net_sales - cost_total - expenses_total),
+        sales_total: crate::utils::money(net_sales),
+        cost_total: crate::utils::money(cost_total),
+        gross_profit: crate::utils::money(net_sales - cost_total),
+        expenses_total: crate::utils::money(expenses_total),
+        purchases_total: crate::utils::money(purchases_total),
+        net_profit: crate::utils::money(net_sales - cost_total - expenses_total),
         sales_count,
     })
 }
@@ -3468,7 +3568,7 @@ pub fn get_stock_value(state: State<AppState>) -> Result<StockValue, String> {
         .map_err(|e| e.to_string())?;
     Ok(StockValue {
         product_count,
-        total_value: crate::db::money(total_value),
+        total_value: crate::utils::money(total_value),
         low_stock_count,
     })
 }
@@ -3649,7 +3749,7 @@ fn save_count_items(
                 )
                 .map_err(|_| "منتج غير موجود".to_string())?,
         };
-        let difference = crate::db::money(it.counted_qty - system_qty);
+        let difference = crate::utils::money(it.counted_qty - system_qty);
         tx.execute(
             "INSERT INTO stock_count_items (count_id, product_id, system_qty, counted_qty, difference)
              VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -3664,9 +3764,9 @@ fn save_count_items(
         total_diff += difference;
     }
     Ok((
-        crate::db::money(total_diff),
-        crate::db::money(total_surplus),
-        crate::db::money(total_deficit),
+        crate::utils::money(total_diff),
+        crate::utils::money(total_surplus),
+        crate::utils::money(total_deficit),
     ))
 }
 
@@ -4317,4 +4417,399 @@ pub fn list_printers() -> Result<Vec<String>, String> {
         .filter(|l| !l.is_empty())
         .collect();
     Ok(printers)
+}
+
+// =============== أول تشغيل ===============
+
+#[tauri::command]
+pub fn is_first_run(state: State<AppState>) -> Result<bool, String> {
+    let conn = get_db(&state)?;
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM settings WHERE key = 'admin_initialized'", [], |r| r.get(0))
+        .map_err(|e| e.to_string())?;
+    Ok(count == 0)
+}
+
+#[tauri::command]
+pub fn initialize_admin(
+    state: State<AppState>,
+    admin_name: String,
+    admin_password: String,
+) -> Result<(), String> {
+    let conn = get_db(&state)?;
+    if admin_name.trim().is_empty() {
+        return Err("اسم المستخدم مطلوب".into());
+    }
+    if admin_password.len() < 6 {
+        return Err("كلمة المرور يجب أن تكون 6 أحرف على الأقل".into());
+    }
+    // حفظ كلمة مرور الأدمن في الإعدادات (مش في ملف الحسابات)
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(admin_password.as_bytes());
+    let hash = hex::encode(hasher.finalize());
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('admin_password_hash', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![hash],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('admin_name', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![admin_name],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('admin_initialized', '1')
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn verify_admin_password(
+    state: State<AppState>,
+    password: String,
+) -> Result<bool, String> {
+    let conn = get_db(&state)?;
+    let stored_hash: Option<String> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'admin_password_hash'",
+            [],
+            |r| r.get(0),
+        )
+        .ok();
+    match stored_hash {
+        Some(expected) => {
+            let mut hasher = sha2::Sha256::new();
+            hasher.update(password.as_bytes());
+            let hash = hex::encode(hasher.finalize());
+            Ok(hash == expected)
+        }
+        None => Ok(password == "admin123"),
+    }
+}
+
+#[tauri::command]
+pub fn change_admin_password(
+    state: State<AppState>,
+    current_password: String,
+    new_password: String,
+) -> Result<(), String> {
+    let conn = get_db(&state)?;
+    // Inline verification to avoid moving state
+    let stored_hash: Option<String> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'admin_password_hash'",
+            [],
+            |r| r.get(0),
+        )
+        .ok();
+    let ok = match stored_hash {
+        Some(expected) => {
+            let mut h = sha2::Sha256::new();
+            h.update(current_password.as_bytes());
+            hex::encode(h.finalize()) == expected
+        }
+        None => current_password == "admin123",
+    };
+    if !ok {
+        return Err("كلمة المرور الحالية خاطئة".into());
+    }
+    if new_password.len() < 6 {
+        return Err("كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل".into());
+    }
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(new_password.as_bytes());
+    let hash = hex::encode(hasher.finalize());
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('admin_password_hash', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![hash],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// =============== التصدير CSV ===============
+
+/// Sanitize a string field for CSV output to prevent CSV injection and formatting issues.
+fn csv_field(s: &str) -> String {
+    let trimmed = s.trim();
+    // If starts with dangerous prefix, prepend single quote to neutralize
+    if let Some(first) = trimmed.chars().next() {
+        if first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r' || first == '\n' {
+            return format!("'{}", trimmed.replace('"', "\"\""));
+        }
+    }
+    // If contains comma, quote, or newline, wrap in quotes
+    if trimmed.contains(',') || trimmed.contains('"') || trimmed.contains('\n') || trimmed.contains('\r') {
+        format!("\"{}\"", trimmed.replace('"', "\"\""))
+    } else {
+        trimmed.to_string()
+    }
+}
+
+#[tauri::command]
+pub fn export_products_csv(state: State<AppState>) -> Result<String, String> {
+    let conn = get_db(&state)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT p.name, p.barcode, c.name, w.name, p.unit, p.cost_price, p.sell_price, p.quantity, p.min_quantity
+             FROM products p
+             LEFT JOIN categories c ON c.id = p.category_id
+             LEFT JOIN warehouses w ON w.id = p.warehouse_id
+             ORDER BY p.name COLLATE NOCASE",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut csv = String::from("Name,Barcode,Category,Warehouse,Unit,Cost Price,Sell Price,Quantity,Min Qty\n");
+    let rows = stmt
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, Option<String>>(0).unwrap_or_default(),
+                r.get::<_, Option<String>>(1).unwrap_or_default(),
+                r.get::<_, Option<String>>(2).unwrap_or_default(),
+                r.get::<_, Option<String>>(3).unwrap_or_default(),
+                r.get::<_, Option<String>>(4).unwrap_or_default(),
+                r.get::<_, f64>(5).unwrap_or(0.0),
+                r.get::<_, f64>(6).unwrap_or(0.0),
+                r.get::<_, f64>(7).unwrap_or(0.0),
+                r.get::<_, f64>(8).unwrap_or(0.0),
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+
+    for row in rows {
+        let (name, barcode, cat, wh, unit, cost, sell, qty, min) = row.map_err(|e| e.to_string())?;
+        csv.push_str(&format!(
+            "{},{},{},{},{},{},{},{},{}\n",
+            csv_field(&name.unwrap_or_default()),
+            csv_field(&barcode.unwrap_or_default()),
+            csv_field(&cat.unwrap_or_default()),
+            csv_field(&wh.unwrap_or_default()),
+            csv_field(&unit.unwrap_or_default()),
+            cost, sell, qty, min
+        ));
+    }
+    Ok(csv)
+}
+
+#[tauri::command]
+pub fn export_sales_csv(
+    state: State<AppState>,
+    from: Option<String>,
+    to: Option<String>,
+) -> Result<String, String> {
+    let conn = get_db(&state)?;
+    let (clause, pv) = if from.is_some() || to.is_some() {
+        let f = from.unwrap_or_default();
+        let t = to.unwrap_or_default();
+        let mut parts = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        if !f.is_empty() {
+            parts.push("s.date >= ?".to_string());
+            params.push(Box::new(f));
+        }
+        if !t.is_empty() {
+            parts.push("s.date <= ?".to_string());
+            params.push(Box::new(t));
+        }
+        if parts.is_empty() {
+            (String::new(), params)
+        } else {
+            (format!(" WHERE {}", parts.join(" AND ")), params)
+        }
+    } else {
+        (String::new(), vec![])
+    };
+
+    let sql = format!(
+        "SELECT s.invoice_no, s.date, s.customer_name, s.total, s.discount, s.additional, s.net_total, s.payment_method
+         FROM sales s{clause} ORDER BY s.date DESC"
+    );
+
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = pv.iter().map(|p| p.as_ref()).collect();
+
+    let mut csv = String::from("Invoice,Date,Customer,Total,Discount,Additional,Net Total,Payment\n");
+    let rows = stmt
+        .query_map(param_refs.as_slice(), |r| {
+            Ok((
+                r.get::<_, String>(0).unwrap_or_default(),
+                r.get::<_, String>(1).unwrap_or_default(),
+                r.get::<_, Option<String>>(2).unwrap_or_default(),
+                r.get::<_, f64>(3).unwrap_or(0.0),
+                r.get::<_, f64>(4).unwrap_or(0.0),
+                r.get::<_, f64>(5).unwrap_or(0.0),
+                r.get::<_, f64>(6).unwrap_or(0.0),
+                r.get::<_, String>(7).unwrap_or_default(),
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+
+    for row in rows {
+        let (inv, date, cust, total, disc, add, net, pay) = row.map_err(|e| e.to_string())?;
+        csv.push_str(&format!(
+            "{},{},{},{},{},{},{},{}\n",
+            csv_field(&inv), csv_field(&date), csv_field(&cust.unwrap_or_default()), total, disc, add, net, csv_field(&pay)
+        ));
+    }
+    Ok(csv)
+}
+
+#[tauri::command]
+pub fn export_purchases_csv(
+    state: State<AppState>,
+    from: Option<String>,
+    to: Option<String>,
+) -> Result<String, String> {
+    let conn = get_db(&state)?;
+    let (clause, pv) = if from.is_some() || to.is_some() {
+        let f = from.unwrap_or_default();
+        let t = to.unwrap_or_default();
+        let mut parts = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        if !f.is_empty() {
+            parts.push("date >= ?".to_string());
+            params.push(Box::new(f));
+        }
+        if !t.is_empty() {
+            parts.push("date <= ?".to_string());
+            params.push(Box::new(t));
+        }
+        if parts.is_empty() {
+            (String::new(), params)
+        } else {
+            (format!(" WHERE {}", parts.join(" AND ")), params)
+        }
+    } else {
+        (String::new(), vec![])
+    };
+
+    let sql = format!(
+        "SELECT date, total, discount, additional, notes
+         FROM purchases{clause} ORDER BY date DESC"
+    );
+
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = pv.iter().map(|p| p.as_ref()).collect();
+
+    let mut csv = String::from("Date,Total,Discount,Additional,Notes\n");
+    let rows = stmt
+        .query_map(param_refs.as_slice(), |r| {
+            Ok((
+                r.get::<_, String>(0).unwrap_or_default(),
+                r.get::<_, f64>(1).unwrap_or(0.0),
+                r.get::<_, f64>(2).unwrap_or(0.0),
+                r.get::<_, f64>(3).unwrap_or(0.0),
+                r.get::<_, Option<String>>(4).unwrap_or_default(),
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+
+    for row in rows {
+        let (date, total, disc, add, notes) = row.map_err(|e| e.to_string())?;
+        csv.push_str(&format!(
+            "{},{},{},{},{}\n",
+            csv_field(&date), total, disc, add, csv_field(&notes.unwrap_or_default())
+        ));
+    }
+    Ok(csv)
+}
+
+// =============== النسخ الاحتياطي التلقائي ===============
+
+lazy_static::lazy_static! {
+    static ref BACKUP_TIMERS: Mutex<Vec<std::sync::mpsc::Sender<()>>> = Mutex::new(Vec::new());
+}
+
+#[tauri::command]
+pub fn start_auto_backup(state: State<AppState>) -> Result<(), String> {
+    let db_path = state.db_path.clone();
+    let (tx, rx) = std::sync::mpsc::channel::<()>();
+    BACKUP_TIMERS.lock().map_err(|e| e.to_string())?.push(tx);
+
+    std::thread::spawn(move || {
+        let backup_interval = std::time::Duration::from_secs(24 * 60 * 60);
+        loop {
+            std::thread::sleep(backup_interval);
+            if rx.try_recv().is_ok() {
+                break;
+            }
+            if let Some(parent) = db_path.parent() {
+                let backup_dir = parent.join("backups");
+                let _ = std::fs::create_dir_all(&backup_dir);
+                let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+                let backup_path = backup_dir.join(format!("tabarak_{}.db", timestamp));
+                let _ = std::fs::copy(&db_path, &backup_path);
+                if let Ok(entries) = std::fs::read_dir(&backup_dir) {
+                    let mut backups: Vec<_> = entries
+                        .filter_map(|e| e.ok())
+                        .filter(|e| e.path().extension().map_or(false, |ext| ext == "db"))
+                        .collect();
+                    backups.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+                    while backups.len() > 7 {
+                        if let Some(oldest) = backups.first() {
+                            let _ = std::fs::remove_file(oldest.path());
+                        }
+                        backups.remove(0);
+                    }
+                }
+            }
+        }
+    });
+    Ok(())
+}
+
+// =============== البحث في الصيانة ===============
+
+#[tauri::command]
+pub fn search_service_orders(
+    state: State<AppState>,
+    query: String,
+) -> Result<Vec<crate::maintenance_models::ServiceOrderSummary>, String> {
+    let conn = get_db(&state)?;
+    let q = format!("%{}%", query);
+    let mut stmt = conn
+        .prepare(
+            "SELECT so.id, so.order_no, c.name, c.phone, so.device_type, so.device_brand, so.device_model,
+                    so.status, so.total_cost, so.amount_paid, (so.total_cost - so.amount_paid) AS remaining,
+                    so.warranty_end, so.original_order_id, so.created_at, so.updated_at
+             FROM service_orders so
+             LEFT JOIN customers c ON c.id = so.customer_id
+             WHERE so.order_no LIKE ?1
+                OR c.name LIKE ?1
+                OR c.phone LIKE ?1
+                OR so.device_brand LIKE ?1
+                OR so.device_model LIKE ?1
+                OR so.serial_number LIKE ?1
+                OR so.imei LIKE ?1
+             ORDER BY so.created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![q], |r| {
+            Ok(crate::maintenance_models::ServiceOrderSummary {
+                id: r.get(0)?,
+                order_no: r.get(1)?,
+                customer_name: r.get(2)?,
+                customer_phone: r.get(3)?,
+                device_type: r.get(4)?,
+                device_brand: r.get(5)?,
+                device_model: r.get(6)?,
+                status: r.get(7)?,
+                total_cost: r.get(8)?,
+                amount_paid: r.get(9)?,
+                remaining: r.get(10)?,
+                warranty_end: r.get(11)?,
+                original_order_id: r.get(12)?,
+                created_at: r.get(13)?,
+                updated_at: r.get(14)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }

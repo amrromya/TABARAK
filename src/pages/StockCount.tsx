@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { confirmDialog, fmtDate, qty, signed, today, useToast } from "../components/ui";
+import { t } from "../i18n";
 import type { Product, Warehouse } from "../types";
 
 interface StockCountLine {
@@ -28,9 +29,9 @@ const statusClass: Record<DiffStatus, string> = {
 };
 
 const statusLabel: Record<DiffStatus, string> = {
-  match: "مطابق",
-  surplus: "زيادة",
-  deficit: "عجز",
+  match: t("matchStatus"),
+  surplus: t("surplusStatus"),
+  deficit: t("deficitStatus"),
 };
 
 export function StockCount({ onBack }: { onBack: () => void }) {
@@ -160,7 +161,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
     setLines((prevLines) =>
       prevLines.map((l) => ({ ...l, counted_qty: l.system_qty })),
     );
-    notify("تمت مطابقة جميع الكميات مع رصيد النظام");
+    notify(t("quantitiesMatched"));
   }, [lines.length, notify]);
 
   const removeLine = useCallback((productId: number) => {
@@ -169,9 +170,9 @@ export function StockCount({ onBack }: { onBack: () => void }) {
 
   const clearAllLines = useCallback(() => {
     if (lines.length === 0) return;
-    if (!confirmDialog("حذف جميع الأصناف من الجرد الحالي؟")) return;
+    if (!confirmDialog(t("clearAllItemsConfirm"))) return;
     setLines([]);
-    notify("تم مسح جميع الأصناف");
+    notify(t("allItemsCleared"));
   }, [lines.length, notify]);
 
   const totals = useMemo(() => {
@@ -256,7 +257,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
           })),
         );
         setSearch("");
-        notify(`تم تحميل الجرد رقم ${id}`, "success");
+        notify(t("countLoaded", { id }), "success");
       } catch (error) {
         notify(String(error), "error");
       }
@@ -293,7 +294,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
   const newCount = useCallback(() => {
     if (
       lines.length > 0 &&
-      !confirmDialog("ستفقد الأصناف الحالية غير المحفوظة. متابعة؟")
+      !confirmDialog(t("loseUnsavedItems"))
     ) {
       return;
     }
@@ -303,12 +304,12 @@ export function StockCount({ onBack }: { onBack: () => void }) {
     setNotes("");
     setFilterMode("all");
     searchRef.current?.focus();
-    notify("فاتورة جرد جديدة");
+    notify(t("newCountInvoice"));
   }, [lines.length, notify]);
 
   const save = useCallback(async () => {
     if (lines.length === 0) {
-      notify("أضف صنفًا واحدًا على الأقل لحفظ الفاتورة", "error");
+      notify(t("addAtLeastOneItem"), "error");
       return;
     }
     setIsSaving(true);
@@ -328,8 +329,8 @@ export function StockCount({ onBack }: { onBack: () => void }) {
       setCurrentId(saved.id);
       notify(
         currentId != null
-          ? "✅ تم تحديث فاتورة الجرد بنجاح"
-          : "✅ تم حفظ فاتورة الجرد المؤقت (غير مطبّقة)",
+          ? `✅ ${t("countInvoiceUpdated")}`
+          : `✅ ${t("countInvoiceSaved")}`,
       );
     } catch (error) {
       notify(String(error), "error");
@@ -358,22 +359,22 @@ export function StockCount({ onBack }: { onBack: () => void }) {
     <div className="sc-page">
       <header className="sc-header">
         <div className="sc-header-left">
-          <button className="sc-back-btn" onClick={onBack} title="رجوع">
+          <button className="sc-back-btn" onClick={onBack} title={t("backBtn")}>
             <span className="sc-back-icon">→</span>
-            <span className="sc-back-text">رجوع</span>
+            <span className="sc-back-text">{t("backBtn")}</span>
           </button>
           <div className="sc-header-info">
             <div className="sc-header-title-row">
               <h1 className="sc-title">
                 <span className="sc-title-icon">📋</span>
-                فاتورة جرد مؤقت
+                {t("tempStockCountTitle")}
               </h1>
               <span
                 className={`sc-status-badge ${
                   currentId != null ? "sc-badge-existing" : "sc-badge-draft"
                 }`}
               >
-                {currentId != null ? `جرد رقم #${currentId}` : "مسودة جديدة"}
+                {currentId != null ? t("countNumber", { id: currentId }) : t("newDraft")}
               </span>
             </div>
             <div className="sc-header-sub">
@@ -382,7 +383,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
               </span>
               {lines.length > 0 && (
                 <span className="sc-header-count">
-                  📦 {lines.length} صنف
+                  📦 {lines.length} {t("itemsUnit")}
                 </span>
               )}
             </div>
@@ -393,11 +394,11 @@ export function StockCount({ onBack }: { onBack: () => void }) {
           <button
             className="sc-btn sc-btn-secondary"
             onClick={newCount}
-            title="فاتورة جرد جديدة"
+            title={t("newCountInvoice")}
             disabled={isSaving}
           >
             <span>📄</span>
-            <span>جديدة</span>
+            <span>{t("newBtn")}</span>
           </button>
           <button
             className="sc-btn sc-btn-primary"
@@ -407,13 +408,13 @@ export function StockCount({ onBack }: { onBack: () => void }) {
             {isSaving ? (
               <>
                 <span className="sc-spinner"></span>
-                <span>جارٍ الحفظ...</span>
+                <span>{t("savingLabel")}</span>
               </>
             ) : (
               <>
                 <span>💾</span>
                 <span>
-                  {currentId == null ? "حفظ الفاتورة" : "حفظ التعديلات"}
+                  {currentId == null ? t("saveInvoice") : t("saveChanges")}
                 </span>
               </>
             )}
@@ -430,7 +431,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                 <input
                   ref={searchRef}
                   className="sc-search-input"
-                  placeholder="ابحث باسم الصنف أو امسح الباركود ثم اضغط Enter..."
+                  placeholder={t("searchProductPlaceholder")}
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
@@ -449,7 +450,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                       searchRef.current?.focus();
                     }}
                     tabIndex={-1}
-                    title="مسح البحث"
+                    title={t("clearSearch")}
                   >
                     ✕
                   </button>
@@ -459,7 +460,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                     {filteredProducts.length === 0 ? (
                       <div className="sc-dropdown-empty">
                         <div className="sc-empty-icon">🔍</div>
-                        <p>لا توجد نتائج مطابقة</p>
+                        <p>{t("noMatchingResults")}</p>
                       </div>
                     ) : (
                       filteredProducts.map((p) => {
@@ -482,15 +483,15 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                               <div className="sc-item-name">
                                 {p.name}
                                 {isInList && (
-                                  <span className="sc-item-badge">مُضاف</span>
+                                  <span className="sc-item-badge">{t("addedLabel")}</span>
                                 )}
                               </div>
                               <div className="sc-item-meta">
                                 <span>
-                                  🏷️ {p.barcode ?? "لا يوجد باركود"}
+                                  🏷️ {p.barcode ?? t("noBarcode")}
                                 </span>
                                 <span>
-                                  📦 {qty(p.quantity)} {p.unit ?? "قطعة"}
+                                   📦 {qty(p.quantity)} {p.unit ?? t("unitPiece")}
                                 </span>
                                 {p.category_name && (
                                   <span>📂 {p.category_name}</span>
@@ -498,7 +499,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                               </div>
                             </div>
                             <div className="sc-item-price">
-                              {p.warehouse_name ?? "بدون مستودع"}
+                              {p.warehouse_name ?? t("noWarehouse")}
                             </div>
                           </button>
                         );
@@ -513,13 +514,13 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                   className="sc-warehouse-select"
                   value={warehouseId}
                   onChange={(e) => setWarehouseId(e.target.value)}
-                  title="تصفية المنتجات حسب المستودع"
+                  title={t("filterByWarehouse")}
                 >
-                  <option value="">🌐 كل المستودعات</option>
+                  <option value="">🌐 {t("allWarehouses")}</option>
                   {warehouses.map((w) => (
                     <option key={w.id} value={String(w.id)}>
                       🏬 {w.name}
-                      {w.is_default ? " (افتراضي)" : ""}
+                      {w.is_default ? ` (${t("defaultLabel")})` : ""}
                     </option>
                   ))}
                 </select>
@@ -530,20 +531,20 @@ export function StockCount({ onBack }: { onBack: () => void }) {
               <div className="sc-filter-bar">
                 <div className="sc-filter-tabs">
                   {([
-                    { key: "all", label: "الكل", count: lines.length },
+                    { key: "all", label: t("filterAll"), count: lines.length },
                     {
                       key: "match",
-                      label: "مطابق",
+                      label: t("filterMatch"),
                       count: totals.matchedCount,
                     },
                     {
                       key: "surplus",
-                      label: "زيادة",
+                      label: t("filterSurplus"),
                       count: totals.surplusCount,
                     },
                     {
                       key: "deficit",
-                      label: "عجز",
+                      label: t("filterDeficit"),
                       count: totals.deficitCount,
                     },
                   ] as const).map((tab) => (
@@ -566,17 +567,17 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                     type="button"
                     className="sc-btn sc-btn-sm sc-btn-outline"
                     onClick={matchAllSystem}
-                    title="مطابقة الكميات مع رصيد النظام للكل"
+                    title={t("matchAllTooltip")}
                   >
-                    ⚡ مطابقة الكل
+                    ⚡ {t("matchAll")}
                   </button>
                   <button
                     type="button"
                     className="sc-btn sc-btn-sm sc-btn-danger-outline"
                     onClick={clearAllLines}
-                    title="مسح جميع الأصناف"
+                    title={t("clearAllTooltip")}
                   >
-                    🗑️ مسح الكل
+                    🗑️ {t("clearAll")}
                   </button>
                 </div>
               </div>
@@ -589,27 +590,27 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                 <div className="sc-empty-illustration">
                   <div className="sc-empty-box">📦</div>
                 </div>
-                <h3 className="sc-empty-title">ابدأ عملية الجرد</h3>
+                <h3 className="sc-empty-title">{t("startCounting")}</h3>
                 <p className="sc-empty-text">
-                  استخدم مربع البحث أعلاه لإضافة الأصناف إلى فاتورة الجرد
+                  {t("useSearchToAddItems")}
                 </p>
                 <div className="sc-empty-hints">
                   <div className="sc-hint-item">
                     <span className="sc-hint-icon">💡</span>
                     <span>
-                      اكتب اسم الصنف أو رقم الباركود ثم اضغط Enter للإضافة
+                      {t("hint1")}
                     </span>
                   </div>
                   <div className="sc-hint-item">
                     <span className="sc-hint-icon">💡</span>
                     <span>
-                      سيظهر لك رصيد النظام افتراضيًا، عدّله للكمية الفعلية
+                      {t("hint2")}
                     </span>
                   </div>
                   <div className="sc-hint-item">
                     <span className="sc-hint-icon">💡</span>
                     <span>
-                      اضغط على زر = لمطابقة الكمية مع رصيد النظام بسرعة
+                      {t("hint3")}
                     </span>
                   </div>
                 </div>
@@ -620,11 +621,11 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                   <thead>
                     <tr>
                       <th className="sc-col-idx">#</th>
-                      <th className="sc-col-product">الصنف</th>
-                      <th className="sc-col-system">الرصيد بالنظام</th>
-                      <th className="sc-col-counted">الكمية الفعلية</th>
-                      <th className="sc-col-diff">الفرق</th>
-                      <th className="sc-col-status">الحالة</th>
+                      <th className="sc-col-product">{t("productLabel")}</th>
+                      <th className="sc-col-system">{t("systemQty")}</th>
+                      <th className="sc-col-counted">{t("actualQty")}</th>
+                      <th className="sc-col-diff">{t("diffLabel")}</th>
+                      <th className="sc-col-status">{t("statusLabel")}</th>
                       <th className="sc-col-actions"></th>
                     </tr>
                   </thead>
@@ -648,17 +649,17 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                                   🏷️ {line.barcode?.trim() || "—"}
                                 </span>
                                 <span>
-                                  📂 {line.category_name ?? "غير مصنف"}
+                                  📂 {line.category_name ?? t("uncategorized")}
                                 </span>
                                 <span>
-                                  📏 {line.unit ?? "قطعة"}
+                                   📏 {line.unit ?? t("unitPiece")}
                                 </span>
                               </div>
                             </div>
                           </td>
                           <td className="sc-col-system">
                             <div className="sc-system-qty">
-                              <span className="sc-qty-label">الرصيد</span>
+                               <span className="sc-qty-label">{t("balanceLabel")}</span>
                               <span className="sc-qty-value sc-mono">
                                 {qty(line.system_qty)}
                               </span>
@@ -676,7 +677,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                                   )
                                 }
                                 tabIndex={-1}
-                                title="تقليل الكمية"
+                                title={t("decreaseQty")}
                               >
                                 −
                               </button>
@@ -703,7 +704,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                                   )
                                 }
                                 tabIndex={-1}
-                                title="زيادة الكمية"
+                                title={t("increaseQty")}
                               >
                                 +
                               </button>
@@ -712,7 +713,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                                 className="sc-match-btn"
                                 onClick={() => matchSystemQty(line.product_id)}
                                 tabIndex={-1}
-                                title="مطابقة رصيد النظام (=)"
+                                title={t("matchSystemQty")}
                               >
                                 =
                               </button>
@@ -725,7 +726,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                               {signed(diff)}
                               {diff !== 0 && line.cost_price > 0 && (
                                 <span className="sc-diff-value">
-                                  ({qty(Math.abs(diff) * line.cost_price)} ج.م)
+                                   ({qty(Math.abs(diff) * line.cost_price)} {t("currencyUnit")})
                                 </span>
                               )}
                             </span>
@@ -742,7 +743,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                               type="button"
                               className="sc-action-btn sc-action-delete"
                               onClick={() => removeLine(line.product_id)}
-                              title="حذف الصنف من الجرد"
+                              title={t("deleteItemFromCount")}
                             >
                               ✕
                             </button>
@@ -754,12 +755,12 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                 </table>
                 {filteredLines.length !== lines.length && (
                   <div className="sc-table-footer-note">
-                    عرض {filteredLines.length} من أصل {lines.length} صنف —{" "}
+                    عرض {filteredLines.length} من أصل {lines.length} {t("itemsUnit")} —{" "}
                     <button
                       className="sc-link-btn"
                       onClick={() => setFilterMode("all")}
                     >
-                      عرض الكل
+                      {t("showAll")}
                     </button>
                   </div>
                 )}
@@ -771,7 +772,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
         <aside className="sc-sidebar">
           <div className="sc-sidebar-section">
             <h3 className="sc-section-title">
-              <span>📊</span> ملخص الجرد
+               <span>📊</span> {t("countSummary")}
             </h3>
 
             <div className="sc-summary-grid">
@@ -779,7 +780,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                 <div className="sc-summary-icon">📦</div>
                 <div className="sc-summary-content">
                   <div className="sc-summary-number">{lines.length}</div>
-                  <div className="sc-summary-label">إجمالي الأصناف</div>
+                  <div className="sc-summary-label">{t("totalItems")}</div>
                 </div>
               </div>
 
@@ -789,7 +790,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                   <div className="sc-summary-number">
                     {totals.matchedCount}
                   </div>
-                  <div className="sc-summary-label">مطابق</div>
+                  <div className="sc-summary-label">{t("matchStatus")}</div>
                 </div>
                 <div className="sc-summary-progress sc-progress-match">
                   <div
@@ -809,7 +810,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                   <div className="sc-summary-number">
                     {totals.surplusCount}
                   </div>
-                  <div className="sc-summary-label">زيادة</div>
+                  <div className="sc-summary-label">{t("surplusStatus")}</div>
                 </div>
                 <div className="sc-summary-progress sc-progress-surplus">
                   <div
@@ -829,7 +830,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                   <div className="sc-summary-number">
                     {totals.deficitCount}
                   </div>
-                  <div className="sc-summary-label">عجز</div>
+                  <div className="sc-summary-label">{t("deficitStatus")}</div>
                 </div>
                 <div className="sc-summary-progress sc-progress-deficit">
                   <div
@@ -847,14 +848,14 @@ export function StockCount({ onBack }: { onBack: () => void }) {
 
           <div className="sc-sidebar-section">
             <h3 className="sc-section-title">
-              <span>💰</span> ملخص القيم الكمية
+               <span>💰</span> {t("qtyValueSummary")}
             </h3>
 
             <div className="sc-amounts-list">
               <div className="sc-amount-row sc-amount-surplus">
                 <div className="sc-amount-label">
                   <span className="sc-amount-dot sc-dot-surplus"></span>
-                  إجمالي كمية الزيادة
+                  {t("totalSurplusQty")}
                 </div>
                 <div className="sc-amount-value">
                   <b>{signed(totals.totalSurplus)}</b>
@@ -864,7 +865,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
               <div className="sc-amount-row sc-amount-deficit">
                 <div className="sc-amount-label">
                   <span className="sc-amount-dot sc-dot-deficit"></span>
-                  إجمالي كمية العجز
+                  {t("totalDeficitQty")}
                 </div>
                 <div className="sc-amount-value">
                   <b>{signed(-totals.totalDeficit)}</b>
@@ -875,10 +876,10 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                 <div className="sc-amount-row sc-amount-muted">
                   <div className="sc-amount-label">
                     <span className="sc-amount-dot sc-dot-surplus"></span>
-                    قيمة الزيادة التقديرية
+                    {t("surplusValueEstimate")}
                   </div>
                   <div className="sc-amount-value">
-                    <b>{qty(totals.surplusValue)} ج.م</b>
+                    <b>{qty(totals.surplusValue)} {t("currencyUnit")}</b>
                   </div>
                 </div>
               )}
@@ -887,10 +888,10 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                 <div className="sc-amount-row sc-amount-muted">
                   <div className="sc-amount-label">
                     <span className="sc-amount-dot sc-dot-deficit"></span>
-                    قيمة العجز التقديرية
+                    {t("deficitValueEstimate")}
                   </div>
                   <div className="sc-amount-value">
-                    <b>{qty(totals.deficitValue)} ج.م</b>
+                    <b>{qty(totals.deficitValue)} {t("currencyUnit")}</b>
                   </div>
                 </div>
               )}
@@ -914,7 +915,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
                           : "sc-dot-match"
                     }`}
                   ></span>
-                  صافي الفرق الكلي
+                  {t("netTotalDiff")}
                 </div>
                 <div className="sc-amount-value">
                   <b>{signed(totals.totalDifference)}</b>
@@ -925,12 +926,12 @@ export function StockCount({ onBack }: { onBack: () => void }) {
 
           <div className="sc-sidebar-section">
             <h3 className="sc-section-title">
-              <span>📝</span> بيانات الفاتورة
+               <span>📝</span> {t("invoiceData")}
             </h3>
 
             <div className="sc-form-group">
               <label className="sc-form-label">
-                <span>📅</span> تاريخ الجرد
+                 <span>📅</span> {t("countDate")}
               </label>
               <input
                 type="date"
@@ -942,12 +943,12 @@ export function StockCount({ onBack }: { onBack: () => void }) {
 
             <div className="sc-form-group">
               <label className="sc-form-label">
-                <span>📄</span> ملاحظات
+                 <span>📄</span> {t("notesLabel")}
               </label>
               <textarea
                 className="sc-form-textarea"
                 rows={3}
-                placeholder="اكتب أي ملاحظات هنا حول عملية الجرد..."
+                 placeholder={t("notesPlaceholder")}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
               />
@@ -964,15 +965,15 @@ export function StockCount({ onBack }: { onBack: () => void }) {
               {isSaving ? (
                 <>
                   <span className="sc-spinner"></span>
-                  <span>جارٍ الحفظ...</span>
+                  <span>{t("savingLabel")}</span>
                 </>
               ) : (
                 <>
                   <span>💾</span>
                   <span>
                     {currentId == null
-                      ? "حفظ الفاتورة كمسودة"
-                      : "حفظ التعديلات"}
+                      ? t("saveAsDraft")
+                      : t("saveChanges")}
                   </span>
                 </>
               )}
@@ -981,8 +982,7 @@ export function StockCount({ onBack }: { onBack: () => void }) {
             <div className="sc-info-box">
               <div className="sc-info-icon">ℹ️</div>
               <div className="sc-info-text">
-                تُحفظ الفاتورة كمسودة مؤقتة ولا تُطبّق على رصيد المخزون
-                إلا عبر خيار «التسوية» من سجل فواتير الجرد.
+                 {t("draftInfoText")}
               </div>
             </div>
           </div>

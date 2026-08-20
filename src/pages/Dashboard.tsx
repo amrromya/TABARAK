@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { fmtDate, money, today, useToast } from "../components/ui";
+import { t } from "../i18n";
 import type { Dashboard as DashboardData } from "../types";
 
 const FEATURES_KEY = "tabarak_features";
 
-function getFeatures(): { maintenance: boolean; attendance: boolean } {
+function getFeatures(): { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean } {
   try {
     const raw = localStorage.getItem(FEATURES_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return { maintenance: false, attendance: false, dark_mode: false, language: false, ...JSON.parse(raw) };
   } catch {}
-  return { maintenance: false, attendance: false };
+  return { maintenance: false, attendance: false, dark_mode: false, language: false };
 }
 
 export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string) => void; onOpenPos: (type: "sales-pos" | "purchase-pos") => void }) {
@@ -45,42 +46,42 @@ export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string
 
   const cards = [
     {
-      label: "مبيعات اليوم",
+      label: t("todaySales"),
       value: money(data?.today_sales ?? 0),
       icon: "💰",
       cls: "green",
       page: "sales",
     },
     {
-      label: "ربح اليوم",
+      label: t("todayProfit"),
       value: money(data?.today_profit ?? 0),
       icon: "📈",
       cls: "teal",
       page: "reports",
     },
     {
-      label: "مشتريات اليوم",
+      label: t("todayPurchases"),
       value: money(data?.today_purchases ?? 0),
       icon: "📦",
       cls: "blue",
       page: "purchases",
     },
     {
-      label: "مصروفات اليوم",
+      label: t("todayExpenses"),
       value: money(data?.today_expenses ?? 0),
       icon: "🧾",
       cls: "amber",
       page: "expenses",
     },
     {
-      label: "الديون المستحقة",
+      label: t("totalDebts"),
       value: money(data?.total_debts ?? 0),
       icon: "🤝",
       cls: "purple",
       page: "customers",
     },
     {
-      label: "رصيد الصندوق",
+      label: t("cashInHand"),
       value: money(data?.cash_in_hand ?? 0),
       icon: "💵",
       cls: "blue",
@@ -91,7 +92,7 @@ export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string
   return (
     <div className="page">
       <div className="page-head">
-        <h1>لوحة التحكم</h1>
+        <h1>{t("dashboard")}</h1>
         <span className="date-badge">{fmtDate(today())}</span>
       </div>
 
@@ -101,8 +102,8 @@ export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string
             <span className="qa-icon">🛒</span>
           </div>
           <div className="qa-content">
-            <span className="qa-title">فاتورة مبيعات جديدة</span>
-            <span className="qa-desc">إضافة فاتورة بيع سريعة</span>
+            <span className="qa-title">{t("newSaleInvoice")}</span>
+            <span className="qa-desc">{t("newSaleDesc")}</span>
           </div>
           <span className="qa-arrow">←</span>
         </button>
@@ -111,8 +112,8 @@ export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string
             <span className="qa-icon">🚚</span>
           </div>
           <div className="qa-content">
-            <span className="qa-title">فاتورة مشتريات جديدة</span>
-            <span className="qa-desc">إضافة فاتورة شراء سريعة</span>
+            <span className="qa-title">{t("newPurchaseInvoice")}</span>
+            <span className="qa-desc">{t("newPurchaseDesc")}</span>
           </div>
           <span className="qa-arrow">←</span>
         </button>
@@ -121,8 +122,8 @@ export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string
             <span className="qa-icon">💰</span>
           </div>
           <div className="qa-content">
-            <span className="qa-title">الحسابات</span>
-            <span className="qa-desc">سندات القبض والصرف والتحويلات</span>
+            <span className="qa-title">{t("accountingAction")}</span>
+            <span className="qa-desc">{t("accountingDesc")}</span>
           </div>
           <span className="qa-arrow">←</span>
         </button>
@@ -132,8 +133,8 @@ export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string
             <span className="qa-icon">🔧</span>
           </div>
           <div className="qa-content">
-            <span className="qa-title">الصيانة</span>
-            <span className="qa-desc">أوامر الصيانة وال الفنيين</span>
+            <span className="qa-title">{t("maintenanceAction")}</span>
+            <span className="qa-desc">{t("maintenanceDesc")}</span>
           </div>
           <span className="qa-arrow">←</span>
         </button>
@@ -144,31 +145,31 @@ export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string
         <div className="modal-overlay" onClick={() => setShowAccounting(false)}>
           <div className="modal accounting-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
-              <h2>💰 الحسابات</h2>
+              <h2>💰 {t("accountingAction")}</h2>
               <button className="modal-close" onClick={() => setShowAccounting(false)}>✕</button>
             </div>
             <div className="accounting-grid">
               <button className="accounting-card ac-receipts" onClick={() => { setShowAccounting(false); onNavigate("receipt_vouchers"); }}>
                 <div className="ac-icon-wrap">📥</div>
                 <div className="ac-info">
-                  <span className="ac-title">سندات القبض</span>
-                  <span className="ac-desc">تسجيل المبالغ المحصلة من العملاء</span>
+                  <span className="ac-title">{t("receiptVouchersAction")}</span>
+                  <span className="ac-desc">{t("receiptVouchersDesc")}</span>
                 </div>
                 <span className="ac-arrow">←</span>
               </button>
               <button className="accounting-card ac-payments" onClick={() => { setShowAccounting(false); onNavigate("payment_vouchers"); }}>
                 <div className="ac-icon-wrap">📤</div>
                 <div className="ac-info">
-                  <span className="ac-title">سندات الصرف</span>
-                  <span className="ac-desc">تسجيل المبالغ المصروفة للموردين</span>
+                  <span className="ac-title">{t("paymentVouchersAction")}</span>
+                  <span className="ac-desc">{t("paymentVouchersDesc")}</span>
                 </div>
                 <span className="ac-arrow">←</span>
               </button>
               <button className="accounting-card ac-transfers" onClick={() => { setShowAccounting(false); onNavigate("warehouse_transfers"); }}>
                 <div className="ac-icon-wrap">🔄</div>
                 <div className="ac-info">
-                  <span className="ac-title">تحويلات المستودعات</span>
-                  <span className="ac-desc">نقل البضائع بين المستودعات</span>
+                  <span className="ac-title">{t("warehouseTransfersAction")}</span>
+                  <span className="ac-desc">{t("warehouseTransfersDesc")}</span>
                 </div>
                 <span className="ac-arrow">←</span>
               </button>
@@ -197,23 +198,23 @@ export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string
       <div className="stats-grid">
         <div className="stat-box">
           <div className="stat-value">{data?.product_count ?? 0}</div>
-          <div className="stat-label">إجمالي المنتجات</div>
+          <div className="stat-label">{t("totalProducts")}</div>
         </div>
         <div className="stat-box warn">
           <div className="stat-value">{data?.low_stock_count ?? 0}</div>
-          <div className="stat-label">منتجات منخفضة المخزون</div>
+          <div className="stat-label">{t("lowStock")}</div>
         </div>
         <div className="stat-box">
           <div className="stat-value">{data?.recent_sales_count ?? 0}</div>
-          <div className="stat-label">فواتير اليوم</div>
+          <div className="stat-label">{t("todayInvoices")}</div>
         </div>
         <div className="stat-box">
           <div className="stat-value">{data?.total_suppliers ?? 0}</div>
-          <div className="stat-label">عدد الموردين</div>
+          <div className="stat-label">{t("totalSuppliers")}</div>
         </div>
         <div className="stat-box">
           <div className="stat-value">{data?.total_customers ?? 0}</div>
-          <div className="stat-label">عدد العملاء</div>
+          <div className="stat-label">{t("totalCustomers")}</div>
         </div>
       </div>
 
@@ -221,8 +222,8 @@ export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string
         <div className="notice">
           <span>⚠️</span>
           <p>
-            يوجد <b>{data.low_stock_count}</b> منتج وصل أو انخفض عن حد الطلب الأدنى.{" "}
-            <a onClick={() => onNavigate("inventory")}>مراجعة المخزون</a>
+            {t("lowStockNotice")}{" "}
+            <a onClick={() => onNavigate("inventory")}>{t("reviewInventory")}</a>
           </p>
         </div>
       )}
@@ -230,8 +231,8 @@ export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string
         <div className="notice debts">
           <span>🤝</span>
           <p>
-            إجمالي الديون المستحقة عليك تحصيلها: <b>{money(data.total_debts)}</b>.{" "}
-            <a onClick={() => onNavigate("customers")}>متابعة العملاء</a>
+            {t("debtsNotice")} <b>{money(data.total_debts)}</b>.{" "}
+            <a onClick={() => onNavigate("customers")}>{t("followCustomers")}</a>
           </p>
         </div>
       )}

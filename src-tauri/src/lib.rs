@@ -6,6 +6,8 @@ mod maintenance_models;
 mod license;
 pub mod sync;
 mod sync_commands;
+pub mod utils;
+pub mod migrations;
 
 use rusqlite::Connection;
 use std::path::PathBuf;
@@ -119,6 +121,8 @@ pub fn run() {
             commands::get_shift_report,
             commands::get_settings,
             commands::save_settings,
+            commands::verify_section_password,
+            commands::change_section_password,
             commands::export_backup,
             commands::import_backup,
             commands::get_dashboard,
@@ -196,6 +200,16 @@ pub fn run() {
             commands::download_online_update,
             commands::apply_online_update,
             commands::list_printers,
+            commands::is_first_run,
+            commands::initialize_admin,
+            commands::verify_admin_password,
+            commands::change_admin_password,
+            commands::list_products_paged,
+            commands::export_products_csv,
+            commands::export_sales_csv,
+            commands::export_purchases_csv,
+            commands::start_auto_backup,
+            commands::search_service_orders,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

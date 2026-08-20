@@ -8,17 +8,18 @@ import {
   today,
   useToast,
 } from "../components/ui";
+import { t } from "../i18n";
 
 const PAYMENT_METHODS = [
-  { value: "cash", label: "نقدي" },
-  { value: "card", label: "شبكة" },
-  { value: "transfer", label: "تحويل بنكي" },
+  { value: "cash", labelKey: "cash" },
+  { value: "card", labelKey: "card" },
+  { value: "transfer", labelKey: "bankTransferLabel" },
 ];
 
 const PAYMENT_LABELS: Record<string, string> = {
-  cash: "نقدي",
-  card: "شبكة",
-  transfer: "تحويل بنكي",
+  cash: "cash",
+  card: "card",
+  transfer: "bankTransferLabel",
 };
 
 export function PaymentVouchers() {
@@ -79,7 +80,7 @@ export function PaymentVouchers() {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (amount <= 0) {
-      notify("أدخل المبلغ", "error");
+      notify(t("enterAmount"), "error");
       return;
     }
     try {
@@ -93,7 +94,7 @@ export function PaymentVouchers() {
         warehouse_id: warehouseId ? Number(warehouseId) : null,
         notes: notes.trim() || null,
       });
-      notify("تم إنشاء سند الصرف");
+      notify(t("paymentVoucherCreated"));
       setShowForm(false);
       resetForm();
       load();
@@ -103,10 +104,10 @@ export function PaymentVouchers() {
   };
 
   const remove = async (id: number) => {
-    if (!(await confirmDialog("هل تريد حذف سند الصرف؟"))) return;
+    if (!(await confirmDialog(t("confirmDeletePayment")))) return;
     try {
       await api.deletePaymentVoucher(id);
-      notify("تم الحذف");
+      notify(t("receiptDeleted"));
       load();
     } catch (e) {
       notify(String(e), "error");
@@ -118,11 +119,11 @@ export function PaymentVouchers() {
   return (
     <div className="page">
       <div className="page-head">
-        <h1>📤 سندات الصرف</h1>
+        <h1>{t("paymentVouchersTitle")}</h1>
         <div className="head-actions">
           <input
             className="search"
-            placeholder="بحث برقم السند أو الاسم..."
+            placeholder={t("searchByVoucherOrName")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -133,27 +134,27 @@ export function PaymentVouchers() {
               setShowForm(true);
             }}
           >
-            ➕ سند صرف جديد
+            {t("newPaymentVoucher")}
           </button>
         </div>
       </div>
 
       <div className="toolbar-info">
         <span>
-          عدد السندات: <b>{vouchers.length}</b>
+          {t("voucherCount")}: <b>{vouchers.length}</b>
         </span>
         <span>
-          الإجمالي: <b style={{ color: "#dc2626" }}>{money(totalAmount)}</b>
+          {t("total")}: <b style={{ color: "#dc2626" }}>{money(totalAmount)}</b>
         </span>
       </div>
 
       {loading ? (
         <div className="settings-card" style={{ textAlign: "center", padding: 40 }}>
-          <p>جارٍ التحميل...</p>
+          <p>{t("loading")}</p>
         </div>
       ) : vouchers.length === 0 ? (
         <div className="settings-card" style={{ textAlign: "center", padding: 40 }}>
-          <p style={{ fontSize: 16, color: "#6b7280" }}>لا توجد سندات صرف.</p>
+          <p style={{ fontSize: 16, color: "#6b7280" }}>{t("noPaymentVouchers")}</p>
         </div>
       ) : (
         <div className="table-wrap">
@@ -161,13 +162,13 @@ export function PaymentVouchers() {
             <thead>
               <tr>
                 <th>#</th>
-                <th>رقم السند</th>
-                <th>التاريخ</th>
-                <th>المبلغ</th>
-                <th>النوع</th>
-                <th>الجهة المستفيدة</th>
-                <th>طريقة الدفع</th>
-                <th>الملاحظات</th>
+                <th>{t("voucherNo")}</th>
+                <th>{t("date")}</th>
+                <th>{t("amount")}</th>
+                <th>{t("typeLabel")}</th>
+                <th>{t("beneficiaryType")}</th>
+                <th>{t("paymentMethod")}</th>
+                <th>{t("notes")}</th>
                 <th></th>
               </tr>
             </thead>
@@ -184,15 +185,15 @@ export function PaymentVouchers() {
                       color: v.dest_type === "supplier" ? "#b45309" : "#1d4ed8",
                       padding: "2px 8px", borderRadius: 10, fontSize: 11,
                     }}>
-                      {v.dest_type === "supplier" ? "مورد" : "عميل"}
+                      {v.dest_type === "supplier" ? t("supplierLabel") : t("customerLabel")}
                     </span>
                   </td>
                   <td>{v.dest_name ?? "—"}</td>
-                  <td>{PAYMENT_LABELS[v.payment_method] ?? v.payment_method}</td>
+                  <td>{t(PAYMENT_LABELS[v.payment_method] ?? "") || v.payment_method}</td>
                   <td style={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.notes ?? "—"}</td>
                   <td>
                     <button className="btn sm danger" onClick={() => remove(v.id)}>
-                      حذف
+                      {t("delete")}
                     </button>
                   </td>
                 </tr>
@@ -203,30 +204,30 @@ export function PaymentVouchers() {
       )}
 
       {showForm && (
-        <Modal title="سند صرف جديد" onClose={() => setShowForm(false)} width="500px">
+        <Modal title={t("newPaymentVoucherTitle")} onClose={() => setShowForm(false)} width="500px">
           <form onSubmit={save}>
             <div className="form-grid">
-              <Field label="التاريخ *">
+              <Field label={t("dateFieldRequired")}>
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
               </Field>
-              <Field label="المبلغ *">
+              <Field label={t("amountRequired")}>
                 <input type="number" min={0} step="0.01" value={amount || ""} onChange={(e) => setAmount(Number(e.target.value))} />
               </Field>
-              <Field label="الصرف لـ">
+              <Field label={t("paidTo")}>
                 <select value={destType} onChange={(e) => { setDestType(e.target.value); setDestId(""); setDestName(""); }}>
-                  <option value="supplier">مورد</option>
-                  <option value="customer">عميل</option>
-                  <option value="other">أخرى</option>
+                  <option value="supplier">{t("supplierLabel")}</option>
+                  <option value="customer">{t("customerLabel")}</option>
+                  <option value="other">{t("otherOption")}</option>
                 </select>
               </Field>
               {destType === "supplier" && (
-                <Field label="اختر المورد">
+                <Field label={t("selectSupplierForVoucher")}>
                   <select value={destId} onChange={(e) => {
                     setDestId(e.target.value);
                     const s = suppliers.find((x: any) => x.id === Number(e.target.value));
                     setDestName(s?.name ?? "");
                   }}>
-                    <option value="">— اختر —</option>
+                    <option value="">{t("selectOption")}</option>
                     {suppliers.map((s: any) => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
@@ -234,13 +235,13 @@ export function PaymentVouchers() {
                 </Field>
               )}
               {destType === "customer" && (
-                <Field label="اختر العميل">
+                <Field label={t("selectCustomer")}>
                   <select value={destId} onChange={(e) => {
                     setDestId(e.target.value);
                     const c = customers.find((x: any) => x.id === Number(e.target.value));
                     setDestName(c?.name ?? "");
                   }}>
-                    <option value="">— اختر —</option>
+                    <option value="">{t("selectOption")}</option>
                     {customers.map((c: any) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
@@ -248,34 +249,34 @@ export function PaymentVouchers() {
                 </Field>
               )}
               {destType === "other" && (
-                <Field label="الاسم">
-                  <input value={destName} onChange={(e) => setDestName(e.target.value)} placeholder="اسم الجهة" />
+                <Field label={t("nameField")}>
+                  <input value={destName} onChange={(e) => setDestName(e.target.value)} placeholder={t("entityNamePlaceholder")} />
                 </Field>
               )}
-              <Field label="طريقة الصرف">
+              <Field label={t("paymentMethodField")}>
                 <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
                   {PAYMENT_METHODS.map((m) => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
+                    <option key={m.value} value={m.value}>{t(m.labelKey)}</option>
                   ))}
                 </select>
               </Field>
               {warehouses.length > 0 && (
-                <Field label="الصندوق / المستودع">
+                <Field label={t("cashBoxWarehouse")}>
                   <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-                    <option value="">— اختر —</option>
+                    <option value="">{t("selectOption")}</option>
                     {warehouses.map((w: any) => (
                       <option key={w.id} value={w.id}>{w.name}</option>
                     ))}
                   </select>
                 </Field>
               )}
-              <Field label="ملاحظات">
-                <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="ملاحظات..." />
+              <Field label={t("notes")}>
+                <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("notesPlaceholderField")} />
               </Field>
             </div>
             <div className="form-actions">
-              <button type="submit" className="btn primary">✅ حفظ</button>
-              <button type="button" className="btn" onClick={() => setShowForm(false)}>إلغاء</button>
+              <button type="submit" className="btn primary">{t("saveBtn")}</button>
+              <button type="button" className="btn" onClick={() => setShowForm(false)}>{t("cancel")}</button>
             </div>
           </form>
         </Modal>

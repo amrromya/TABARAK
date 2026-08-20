@@ -9,6 +9,7 @@ import {
   today,
   useToast,
 } from "../components/ui";
+import { t } from "../i18n";
 import { showDesktopNotif, setNotifToast } from "../utils/notifications";
 import type { Employee, Shift, NewShift, EmployeeShift, NewEmployeeShift, ShiftReport } from "../types";
 import type { SyncConfig } from "../types";
@@ -28,7 +29,7 @@ interface AttRecord {
 }
 
 const ATTENDANCE_TYPES = [
-  { value: "manual", label: "تسجيل يدوي" },
+  { value: "manual", label: t("manualEntry") },
 ];
 
 type Tab = "attendance" | "shifts" | "assignments" | "report";
@@ -154,7 +155,7 @@ export function Attendance() {
     const headers = getHeaders();
     const url = getSupabaseUrl();
     if (!headers || !url) {
-      throw new Error("إعدادات الاتصال غير مُعدّة — اذهب إلى الإعدادات وأعد حفظ بيانات Supabase");
+      throw new Error(t("syncConfigNotSet"));
     }
     const res = await fetch(
       `${url}/rest/v1/attendance?select=*&order=date.desc,check_in.desc&limit=500`,
@@ -253,13 +254,13 @@ export function Attendance() {
   }, [reportFrom, reportTo]);
 
   const handleDeleteAttendance = useCallback(async (id: number) => {
-    if (!confirm("هل أنت متأكد من حذف هذا السجل نهائياً؟")) return;
+    if (!confirm(t("confirmPermanentDelete"))) return;
     try {
       await api.deleteAttendance(id);
       setShiftReport((prev) => prev.filter((r) => r.id !== id));
-      notify("تم الحذف نهائياً", "success");
+      notify(t("deletedPermanently"), "success");
     } catch {
-      notify("فشل الحذف", "error");
+      notify(t("deleteFailed"), "error");
     }
   }, [notify]);
 
@@ -391,10 +392,10 @@ export function Attendance() {
       if (path) {
         const bytes = doc.output("arraybuffer");
         await api.writeBinaryFile(path, Array.from(new Uint8Array(bytes)));
-        notify("تم حفظ PDF بنجاح");
+        notify(t("pdfSavedSuccess"));
       }
     } catch (e) {
-      notify("فشل التصدير: " + String(e), "error");
+      notify(`${t("exportFailed")}: ` + String(e), "error");
     } finally {
       setPdfBusy(false);
     }
@@ -474,13 +475,13 @@ export function Attendance() {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.employee_id) {
-      notify("اختر الموظف", "error");
+        notify(t("selectEmployeeError"), "error");
       return;
     }
     const headers = getHeaders();
     const url = getSupabaseUrl();
     if (!headers || !url) {
-      notify("إعدادات الاتصال غير مُعدّة", "error");
+        notify(t("syncConfigNotSet"), "error");
       return;
     }
     try {
@@ -499,16 +500,16 @@ export function Attendance() {
           headers: { ...headers, Prefer: "return=representation" },
           body: JSON.stringify(payload),
         });
-        if (!res.ok) throw new Error("فشل التعديل");
-        notify("تم تعديل الحضور");
+        if (!res.ok) throw new Error(t("editFailed"));
+        notify(t("attendanceEdited"));
       } else {
         const res = await fetch(`${url}/rest/v1/attendance`, {
           method: "POST",
           headers: { ...headers, Prefer: "return=representation" },
           body: JSON.stringify(payload),
         });
-        if (!res.ok) throw new Error("فشل التسجيل");
-        notify(formMode === "in" ? "تم تسجيل الحضور" : "تم تسجيل الانصراف");
+        if (!res.ok) throw new Error(t("recordFailed"));
+        notify(formMode === "in" ? t("attendanceRecorded") : t("checkoutRecorded"));
       }
       setShowForm(false);
       load();
@@ -522,7 +523,7 @@ export function Attendance() {
     const headers = getHeaders();
     const url = getSupabaseUrl();
     if (!headers || !url) {
-      notify("إعدادات الاتصال غير مُعدّة", "error");
+        notify(t("syncConfigNotSet"), "error");
       return;
     }
     try {
@@ -530,8 +531,8 @@ export function Attendance() {
         method: "DELETE",
         headers,
       });
-      if (!res.ok) throw new Error("فشل الحذف");
-      notify("تم الحذف");
+      if (!res.ok) throw new Error(t("deleteFailed"));
+      notify(t("deletedSuccess"));
       load();
     } catch (err) {
       notify(String(err), "error");
@@ -541,16 +542,15 @@ export function Attendance() {
   const saveShift = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!shiftForm.name.trim()) {
-      notify("اسم الفترة مطلوب", "error");
+      notify(t("shiftNameRequired"), "error");
       return;
     }
     try {
       if (editingShift) {
         await api.updateShift(editingShift.id, shiftForm);
-        notify("تم تعديل الفترة");
+        notify(t("shiftEdited"));
       } else {
-        await api.createShift(shiftForm);
-        notify("تم إنشاء الفترة");
+        notify(t("shiftCreated"));
       }
       setShowShiftForm(false);
       setEditingShift(null);
@@ -561,10 +561,10 @@ export function Attendance() {
   };
 
   const removeShift = async (s: Shift) => {
-    if (!confirmDialog(`حذف الفترة "${s.name}"؟`)) return;
+    if (!confirmDialog(t("confirmDeleteShift", { name: s.name }))) return;
     try {
       await api.deleteShift(s.id);
-      notify("تم الحذف");
+      notify(t("deletedSuccess"));
       loadShifts();
     } catch (err) {
       notify(String(err), "error");
@@ -574,12 +574,12 @@ export function Attendance() {
   const saveAssign = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assignForm.employee_id || !assignForm.shift_id) {
-      notify("اختر الموظف والفترة", "error");
+      notify(t("selectEmployeeAndShift"), "error");
       return;
     }
     try {
       await api.createEmployeeShift(assignForm);
-      notify("تم تعيين الفترة");
+      notify(t("shiftAssigned"));
       setShowAssignForm(false);
       loadShifts();
     } catch (err) {
@@ -591,7 +591,7 @@ export function Attendance() {
     if (!confirmDialog(`إلغاء تعيين الفترة لـ ${es.employee_name}؟`)) return;
     try {
       await api.deleteEmployeeShift(es.id);
-      notify("تم الإلغاء");
+      notify(t("assignmentCancelled"));
       loadShifts();
     } catch (err) {
       notify(String(err), "error");
@@ -599,24 +599,24 @@ export function Attendance() {
   };
 
   const title = editing
-    ? "تعديل حضور"
+    ? t("editAttendance")
     : formMode === "in"
-    ? "تسجيل حضور"
-    : "تسجيل انصراف";
+    ? t("recordAttendance")
+    : t("recordCheckout");
 
   const hasConfig = !!(syncCfg?.supabase_url && syncCfg?.supabase_key);
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
-    { key: "attendance", label: "الحضور والانصراف", icon: "📋" },
-    { key: "shifts", label: "الفترات", icon: "🕐" },
-    { key: "assignments", label: "تعيين الفترات", icon: "👥" },
-    { key: "report", label: "تقرير الفترات", icon: "📊" },
+    { key: "attendance", label: t("attendanceTab"), icon: "📋" },
+    { key: "shifts", label: t("shiftsTab"), icon: "🕐" },
+    { key: "assignments", label: t("assignmentsTab"), icon: "👥" },
+    { key: "report", label: t("shiftReportTab"), icon: "📊" },
   ];
 
   return (
     <div className="page">
       <div className="page-head">
-        <h1>الحضور والانصراف</h1>
+        <h1>{t("attendanceTitle")}</h1>
       </div>
 
       <div style={{
@@ -661,7 +661,7 @@ export function Attendance() {
           color: "#92400e",
           fontWeight: 600,
         }}>
-          ⚠️ لم يتم الاتصال بـ Supabase — اذهب إلى الإعدادات وأدخل بيانات Supabase ثم اضغط "حفظ"
+          ⚠️ {t("supabaseNotConfigured")}
         </div>
       )}
 
@@ -678,7 +678,7 @@ export function Attendance() {
               color: "#991b1b",
               fontWeight: 600,
             }}>
-              ❌ خطأ في الاتصال: {lastError}
+              ❌ {t("connectionError")}: {lastError}
             </div>
           )}
 
@@ -693,7 +693,7 @@ export function Attendance() {
               color: "#065f46",
               display: "inline-block",
             }}>
-              ✅ متصل — آخر تحديث: {lastFetchTime || "—"} — يتحدث تلقائي كل 8 ثوانٍ
+              ✅ {t("connectedLabel")} — {t("lastUpdate")}: {lastFetchTime || "—"} — {t("autoRefresh")}
             </div>
           )}
 
@@ -701,7 +701,7 @@ export function Attendance() {
             <div className="head-actions">
               <input
                 className="search"
-                placeholder="بحث باسم الموظف..."
+                placeholder={t("searchByName")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -712,14 +712,14 @@ export function Attendance() {
                 className="search"
                 style={{ width: 180 }}
               />
-              <button className="btn" onClick={load} title="تحديث">
-                🔄 تحديث
+              <button className="btn" onClick={load} title={t("refreshBtn")}>
+                🔄 {t("refreshBtn")}
               </button>
               <button className="btn primary" onClick={openCheckIn}>
-                ✅ تسجيل حضور
+                ✅ {t("recordAttendance")}
               </button>
               <button className="btn" onClick={openCheckOut} style={{ background: "#e53e3e", color: "#fff" }}>
-                🔴 تسجيل انصراف
+                🔴 {t("recordCheckout")}
               </button>
             </div>
           </div>
@@ -729,28 +729,28 @@ export function Attendance() {
               <div className="card-icon">👥</div>
               <div>
                 <div className="card-value">{employees.length}</div>
-                <div className="card-label">إجمالي الموظفين</div>
+                <div className="card-label">{t("totalEmployees")}</div>
               </div>
             </div>
             <div className="card green">
               <div className="card-icon">✅</div>
               <div>
                 <div className="card-value">{presentCount}</div>
-                <div className="card-label">حاضرين اليوم</div>
+                <div className="card-label">{t("presentToday")}</div>
               </div>
             </div>
             <div className="card red">
               <div className="card-icon">❌</div>
               <div>
                 <div className="card-value">{absentCount}</div>
-                <div className="card-label">غائبين اليوم</div>
+                <div className="card-label">{t("absentToday")}</div>
               </div>
             </div>
             <div className="card amber">
               <div className="card-icon">📝</div>
               <div>
                 <div className="card-value">{todayRecords.filter((a) => a.type === "manual").length}</div>
-                <div className="card-label">تسجيل يدوي</div>
+                <div className="card-label">{t("manualEntry")}</div>
               </div>
             </div>
           </div>
@@ -760,20 +760,20 @@ export function Attendance() {
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>الموظف</th>
-                  <th>التاريخ</th>
-                  <th>وقت الحضور</th>
-                  <th>وقت الانصراف</th>
-                  <th>النوع</th>
-                  <th>الموقع</th>
-                  <th>إجراءات</th>
+                  <th>{t("employeeLabel")}</th>
+                  <th>{t("dateLabel")}</th>
+                  <th>{t("checkInTime")}</th>
+                  <th>{t("checkOutTime")}</th>
+                  <th>{t("typeLabel")}</th>
+                  <th>{t("locationLabel")}</th>
+                  <th>{t("actionsLabel")}</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredAttendance.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="text-center" style={{ padding: 30 }}>
-                      {hasConfig ? "لا توجد سجلات حضور" : "لم يتم الاتصال بقاعدة البيانات"}
+                      {hasConfig ? t("noAttendanceRecords") : t("dbNotConnected")}
                     </td>
                   </tr>
                 ) : (
@@ -796,7 +796,7 @@ export function Attendance() {
                         </td>
                         <td>
                           <span className={`stmt-type-badge ${a.type === "manual" ? "type-payment" : "type-sale"}`}>
-                            {a.type === "manual" ? "يدوي" : "QR"}
+                            {a.type === "manual" ? t("manualShort") : "QR"}
                           </span>
                         </td>
                         <td>
@@ -819,7 +819,7 @@ export function Attendance() {
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              📍 خريطة
+                              📍 {t("mapLink")}
                             </a>
                           ) : (
                             <span style={{ color: "#ccc", fontSize: 12 }}>—</span>
@@ -827,10 +827,10 @@ export function Attendance() {
                         </td>
                         <td className="actions">
                           <button className="btn sm" onClick={() => openEdit(a)}>
-                            تعديل
+                            {t("editBtn")}
                           </button>
                           <button className="btn sm danger" onClick={() => remove(a)}>
-                            حذف
+                            {t("deleteBtn")}
                           </button>
                         </td>
                       </tr>
@@ -846,14 +846,14 @@ export function Attendance() {
       {activeTab === "shifts" && (
         <>
           <div className="page-head">
-            <h2>إدارة الفترات</h2>
+            <h2>{t("shiftManagement")}</h2>
             <div className="head-actions">
               <button className="btn primary" onClick={() => {
                 setEditingShift(null);
                 setShiftForm({ name: "", start_time: "08:00", end_time: "16:00", grace_minutes: 15, is_active: true });
                 setShowShiftForm(true);
               }}>
-                ➕ إضافة فترة
+                ➕ {t("addShift")}
               </button>
             </div>
           </div>
@@ -862,20 +862,20 @@ export function Attendance() {
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>اسم الفترة</th>
-                  <th>وقت البداية</th>
-                  <th>وقت النهاية</th>
-                  <th>ساعات العمل</th>
-                  <th>السماح بالتأخير</th>
-                  <th>الحالة</th>
-                  <th>إجراءات</th>
+                  <th>{t("shiftNameLabel")}</th>
+                  <th>{t("startTime")}</th>
+                  <th>{t("endTime")}</th>
+                  <th>{t("workHours")}</th>
+                  <th>{t("gracePeriod")}</th>
+                  <th>{t("statusLabel")}</th>
+                  <th>{t("actionsLabel")}</th>
                 </tr>
               </thead>
               <tbody>
                 {shifts.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="text-center" style={{ padding: 30 }}>
-                      لا توجد فترات بعد — أضف فترة جديدة
+                      لا توجد فترات بعد — {t("addNewShift")}
                     </td>
                   </tr>
                 ) : (
@@ -890,8 +890,8 @@ export function Attendance() {
                       <td style={{ fontWeight: 600 }}>{s.name}</td>
                       <td style={{ color: "#16a34a", fontWeight: 600 }}>{s.start_time}</td>
                       <td style={{ color: "#e53e3e", fontWeight: 600 }}>{s.end_time}</td>
-                      <td>{hours} ساعة</td>
-                      <td>{s.grace_minutes} دقيقة</td>
+                      <td>{hours} {t("hoursUnit")}</td>
+                      <td>{s.grace_minutes} {t("minutesUnit")}</td>
                       <td>
                         <span style={{
                           padding: "3px 10px",
@@ -901,7 +901,7 @@ export function Attendance() {
                           background: s.is_active ? "#d1fae5" : "#fee2e2",
                           color: s.is_active ? "#065f46" : "#991b1b",
                         }}>
-                          {s.is_active ? "نشطة" : "غير نشطة"}
+                          {s.is_active ? t("activeStatus") : t("inactiveStatus")}
                         </span>
                       </td>
                       <td className="actions">
@@ -915,8 +915,8 @@ export function Attendance() {
                             is_active: s.is_active,
                           });
                           setShowShiftForm(true);
-                        }}>تعديل</button>
-                        <button className="btn sm danger" onClick={() => removeShift(s)}>حذف</button>
+                        }}>{t("editBtn")}</button>
+                        <button className="btn sm danger" onClick={() => removeShift(s)}>{t("deleteBtn")}</button>
                       </td>
                     </tr>
                     );
@@ -931,7 +931,7 @@ export function Attendance() {
       {activeTab === "assignments" && (
         <>
           <div className="page-head">
-            <h2>تعيين الفترات للموظفين</h2>
+            <h2>{t("assignShiftsTitle")}</h2>
             <div className="head-actions">
               <button className="btn primary" onClick={() => {
                 setAssignForm({
@@ -941,7 +941,7 @@ export function Attendance() {
                 });
                 setShowAssignForm(true);
               }}>
-                ➕ تعيين فترة
+                ➕ {t("assignShiftBtn")}
               </button>
             </div>
           </div>
@@ -950,19 +950,19 @@ export function Attendance() {
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>الموظف</th>
-                  <th>الفترة</th>
-                  <th>وقت البداية</th>
-                  <th>وقت النهاية</th>
-                  <th>تاريخ السريان</th>
-                  <th>إجراءات</th>
+                  <th>{t("employeeLabel")}</th>
+                  <th>{t("shiftLabel")}</th>
+                  <th>{t("startTime")}</th>
+                  <th>{t("endTime")}</th>
+                  <th>{t("effectiveDate")}</th>
+                  <th>{t("actionsLabel")}</th>
                 </tr>
               </thead>
               <tbody>
                 {empShifts.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="text-center" style={{ padding: 30 }}>
-                      لم يتم تعيين فترات بعد
+                      {t("noShiftsAssigned")}
                     </td>
                   </tr>
                 ) : (
@@ -986,7 +986,7 @@ export function Attendance() {
                       <td style={{ color: "#e53e3e", fontWeight: 600 }}>{es.end_time}</td>
                       <td>{fmtDate(es.effective_date)}</td>
                       <td className="actions">
-                        <button className="btn sm danger" onClick={() => removeAssign(es)}>إلغاء</button>
+                        <button className="btn sm danger" onClick={() => removeAssign(es)}>{t("cancelBtn")}</button>
                       </td>
                     </tr>
                   ))
@@ -1000,9 +1000,9 @@ export function Attendance() {
       {activeTab === "report" && (
         <>
           <div className="page-head">
-            <h2>تقرير الفترات اليومي</h2>
+            <h2>{t("dailyShiftReport")}</h2>
             <div className="head-actions">
-              <label style={{ fontSize: 13, fontWeight: 600, alignSelf: "center" }}>من:</label>
+              <label style={{ fontSize: 13, fontWeight: 600, alignSelf: "center" }}>{t("fromLabel")}:</label>
               <input
                 type="date"
                 value={reportFrom}
@@ -1010,7 +1010,7 @@ export function Attendance() {
                 className="search"
                 style={{ width: 160 }}
               />
-              <label style={{ fontSize: 13, fontWeight: 600, alignSelf: "center" }}>إلى:</label>
+              <label style={{ fontSize: 13, fontWeight: 600, alignSelf: "center" }}>{t("toLabel")}:</label>
               <input
                 type="date"
                 value={reportTo}
@@ -1019,13 +1019,13 @@ export function Attendance() {
                 style={{ width: 160 }}
               />
               <button className="btn primary" onClick={loadShiftReport}>
-                🔍 بحث
+                🔍 {t("searchBtn")}
               </button>
-              <button className="btn" onClick={handlePrintReport} title="طباعة">
-                🖨️ طباعة
+              <button className="btn" onClick={handlePrintReport} title={t("printBtn")}>
+                🖨️ {t("printBtn")}
               </button>
               <button className="btn primary" onClick={handleExportShiftPDF} disabled={pdfBusy}>
-                {pdfBusy ? "⏳ جاري..." : "📥 تصدير PDF"}
+                {pdfBusy ? `⏳ ${t("exportingPdf")}` : `📥 ${t("exportPdf")}`}
               </button>
             </div>
           </div>
@@ -1035,21 +1035,21 @@ export function Attendance() {
               <div className="card-icon">👥</div>
               <div>
                 <div className="card-value">{shiftReport.length}</div>
-                <div className="card-label">إجمالي السجلات</div>
+                <div className="card-label">{t("totalRecords")}</div>
               </div>
             </div>
             <div className="card red">
               <div className="card-icon">⏰</div>
               <div>
                 <div className="card-value">{shiftReport.filter((r) => r.is_late).length}</div>
-                <div className="card-label">متأخرين</div>
+                <div className="card-label">{t("lateArrivals")}</div>
               </div>
             </div>
             <div className="card amber">
               <div className="card-icon">🏃</div>
               <div>
                 <div className="card-value">{shiftReport.filter((r) => r.is_early_leave).length}</div>
-                <div className="card-label">مدرعين مبكراً</div>
+                <div className="card-label">{t("earlyLeaves")}</div>
               </div>
             </div>
             <div className="card green">
@@ -1060,7 +1060,7 @@ export function Attendance() {
                     ? (shiftReport.reduce((sum, r) => sum + r.work_hours, 0) / shiftReport.length).toFixed(1)
                     : "0"}
                 </div>
-                <div className="card-label">متوسط ساعات العمل</div>
+                <div className="card-label">{t("avgWorkHours")}</div>
               </div>
             </div>
           </div>
@@ -1071,23 +1071,23 @@ export function Attendance() {
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>التاريخ</th>
-                  <th>الموظف</th>
-                  <th>الفترة</th>
-                  <th>من - إلى</th>
-                  <th>الحضور</th>
-                  <th>الانصراف</th>
-                  <th>ساعات العمل</th>
-                  <th>ضمن الفترة</th>
-                  <th>الحالة</th>
-                  <th>إجراء</th>
+                  <th>{t("dateLabel")}</th>
+                  <th>{t("employeeLabel")}</th>
+                  <th>{t("shiftLabel")}</th>
+                  <th>{t("fromToLabel")}</th>
+                  <th>{t("checkInTime")}</th>
+                  <th>{t("checkOutTime")}</th>
+                  <th>{t("workHours")}</th>
+                  <th>{t("withinShift")}</th>
+                  <th>{t("statusLabel")}</th>
+                  <th>{t("actionLabel")}</th>
                 </tr>
               </thead>
               <tbody>
                 {shiftReport.length === 0 ? (
                   <tr>
                     <td colSpan={10} className="text-center" style={{ padding: 30 }}>
-                      لا توجد سجلات حضور في هذا النطاق
+                      {t("noAttendanceInPeriod")}
                     </td>
                   </tr>
                 ) : (
@@ -1130,7 +1130,7 @@ export function Attendance() {
                         {r.check_in || "—"}
                         {r.is_late && (
                           <span style={{ fontSize: 11, display: "block", color: "#e53e3e" }}>
-                            ⏰ تأخر {r.late_minutes} دقيقة
+                             ⏰ {t("lateLabel")} {r.late_minutes} {t("minutesUnit")}
                           </span>
                         )}
                       </td>
@@ -1141,11 +1141,11 @@ export function Attendance() {
                         {r.check_out || "—"}
                         {r.is_early_leave && (
                           <span style={{ fontSize: 11, display: "block", color: "#e53e3e" }}>
-                            🏃 انصراف مبكر {r.early_minutes} دقيقة
+                             🏃 {t("earlyLeaveLabel")} {r.early_minutes} {t("minutesUnit")}
                           </span>
                         )}
                       </td>
-                      <td style={{ fontWeight: 600 }}>{r.check_in && r.check_out ? `${r.work_hours} س` : "—"}</td>
+                      <td style={{ fontWeight: 600 }}>{r.check_in && r.check_out ? `${r.work_hours} ${t("hoursAbbrev")}` : "—"}</td>
                       <td>
                         {!r.check_in ? (
                           <span style={{ color: "#999", fontSize: 12 }}>—</span>
@@ -1159,7 +1159,7 @@ export function Attendance() {
                               background: "#d1fae5",
                               color: "#065f46",
                             }}>
-                              ✅ ضمن الفترة
+                              ✅ {t("withinShiftBadge")}
                             </span>
                           ) : (
                             <span style={{
@@ -1170,7 +1170,7 @@ export function Attendance() {
                               background: "#fef3c7",
                               color: "#92400e",
                             }}>
-                              ⚠️ خارج الفترة
+                              ⚠️ {t("outsideShiftBadge")}
                             </span>
                           )
                         ) : (
@@ -1182,7 +1182,7 @@ export function Attendance() {
                             background: "#f3f4f6",
                             color: "#6b7280",
                           }}>
-                            بدون فترة
+                            {t("noShiftBadge")}
                           </span>
                         )}
                       </td>
@@ -1196,7 +1196,7 @@ export function Attendance() {
                             background: "#fee2e2",
                             color: "#991b1b",
                           }}>
-                            غائب
+                            {t("absentStatus")}
                           </span>
                         ) : r.has_shift ? (
                           r.is_late ? (
@@ -1208,7 +1208,7 @@ export function Attendance() {
                               background: "#fef3c7",
                               color: "#92400e",
                             }}>
-                              متأخر
+                              {t("lateStatus")}
                             </span>
                           ) : (
                             <span style={{
@@ -1219,7 +1219,7 @@ export function Attendance() {
                               background: "#d1fae5",
                               color: "#065f46",
                             }}>
-                              حاضر
+                              {t("presentStatus")}
                             </span>
                           )
                         ) : (
@@ -1231,7 +1231,7 @@ export function Attendance() {
                             background: "#ebf5fb",
                             color: "#1a73e8",
                           }}>
-                            سجل يدوي
+                            {t("manualRecordStatus")}
                           </span>
                         )}
                       </td>
@@ -1248,9 +1248,9 @@ export function Attendance() {
                             fontSize: 12,
                             fontWeight: 600,
                           }}
-                          title="حذف نهائي"
+                          title={t("permanentDelete")}
                         >
-                          🗑️ حذف
+                          🗑️ {t("deleteBtn")}
                         </button>
                       </td>
                     </tr>
@@ -1265,34 +1265,34 @@ export function Attendance() {
 
       {showShiftForm && (
         <Modal
-          title={editingShift ? "تعديل الفترة" : "إضافة فترة جديدة"}
+          title={editingShift ? t("editShift") : t("addNewShift")}
           onClose={() => { setShowShiftForm(false); setEditingShift(null); }}
           width="500px"
         >
           <form onSubmit={saveShift}>
             <div className="form-grid">
-              <Field label="اسم الفترة *">
+              <Field label={`${t("shiftNameLabel")} *`}>
                 <input
                   value={shiftForm.name}
                   onChange={(e) => setShiftForm({ ...shiftForm, name: e.target.value })}
-                  placeholder="مثال: الفترة الصباحية"
+                  placeholder={t("shiftNamePlaceholder")}
                 />
               </Field>
-              <Field label="وقت البداية">
+              <Field label={t("startTime")}>
                 <input
                   type="time"
                   value={shiftForm.start_time}
                   onChange={(e) => setShiftForm({ ...shiftForm, start_time: e.target.value })}
                 />
               </Field>
-              <Field label="وقت النهاية">
+              <Field label={t("endTime")}>
                 <input
                   type="time"
                   value={shiftForm.end_time}
                   onChange={(e) => setShiftForm({ ...shiftForm, end_time: e.target.value })}
                 />
               </Field>
-              <Field label="السماح بالتأخير (دقيقة)">
+              <Field label={t("gracePeriodMinutes")}>
                 <input
                   type="number"
                   min="0"
@@ -1300,22 +1300,22 @@ export function Attendance() {
                   onChange={(e) => setShiftForm({ ...shiftForm, grace_minutes: Number(e.target.value) })}
                 />
               </Field>
-              <Field label="الحالة">
+              <Field label={t("statusLabel")}>
                 <select
                   value={shiftForm.is_active ? "1" : "0"}
                   onChange={(e) => setShiftForm({ ...shiftForm, is_active: e.target.value === "1" })}
                 >
-                  <option value="1">نشطة</option>
-                  <option value="0">غير نشطة</option>
+                  <option value="1">{t("activeStatus")}</option>
+                  <option value="0">{t("inactiveStatus")}</option>
                 </select>
               </Field>
             </div>
             <div className="form-actions">
               <button type="submit" className="btn primary">
-                {editingShift ? "💾 حفظ التعديل" : "➕ إضافة"}
+                {editingShift ? `💾 ${t("saveChanges")}` : `➕ ${t("addBtn")}`}
               </button>
               <button type="button" className="btn" onClick={() => { setShowShiftForm(false); setEditingShift(null); }}>
-                إلغاء
+                {t("cancelBtn")}
               </button>
             </div>
           </form>
@@ -1324,35 +1324,35 @@ export function Attendance() {
 
       {showAssignForm && (
         <Modal
-          title="تعيين فترة لموظف"
+          title={t("assignShiftModal")}
           onClose={() => setShowAssignForm(false)}
           width="500px"
         >
           <form onSubmit={saveAssign}>
             <div className="form-grid">
-              <Field label="الموظف *">
+              <Field label={`${t("employeeLabel")} *`}>
                 <select
                   value={assignForm.employee_id}
                   onChange={(e) => setAssignForm({ ...assignForm, employee_id: Number(e.target.value) })}
                 >
-                  <option value={0}>— اختر الموظف —</option>
+                  <option value={0}>— {t("selectEmployee")} —</option>
                   {employees.map((emp) => (
                     <option key={emp.id} value={emp.id}>{emp.name}</option>
                   ))}
                 </select>
               </Field>
-              <Field label="الفترة *">
+              <Field label={`${t("shiftLabel")} *`}>
                 <select
                   value={assignForm.shift_id}
                   onChange={(e) => setAssignForm({ ...assignForm, shift_id: Number(e.target.value) })}
                 >
-                  <option value={0}>— اختر الفترة —</option>
+                  <option value={0}>— {t("selectShift")} —</option>
                   {shifts.filter((s) => s.is_active).map((s) => (
                     <option key={s.id} value={s.id}>{s.name} ({s.start_time} - {s.end_time})</option>
                   ))}
                 </select>
               </Field>
-              <Field label="تاريخ السريان من">
+              <Field label={t("effectiveDate")}>
                 <input
                   type="date"
                   value={assignForm.effective_date}
@@ -1362,10 +1362,10 @@ export function Attendance() {
             </div>
             <div className="form-actions">
               <button type="submit" className="btn primary">
-                ➤ تعيين الفترة
+                ➤ {t("assignShiftBtn")}
               </button>
               <button type="button" className="btn" onClick={() => setShowAssignForm(false)}>
-                إلغاء
+                {t("cancelBtn")}
               </button>
             </div>
           </form>
@@ -1376,18 +1376,18 @@ export function Attendance() {
         <Modal title={title} onClose={() => setShowForm(false)} width="600px">
           <form onSubmit={save}>
             <div className="form-grid">
-              <Field label="الموظف *">
+              <Field label={`${t("employeeLabel")} *`}>
                 <select
                   value={form.employee_id}
                   onChange={(e) => setForm({ ...form, employee_id: Number(e.target.value) })}
                 >
-                  <option value={0}>— اختر الموظف —</option>
+                  <option value={0}>— {t("selectEmployee")} —</option>
                   {employees.map((emp) => (
                     <option key={emp.id} value={emp.id}>{emp.name}</option>
                   ))}
                 </select>
               </Field>
-              <Field label="التاريخ">
+              <Field label={t("dateLabel")}>
                 <input
                   type="date"
                   value={form.date}
@@ -1395,7 +1395,7 @@ export function Attendance() {
                 />
               </Field>
               {formMode === "in" && (
-                <Field label="وقت الحضور">
+                <Field label={t("checkInTime")}>
                   <input
                     type="time"
                     value={form.check_in}
@@ -1404,7 +1404,7 @@ export function Attendance() {
                 </Field>
               )}
               {formMode === "out" && (
-                <Field label="وقت الانصراف">
+                <Field label={t("checkOutTime")}>
                   <input
                     type="time"
                     value={form.check_out}
@@ -1412,7 +1412,7 @@ export function Attendance() {
                   />
                 </Field>
               )}
-              <Field label="النوع">
+              <Field label={t("typeLabel")}>
                 <select
                   value={form.type}
                   onChange={(e) => setForm({ ...form, type: e.target.value })}
@@ -1422,7 +1422,7 @@ export function Attendance() {
                   ))}
                 </select>
               </Field>
-              <Field label="ملاحظات">
+              <Field label={t("notesLabel")}>
                 <input
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -1432,10 +1432,10 @@ export function Attendance() {
 
             <div className="form-actions">
               <button type="submit" className="btn primary">
-                {formMode === "in" ? "✅ تسجيل الحضور" : "🔴 تسجيل الانصراف"}
+                {formMode === "in" ? `✅ ${t("recordAttendance")}` : `🔴 ${t("recordCheckout")}`}
               </button>
               <button type="button" className="btn" onClick={() => setShowForm(false)}>
-                إلغاء
+                {t("cancelBtn")}
               </button>
             </div>
           </form>

@@ -216,6 +216,17 @@ export const api = {
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) =>
     invoke<Settings>("save_settings", { settings }),
+  verifySectionPassword: (password: string) =>
+    invoke<boolean>("verify_section_password", { password }),
+  changeSectionPassword: (currentPassword: string, newPassword: string) =>
+    invoke<void>("change_section_password", { currentPassword, newPassword }),
+  isFirstRun: () => invoke<boolean>("is_first_run"),
+  initializeAdmin: (adminName: string, adminPassword: string) =>
+    invoke<void>("initialize_admin", { adminName, adminPassword }),
+  verifyAdminPassword: (password: string) =>
+    invoke<boolean>("verify_admin_password", { password }),
+  changeAdminPassword: (currentPassword: string, newPassword: string) =>
+    invoke<void>("change_admin_password", { currentPassword, newPassword }),
 
   // النسخ الاحتياطي
   exportBackup: (path: string) => invoke<void>("export_backup", { path }),
@@ -378,4 +389,22 @@ export const api = {
   // الطابعات
   listPrinters: () =>
     invoke<string[]>("list_printers"),
+
+  // البحث في الصيانة
+  searchServiceOrders: (query: string) =>
+    invoke<any[]>("search_service_orders", { query }),
+
+  // المنتجات بالصفحات
+  listProductsPaged: (search: string | null, page: number, pageSize: number) =>
+    invoke<[Product[], number]>("list_products_paged", { search: search || null, page, pageSize }),
+
+  // التصدير CSV
+  exportProductsCsv: () => invoke<string>("export_products_csv"),
+  exportSalesCsv: (from?: string, to?: string) =>
+    invoke<string>("export_sales_csv", { from: from || null, to: to || null }),
+  exportPurchasesCsv: (from?: string, to?: string) =>
+    invoke<string>("export_purchases_csv", { from: from || null, to: to || null }),
+
+  // النسخ الاحتياطي التلقائي
+  startAutoBackup: () => invoke<void>("start_auto_backup"),
 };

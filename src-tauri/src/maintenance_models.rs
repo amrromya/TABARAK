@@ -283,18 +283,6 @@ pub struct MaintenanceDashboard {
 
 // ==================== Reports ====================
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MaintenanceReport {
-    pub total_orders: i64,
-    pub completed: i64,
-    pub cancelled: i64,
-    pub delivered: i64,
-    pub revenue: f64,
-    pub parts_cost: f64,
-    pub labor_cost: f64,
-    pub profit: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaintenanceSettings {
     pub next_order_number: String,
     pub late_days: String,

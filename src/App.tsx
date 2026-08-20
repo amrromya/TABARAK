@@ -2,6 +2,10 @@ import { useState, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ToastProvider } from "./components/ui";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { useTheme } from "./hooks/useTheme";
+import { initLang, setLang, getLang, t } from "./i18n";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { Dashboard } from "./pages/Dashboard";
 import { Inventory } from "./pages/Inventory";
 import { Warehouses } from "./pages/Warehouses";
@@ -39,18 +43,18 @@ import type { Account } from "./types";
 import { api } from "./api";
 
 const NAV = [
-  { key: "dashboard", label: "لوحة التحكم", icon: "🏠" },
-  { key: "inventory", label: "المخزون", icon: "📦" },
-  { key: "warehouses", label: "المستودعات", icon: "🏬" },
-  { key: "purchases", label: "سجل المشتريات", icon: "📦" },
-  { key: "suppliers", label: "الموردين", icon: "🚚" },
-  { key: "customers", label: "العملاء والديون", icon: "🤝" },
-  { key: "employees", label: "الموظفين", icon: "👥" },
-  { key: "attendance", label: "الحضور والانصراف", icon: "🕐" },
-  { key: "expenses", label: "المصروفات", icon: "🧾" },
-  { key: "sales", label: "سجل المبيعات", icon: "🧾" },
-  { key: "reports", label: "التقارير", icon: "📈" },
-  { key: "settings", label: "الإعدادات", icon: "⚙️" },
+  { key: "dashboard", labelKey: "dashboard", icon: "🏠" },
+  { key: "inventory", labelKey: "inventory", icon: "📦" },
+  { key: "warehouses", labelKey: "warehouses", icon: "🏬" },
+  { key: "purchases", labelKey: "purchases", icon: "📦" },
+  { key: "suppliers", labelKey: "suppliers", icon: "🚚" },
+  { key: "customers", labelKey: "customers", icon: "🤝" },
+  { key: "employees", labelKey: "employees", icon: "👥" },
+  { key: "attendance", labelKey: "attendance", icon: "🕐" },
+  { key: "expenses", labelKey: "expenses", icon: "🧾" },
+  { key: "sales", labelKey: "sales", icon: "🧾" },
+  { key: "reports", labelKey: "reports", icon: "📈" },
+  { key: "settings", labelKey: "settings", icon: "⚙️" },
 ];
 
 const POS_WINDOWS: Record<string, { title: string }> = {
@@ -120,9 +124,39 @@ async function openFullCountWindow(account?: Account) {
   await openTool("full-count", undefined, undefined, params.toString());
 }
 
-function Shell({ account }: { account: Account }) {
+function Shell({ account, theme, toggleTheme }: { account: Account; theme: "light" | "dark"; toggleTheme: () => void }) {
   const [page, setPage] = useState("dashboard");
   const [appVersion, setAppVersion] = useState("");
+  const [features, setFeatures] = useState<{ dark_mode: boolean; language: boolean }>(() => {
+    try {
+      const raw = localStorage.getItem("tabarak_features");
+      if (raw) return { dark_mode: false, language: false, ...JSON.parse(raw) };
+    } catch {}
+    return { dark_mode: false, language: false };
+  });
+
+  // Listen for feature changes
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "tabarak_features") {
+        try {
+          const raw = localStorage.getItem("tabarak_features");
+          if (raw) setFeatures({ dark_mode: false, language: false, ...JSON.parse(raw) });
+        } catch {}
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    "f2": () => { if (canAccess("sales")) openPosWindow("sales-pos", undefined, account); },
+    "f3": () => { if (canAccess("purchases")) openPosWindow("purchase-pos", undefined, account); },
+    "ctrl+f": () => { const el = document.querySelector<HTMLInputElement>(".search-input"); if (el) el.focus(); },
+    "f1": () => setPage("dashboard"),
+    "f5": () => window.location.reload(),
+  });
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -225,8 +259,8 @@ function Shell({ account }: { account: Account }) {
         <div className="logo">
           <img src="/app.png" alt="تبارك" className="logo-mark-img" />
           <div>
-            <h1>تبارك</h1>
-            <p>برنامج الحسابات</p>
+            <h1>{t("appTitle")}</h1>
+            <p>{t("appSubtitle")}</p>
             {account && (
               <span className="account-badge">👤 {account.name}</span>
             )}
@@ -240,19 +274,31 @@ function Shell({ account }: { account: Account }) {
                 onClick={() => navClick(n)}
               >
                 <span className="nav-icon">{n.icon}</span>
-                <span>{n.label}</span>
+                <span>{t(n.labelKey)}</span>
               </button>
           ))}
         </nav>
         {account && (
           <div className="sidebar-footer">
+            <div className="sidebar-toggles">
+              {features.dark_mode && (
+                <button className="sidebar-toggle-btn" onClick={toggleTheme} title={theme === "dark" ? t("lightMode") : t("darkMode")}>
+                  {theme === "dark" ? "☀️" : "🌙"}
+                </button>
+              )}
+              {features.language && (
+                <button className="sidebar-toggle-btn" onClick={() => { setLang(getLang() === "ar" ? "en" : "ar"); window.location.reload(); }} title={t("language")}>
+                  🌐
+                </button>
+              )}
+            </div>
             <button className="nav-item logout-btn" onClick={() => window.location.reload()}>
               <span className="nav-icon">🚪</span>
-              <span>خروج</span>
+              <span>{t("logout")}</span>
             </button>
             <div className="sidebar-version">
-              <span>الإصدار {appVersion || "—"}</span>
-              <span>إعداد وتطوير المهندس/ عمرو روميه</span>
+              <span>{t("version")} {appVersion || "—"}</span>
+              <span>{t("devCredit")}</span>
             </div>
           </div>
         )}
@@ -317,6 +363,13 @@ function App() {
   const [account, setAccount] = useState<Account | null>(null);
   const [licenseActive, setLicenseActive] = useState(isPopup);
 
+  // Initialize theme and language
+  const [theme, toggleTheme] = useTheme();
+  useEffect(() => { initLang(); }, []);
+
+  // Start auto-backup
+  useEffect(() => { api.startAutoBackup().catch(() => {}); }, [authenticated]);
+
   const handleSplashFinish = () => {
     api.checkLicense()
       .then(() => {
@@ -334,24 +387,42 @@ function App() {
   };
 
   if (loading) {
-    return <SplashScreen onFinish={handleSplashFinish} />;
+    return (
+      <ErrorBoundary>
+        <SplashScreen onFinish={handleSplashFinish} />
+      </ErrorBoundary>
+    );
   }
 
   if (!licenseActive) {
-    return <Activation onActivated={() => setLicenseActive(true)} />;
+    return (
+      <ErrorBoundary>
+        <Activation onActivated={() => setLicenseActive(true)} />
+      </ErrorBoundary>
+    );
   }
 
   if (!authenticated || !account) {
     if (isPopup) {
-      return <AutoLogin onLogin={handleLogin} />;
+      return (
+        <ErrorBoundary>
+          <AutoLogin onLogin={handleLogin} />
+        </ErrorBoundary>
+      );
     }
-    return <LoginScreen onLogin={handleLogin} />;
+    return (
+      <ErrorBoundary>
+        <LoginScreen onLogin={handleLogin} />
+      </ErrorBoundary>
+    );
   }
 
   return (
-    <ToastProvider>
-      <Shell account={account} />
-    </ToastProvider>
+    <ErrorBoundary>
+      <ToastProvider>
+        <Shell account={account} theme={theme} toggleTheme={toggleTheme} />
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }
 

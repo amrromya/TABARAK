@@ -1,6 +1,7 @@
 use rusqlite::{Connection, params};
 use std::fs;
 use tauri::{App, Manager};
+use crate::utils::ensure_column;
 
 pub fn init_db(app: &App) -> Result<Connection, String> {
     let dir = app
@@ -12,28 +13,6 @@ pub fn init_db(app: &App) -> Result<Connection, String> {
     let conn = Connection::open(&db_path).map_err(|e| format!("فشل فتح قاعدة البيانات: {e}"))?;
     migrate(&conn)?;
     Ok(conn)
-}
-
-fn ensure_column(
-    conn: &Connection,
-    table: &str,
-    column: &str,
-    ddl: &str,
-) -> Result<(), String> {
-    let sql = format!("PRAGMA table_info({table})");
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let exists = stmt
-        .query_map([], |r| r.get::<_, String>(1))
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?
-        .iter()
-        .any(|n| n == column);
-    if !exists {
-        let sql = format!("ALTER TABLE {table} ADD COLUMN {column} {ddl}");
-        conn.execute(&sql, []).map_err(|e| e.to_string())?;
-    }
-    Ok(())
 }
 
 fn migrate(conn: &Connection) -> Result<(), String> {
@@ -608,9 +587,17 @@ fn migrate(conn: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_so_images_order ON service_order_images(order_id);
         CREATE INDEX IF NOT EXISTS idx_so_tech_order ON service_order_technicians(order_id);
         CREATE INDEX IF NOT EXISTS idx_so_parts_order ON service_order_parts(order_id);
+        CREATE INDEX IF NOT EXISTS idx_so_parts_product ON service_order_parts(product_id);
         CREATE INDEX IF NOT EXISTS idx_so_payments_order ON service_order_payments(order_id);
         CREATE INDEX IF NOT EXISTS idx_so_notes_order ON service_order_notes(order_id);
         CREATE INDEX IF NOT EXISTS idx_so_log_order ON service_order_audit_log(order_id);
+        CREATE INDEX IF NOT EXISTS idx_receipt_vouchers_date ON receipt_vouchers(date);
+        CREATE INDEX IF NOT EXISTS idx_receipt_vouchers_source ON receipt_vouchers(source_type, source_id);
+        CREATE INDEX IF NOT EXISTS idx_payment_vouchers_date ON payment_vouchers(date);
+        CREATE INDEX IF NOT EXISTS idx_payment_vouchers_dest ON payment_vouchers(dest_type, dest_id);
+        CREATE INDEX IF NOT EXISTS idx_warehouse_transfers_date ON warehouse_transfers(date);
+        CREATE INDEX IF NOT EXISTS idx_warehouse_transfer_items_transfer ON warehouse_transfer_items(transfer_id);
+        CREATE INDEX IF NOT EXISTS idx_warehouse_transfer_items_product ON warehouse_transfer_items(product_id);
         ",
     )
     .map_err(|e| format!("فشل إنشاء جداول الصيانة: {e}"))?;
@@ -661,8 +648,4 @@ fn migrate(conn: &Connection) -> Result<(), String> {
     crate::sync::schema::add_sync_columns(conn)?;
 
     Ok(())
-}
-
-pub fn money(v: f64) -> f64 {
-    (v * 100.0).round() / 100.0
 }

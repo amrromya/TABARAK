@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { t } from "../i18n";
 
 interface LicenseInfo {
   hwid: string;
@@ -44,7 +45,7 @@ export function Activation({ onActivated }: { onActivated: () => void }) {
 
   const handleActivate = async () => {
     if (!licenseKey.trim()) {
-      setError("أدخل كود التفعيل");
+      setError(t("enterCodeError"));
       return;
     }
     setLoading(true);
@@ -61,7 +62,7 @@ export function Activation({ onActivated }: { onActivated: () => void }) {
   };
 
   const handleRemove = async () => {
-    if (!confirm("هل تريد حذف التفعيل؟")) return;
+    if (!confirm(t("confirmRemoveActivation"))) return;
     try {
       await api.removeLicense();
       setLicenseInfo(null);
@@ -84,8 +85,8 @@ export function Activation({ onActivated }: { onActivated: () => void }) {
         {/* Header */}
         <div className="activation-header">
           <div className="activation-logo">🔐</div>
-          <h1>تفعيل برنامج تبارك</h1>
-          <p>أدخل كود التفعيل لتثبيت البرنامج</p>
+          <h1>{t("activateTitle")}</h1>
+          <p>{t("activateSubtitle")}</p>
         </div>
 
         {/* Status Card */}
@@ -93,25 +94,25 @@ export function Activation({ onActivated }: { onActivated: () => void }) {
           <div className="activation-status active">
             <div className="status-icon">✅</div>
             <div className="status-info">
-              <h3>البرنامج مُفعّل</h3>
+              <h3>{t("programActivated")}</h3>
               <div className="status-details">
-                <span><b>الاسم:</b> {licenseInfo.customer_name}</span>
-                <span><b>الانتهاء:</b> {licenseInfo.expiry_date}</span>
-                <span><b>الميزات:</b> {licenseInfo.features}</span>
+                <span><b>{t("customerNameLabel")}:</b> {licenseInfo.customer_name}</span>
+                <span><b>{t("expiryDate")}:</b> {licenseInfo.expiry_date}</span>
+                <span><b>{t("featuresLabel")}:</b> {licenseInfo.features}</span>
               </div>
             </div>
-            <button className="btn danger sm" onClick={handleRemove}>حذف التفعيل</button>
+            <button className="btn danger sm" onClick={handleRemove}>{t("removeActivation")}</button>
           </div>
         )}
 
         {/* HWID Card */}
         <div className="activation-card">
-          <h3>بصمة جهازك ( HWID )</h3>
-          <p className="card-desc">أرسل هذا الكود للحصول على كود التفعيل</p>
+          <h3>{t("hwidTitle")}</h3>
+          <p className="card-desc">{t("hwidDesc")}</p>
           <div className="hwid-box">
-            <code>{hwid || "جارٍ التحميل..."}</code>
+            <code>{hwid || t("loading")}</code>
             <button className="btn sm" onClick={copyHwid}>
-              {copied ? "✅ تم النسخ" : "📋 نسخ"}
+              {copied ? t("copiedBtn") : t("copyBtn")}
             </button>
           </div>
         </div>
@@ -119,7 +120,7 @@ export function Activation({ onActivated }: { onActivated: () => void }) {
         {/* Activation Form */}
         {!isActive && (
           <div className="activation-card">
-            <h3>إدخال كود التفعيل</h3>
+            <h3>{t("enterActivationCode")}</h3>
             <div className="activation-input-group">
               <input
                 className="activation-input"
@@ -133,7 +134,7 @@ export function Activation({ onActivated }: { onActivated: () => void }) {
                 onClick={handleActivate}
                 disabled={loading}
               >
-                {loading ? "جارٍ التحقق..." : "🔑 تفعيل"}
+                {loading ? t("activatingLabel") : t("activateBtn")}
               </button>
             </div>
             {error && <div className="activation-error">❌ {error}</div>}
@@ -142,8 +143,8 @@ export function Activation({ onActivated }: { onActivated: () => void }) {
 
         {/* Footer */}
         <div className="activation-footer">
-          <p>للحصول على كود التفعيل تواصل مع المطور</p>
-          <p className="copyright">برنامج تبارك © 2025</p>
+          <p>{t("contactDeveloper")}</p>
+          <p className="copyright">{t("copyright")}</p>
         </div>
       </div>
     </div>

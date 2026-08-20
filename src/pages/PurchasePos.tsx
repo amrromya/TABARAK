@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import { t } from "../i18n";
 import { ProductCard } from "../components/ProductCard";
 import { InvoiceBar, type DiscountType } from "../components/InvoiceBar";
 import { PrintBarcode } from "../components/PrintBarcode";
 import { PrintPurchaseReturn } from "../components/PrintPurchaseReturn";
+import { PrintPurchaseThermal } from "../components/PrintPurchaseThermal";
 import { ProductMovements } from "../components/ProductMovements";
 import { Field, Modal, fmtDate, money, qty, today, useToast } from "../components/ui";
 import type {
@@ -146,7 +148,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
   }, [warehouses, warehouseId]);
 
   useEffect(() => {
-    searchRef.current?.focus();
+    // Don't auto-focus — only focus when user clicks the search bar
   }, []);
 
   const addWarehouse = async (name: string) => {
@@ -154,7 +156,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
       const w = await api.createWarehouse(name);
       setWarehouses((ws) => [...ws, w]);
       setWarehouseId(String(w.id));
-      notify(`تم إضافة المستودع "${w.name}"`);
+      notify(`${t("addWarehouseNotify")} "${w.name}"`);
     } catch (err) {
       notify(String(err), "error");
       throw err;
@@ -239,7 +241,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
         setPrintReturn(ret);
         setShowMovements(false);
       } else {
-        notify("عرض الفاتورة غير متاح من هنا", "error");
+        notify(t("viewInvoiceNotAvailable"), "error");
       }
     } catch (err) {
       notify(String(err), "error");
@@ -299,7 +301,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
 
   const saveNewProduct = async () => {
     if (!np.name.trim()) {
-      notify("أدخل اسم الصنف", "error");
+      notify(t("enterItemName"), "error");
       return;
     }
     try {
@@ -338,7 +340,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
           cost_price: np.cost_price || created.cost_price,
         },
       ]);
-      notify(`تم إنشاء الصنف "${created.name}" وإضافته للفاتورة`);
+      notify(`${t("itemCreatedAdded")} "${created.name}"`);
       setNewModal(null);
       searchRef.current?.focus();
     } catch (err) {
@@ -348,7 +350,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
 
   const saveSupplier = async () => {
     if (!supForm.name.trim()) {
-      notify("أدخل اسم المورد", "error");
+      notify(t("enterSupplierName"), "error");
       return;
     }
     try {
@@ -361,7 +363,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
       setSupplierId(String(s.id));
       setShowSupplier(false);
       setSupForm({ name: "", phone: "", notes: "" });
-      notify(`تم إضافة المورد "${s.name}"`);
+      notify(`${t("supplierAdded")} "${s.name}"`);
     } catch (err) {
       notify(String(err), "error");
     }
@@ -402,11 +404,11 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
 
   const save = async () => {
     if (lines.length === 0) {
-      notify("أضف صنف واحد على الأقل للفاتورة", "error");
+      notify(t("addAtLeastOneItem"), "error");
       return;
     }
     if (paymentMethod === "credit" && !supplierId) {
-      notify("اختر موردًا للفاتورة الآجلة", "error");
+      notify(t("selectSupplierForCredit"), "error");
       return;
     }
     try {
@@ -426,9 +428,9 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
       notify(
         isNew
           ? paymentMethod === "cash"
-            ? "تم تسجيل فاتورة الشراء (مورد نقدي)"
-            : "تم تسجيل فاتورة الشراء الآجلة"
-          : "تم حفظ التعديلات",
+            ? t("purchaseSavedCash")
+            : t("purchaseSavedCredit")
+          : t("changesSaved"),
       );
       await afterSave();
     } catch (err) {
@@ -438,10 +440,10 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
 
   const deleteCurrent = async () => {
     if (currentId == null) return;
-    if (!window.confirm("هل تريد حذف فاتورة الشراء هذه؟")) return;
+    if (!window.confirm(t("confirmDeleteInvoice"))) return;
     try {
       await api.deletePurchase(currentId);
-      notify("تم حذف الفاتورة");
+      notify(t("invoiceDeleted"));
       setCurrentId(null);
       setLines([]);
       setNotes("");
@@ -486,14 +488,14 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
     <div className="pos">
       <header className="pos-head">
         <button className="btn" onClick={onBack}>
-          → رجوع
+          → {t("back")}
         </button>
         <div className="pos-title">
-          <h1>فاتورة مشتريات</h1>
+          <h1>{t("purchaseInvoice")}</h1>
           <span>
             {currentId != null
-              ? `فاتورة رقم ${currentId}`
-              : settings?.store_name || "تبارك"}
+              ? `${t("invoiceNumber")} ${currentId}`
+              : settings?.store_name || t("appTitle")}
           </span>
         </div>
         <div className="pos-head-actions">
@@ -501,7 +503,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
             className="btn pos-nav-btn"
             onClick={goPrev}
             disabled={!hasPrev}
-            title="الفاتورة السابقة"
+            title={t("previousInvoice")}
           >
             ‹
           </button>
@@ -509,37 +511,37 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
             className="btn pos-nav-btn"
             onClick={goNext}
             disabled={!hasNext}
-            title="الفاتورة التالية"
+            title={t("nextInvoice")}
           >
             ›
           </button>
-          <button className="btn pos-nav-btn" onClick={newInvoice} title="فاتورة جديدة">
-            📄 جديدة
+          <button className="btn pos-nav-btn" onClick={newInvoice} title={t("newInvoice")}>
+            📄 {t("new")}
           </button>
           <button
             className="btn pos-nav-btn"
             onClick={() => setShowBarcode(true)}
-            title="طباعة باركود الأصناف"
+            title={t("barcodePrint")}
             disabled={lines.length === 0}
           >
-            🏷️ باركود
+            🏷️ {t("barcode")}
           </button>
           {currentId != null && (
-            <button className="btn pos-nav-btn" onClick={save} title="حفظ التعديلات">
-              ✏️ تعديل
+            <button className="btn pos-nav-btn" onClick={save} title={t("saveChanges")}>
+              ✏️ {t("edit")}
             </button>
           )}
           {currentId != null && (
             <button
               className="btn pos-nav-btn danger"
               onClick={deleteCurrent}
-              title="حذف الفاتورة"
+              title={t("deleteInvoice")}
             >
-              🗑️ حذف
+              🗑️ {t("delete")}
             </button>
           )}
           <button className="btn primary pos-save" onClick={save}>
-            {currentId == null ? "💾 حفظ الفاتورة" : "💾 حفظ التعديلات"}
+            {currentId == null ? `💾 ${t("saveInvoice")}` : `💾 ${t("saveChanges")}`}
           </button>
         </div>
       </header>
@@ -550,7 +552,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
             <input
               ref={searchRef}
               className="pos-search"
-              placeholder="🔍 اكتب اسم الصنف أو الباركود... (لو غير مسجل اضغط Enter لفتح كارت صنف جديد)"
+              placeholder={t("searchPlaceholder")}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -564,7 +566,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
               <div className="pos-dropdown">
                 {filtered.length === 0 && (
                   <div className="pos-dropdown-empty">
-                    لا يوجد صنف مسجل بهذا الاسم — اضغط Enter لإنشائه كصنف جديد
+                    {t("noItemRegistered")}
                   </div>
                 )}
                 {filtered.map((p) => (
@@ -579,10 +581,10 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
                     </div>
                     <div className="pos-item-prices">
                       <span className="pos-item-sell">
-                        بيع: {money(p.sell_price)}
+                        {t("sellLabel")} {money(p.sell_price)}
                       </span>
                       <span className="pos-item-cost">
-                        شراء: {money(p.cost_price)}
+                        {t("buyLabel")} {money(p.cost_price)}
                       </span>
                     </div>
                     <span
@@ -600,9 +602,9 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
                         setMovementProduct(p);
                         setShowMovements(true);
                       }}
-                      title="حركة الصنف"
+                      title={t("itemMovement")}
                     >
-                      حركة صنف
+                      {t("itemMovement")}
                     </button>
                   </div>
                 ))}
@@ -614,16 +616,16 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
             {lines.length === 0 ? (
               <div className="pos-empty">
                 <div>🚚</div>
-                <p>ابدأ بكتابة اسم الصنف أو الباركود لإضافة أصناف للفاتورة</p>
+                <p>{t("emptyCartMessage")}</p>
               </div>
             ) : (
               <table className="table pos-cart">
                 <thead>
                   <tr>
-                    <th>الصنف</th>
-                    <th style={{ width: 100 }}>الكمية</th>
-                    <th style={{ width: 130 }}>سعر الشراء</th>
-                    <th style={{ width: 120 }}>الإجمالي</th>
+                    <th>{t("itemNameHeader")}</th>
+                    <th style={{ width: 100 }}>{t("quantity")}</th>
+                    <th style={{ width: 130 }}>{t("purchasePriceHeader")}</th>
+                    <th style={{ width: 120 }}>{t("total")}</th>
                     <th style={{ width: 50 }}></th>
                   </tr>
                 </thead>
@@ -632,7 +634,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
                     <tr
                       key={l.product_id}
                       className="pos-line-row"
-                      title="اضغط مرتين لفتح كرت الصنف"
+                      title={t("doubleClickToOpen")}
                       onDoubleClick={() => {
                         const p = products.find((x) => x.id === l.product_id);
                         if (p) setEditProduct(p);
@@ -713,12 +715,12 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
 
         <aside className="pos-panel">
           <div className="pos-panel-total">
-            <span>إجمالي الفاتورة</span>
+            <span>{t("invoiceTotal")}</span>
             <b>{money(netTotal)}</b>
           </div>
 
           <div className="pos-panel-field">
-            <label>طريقة الدفع</label>
+            <label>{t("paymentMethod")}</label>
             <div className="pay-btns two">
               <button
                 type="button"
@@ -728,29 +730,29 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
                   setSupplierId("");
                 }}
               >
-                💵 نقدي
+                💵 {t("cash")}
               </button>
               <button
                 type="button"
                 className={`pay-btn ${paymentMethod === "credit" ? "active" : ""}`}
                 onClick={() => setPaymentMethod("credit")}
               >
-                📒 آجل
+                📒 {t("credit")}
               </button>
             </div>
           </div>
 
           {paymentMethod === "cash" ? (
-            <div className="pos-panel-ok">الفاتورة لمورد نقدي (بدون مورد)</div>
+            <div className="pos-panel-ok">{t("cashSupplierNote")}</div>
           ) : (
             <div className="pos-panel-field">
-              <label>المورد * (فاتورة آجلة)</label>
+              <label>{t("creditSupplierLabel")}</label>
               <div className="pos-select-row">
                 <select
                   value={supplierId}
                   onChange={(e) => setSupplierId(e.target.value)}
                 >
-                  <option value="">— اختر المورد —</option>
+                  <option value="">— {t("chooseSupplier")} —</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
@@ -762,14 +764,14 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
                   className="btn sm"
                   onClick={() => setShowSupplier(true)}
                 >
-                  + جديد
+                  + {t("new")}
                 </button>
               </div>
             </div>
           )}
 
           <div className="pos-panel-field">
-            <label>التاريخ</label>
+            <label>{t("date")}</label>
             <input
               type="date"
               value={date}
@@ -778,12 +780,12 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
           </div>
 
           <div className="pos-panel-field">
-            <label>الموظف (اختياري)</label>
+            <label>{t("employeeOptional")}</label>
             <select
               value={employeeId}
               onChange={(e) => setEmployeeId(e.target.value)}
             >
-              <option value="">— اختر الموظف —</option>
+              <option value="">— {t("chooseEmployee")} —</option>
               {employees.map((emp) => (
                 <option key={emp.id} value={emp.id}>
                   {emp.name}
@@ -793,21 +795,21 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
           </div>
 
           <div className="pos-panel-field">
-            <label>ملاحظات</label>
+            <label>{t("notes")}</label>
             <textarea
               className="pos-notes"
               rows={3}
-              placeholder="ملاحظات على الفاتورة..."
+              placeholder={t("notesPlaceholder")}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
           </div>
 
           <button className="btn primary pos-panel-save" onClick={save}>
-            {currentId == null ? "💾 حفظ الفاتورة" : "💾 حفظ التعديلات"}
+            {currentId == null ? `💾 ${t("saveInvoice")}` : `💾 ${t("saveChanges")}`}
           </button>
           <button className="btn pos-panel-clear" onClick={newInvoice}>
-            📄 فاتورة جديدة
+            📄 {t("newInvoice")}
           </button>
         </aside>
       </div>
@@ -829,19 +831,19 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
 
       {newModal && (
         <Modal
-          title="🏷️ صنف جديد"
+          title={`🏷️ ${t("newItem")}`}
           onClose={() => setNewModal(null)}
           width="460px"
         >
           <div className="modal-grid">
-            <Field label="اسم الصنف *">
+            <Field label={`${t("itemName")} *`}>
               <input
                 autoFocus
                 value={np.name}
                 onChange={(e) => setNp((s) => ({ ...s, name: e.target.value }))}
               />
             </Field>
-            <Field label="الباركود (تلقائي — يمكن تعديله)">
+            <Field label={t("barcodeAuto")}>
               <input
                 value={np.barcode}
                 onChange={(e) =>
@@ -849,11 +851,11 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
                 }
               />
             </Field>
-            <Field label="التصنيف (اكتب اسمًا جديدًا أو اختر)">
+            <Field label={t("categoryHint")}>
               <input
                 list="pos-category-list"
                 value={np.category}
-                placeholder="مثال: حلويات، بقالة..."
+                placeholder={t("categoryPlaceholder")}
                 onChange={(e) =>
                   setNp((s) => ({ ...s, category: e.target.value }))
                 }
@@ -864,23 +866,23 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
                 ))}
               </datalist>
             </Field>
-            <Field label="الوحدة">
+            <Field label={t("unit")}>
               <input
                 value={np.unit}
-                placeholder="قطعة، كجم، علبة..."
+                placeholder={t("unitPlaceholder")}
                 onChange={(e) =>
                   setNp((s) => ({ ...s, unit: e.target.value }))
                 }
               />
             </Field>
-            <Field label="المستودع">
+            <Field label={t("warehouse")}>
               <select
                 value={np.warehouse}
                 onChange={(e) =>
                   setNp((s) => ({ ...s, warehouse: e.target.value }))
                 }
               >
-                <option value="">— بدون مستودع —</option>
+                <option value="">— {t("noWarehouse")} —</option>
                 {warehouses.map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.name}
@@ -888,7 +890,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
                 ))}
               </select>
             </Field>
-            <Field label="سعر الشراء">
+            <Field label={t("costPrice")}>
               <input
                 type="number"
                 min={0}
@@ -899,7 +901,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
                 }
               />
             </Field>
-            <Field label="سعر البيع">
+            <Field label={t("sellPrice")}>
               <input
                 type="number"
                 min={0}
@@ -910,7 +912,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
                 }
               />
             </Field>
-            <Field label="كمية الفاتورة">
+            <Field label={t("invoiceQuantity")}>
               <input
                 type="number"
                 min={0}
@@ -921,7 +923,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
                 }
               />
             </Field>
-            <Field label="حد التنبيه">
+            <Field label={t("minQuantity")}>
               <input
                 type="number"
                 min={0}
@@ -935,7 +937,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
           </div>
           <div className="modal-actions">
             <button className="btn primary" onClick={saveNewProduct}>
-              💾 حفظ الصنف وإضافته للفاتورة
+              💾 {t("saveItem")}
             </button>
           </div>
         </Modal>
@@ -943,12 +945,12 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
 
       {showSupplier && (
         <Modal
-          title="🚚 مورد جديد"
+          title={`🚚 ${t("newSupplier")}`}
           onClose={() => setShowSupplier(false)}
           width="420px"
         >
           <div className="modal-grid">
-            <Field label="اسم المورد *">
+            <Field label={`${t("supplierName")} *`}>
               <input
                 autoFocus
                 value={supForm.name}
@@ -957,7 +959,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
                 }
               />
             </Field>
-            <Field label="الهاتف">
+            <Field label={t("phone")}>
               <input
                 value={supForm.phone}
                 onChange={(e) =>
@@ -965,7 +967,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
                 }
               />
             </Field>
-            <Field label="ملاحظات">
+            <Field label={t("notes")}>
               <input
                 value={supForm.notes}
                 onChange={(e) =>
@@ -976,10 +978,10 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
           </div>
           <div className="modal-actions">
             <button className="btn" onClick={() => setShowSupplier(false)}>
-              إلغاء
+              {t("cancel")}
             </button>
             <button className="btn primary" onClick={saveSupplier}>
-              💾 حفظ المورد
+              💾 {t("saveSupplierBtn")}
             </button>
           </div>
         </Modal>
@@ -1025,41 +1027,48 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
               price: p?.sell_price,
             };
           })}
-          storeName={settings?.store_name || "تبارك"}
+          storeName={settings?.store_name || t("appTitle")}
           onClose={() => setShowBarcode(false)}
         />
       )}
 
-      {printPurchase && (
-        <Modal title={`فاتورة مشتريات P-${printPurchase.id}`} onClose={() => setPrintPurchase(null)} width="720px">
-          <div className="view-invoice">
-            <div className="inv-meta">
-              <div><span>التاريخ:</span> <b>{fmtDate(printPurchase.date)}</b></div>
-              <div><span>المورد:</span> <b>{printPurchase.supplier_name ?? "—"}</b></div>
-              <div><span>الإجمالي:</span> <b>{money(printPurchase.total)}</b></div>
+      {printPurchase && (() => {
+        let rp = "A4";
+        try { const raw = localStorage.getItem("tabarak_print_settings"); if (raw) { const ps = JSON.parse(raw); if (ps.receiptPrinter) rp = ps.receiptPrinter; } } catch {}
+        const isThermal = rp === "58mm" || rp === "80mm";
+        return isThermal && settings ? (
+          <PrintPurchaseThermal purchase={printPurchase} settings={settings} printerType={rp as "58mm" | "80mm"} onClose={() => setPrintPurchase(null)} />
+        ) : (
+          <Modal title={`${t("purchaseInvoice")} P-${printPurchase.id}`} onClose={() => setPrintPurchase(null)} width="720px">
+            <div className="view-invoice">
+              <div className="inv-meta">
+                <div><span>{t("date")}:</span> <b>{fmtDate(printPurchase.date)}</b></div>
+                <div><span>{t("supplier")}:</span> <b>{printPurchase.supplier_name ?? "—"}</b></div>
+                <div><span>{t("total")}:</span> <b>{money(printPurchase.total)}</b></div>
+              </div>
+              <table className="table">
+                <thead><tr><th>{t("itemNameHeader")}</th><th>{t("quantity")}</th><th>{t("purchasePriceHeader")}</th><th>{t("total")}</th></tr></thead>
+                <tbody>
+                  {printPurchase.items.map((it, i) => (
+                    <tr key={i}>
+                      <td>{it.product_name}</td>
+                      <td>{qty(it.quantity)}</td>
+                      <td>{money(it.cost_price)}</td>
+                      <td>{money(it.quantity * it.cost_price)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="inv-totals">
+                <div><span>{t("subtotalLabel")}:</span> <b>{money(printPurchase.items.reduce((s, it) => s + it.quantity * it.cost_price, 0))}</b></div>
+                {printPurchase.discount > 0 && <div><span>{t("discount")}:</span> <b>{money(printPurchase.discount)}</b></div>}
+                {printPurchase.additional > 0 && <div><span>{t("additionalLabel")}:</span> <b>{money(printPurchase.additional)}</b></div>}
+                <div className="inv-net"><span>{t("netTotal")}:</span> <b>{money(printPurchase.total)}</b></div>
+              </div>
             </div>
-            <table className="table">
-              <thead><tr><th>الصنف</th><th>الكمية</th><th>سعر الشراء</th><th>الإجمالي</th></tr></thead>
-              <tbody>
-                {printPurchase.items.map((it, i) => (
-                  <tr key={i}>
-                    <td>{it.product_name}</td>
-                    <td>{qty(it.quantity)}</td>
-                    <td>{money(it.cost_price)}</td>
-                    <td>{money(it.quantity * it.cost_price)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="inv-totals">
-              <div><span>المجموع الفرعي:</span> <b>{money(printPurchase.items.reduce((s, it) => s + it.quantity * it.cost_price, 0))}</b></div>
-              {printPurchase.discount > 0 && <div><span>الخصم:</span> <b>{money(printPurchase.discount)}</b></div>}
-              {printPurchase.additional > 0 && <div><span>إضافي:</span> <b>{money(printPurchase.additional)}</b></div>}
-              <div className="inv-net"><span>الصافي:</span> <b>{money(printPurchase.total)}</b></div>
-            </div>
-          </div>
-        </Modal>
-      )}
+          </Modal>
+        );
+      })()}
 
       {printReturn && settings && (
         <PrintPurchaseReturn

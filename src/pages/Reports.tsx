@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { money, qty, useToast } from "../components/ui";
+import { t } from "../i18n";
 import type { BestSeller, DailySalesRow, ProfitLoss, StockValue } from "../types";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -192,36 +193,36 @@ export function Reports() {
   const netProfitColor = data && data.net_profit >= 0 ? "#16a34a" : "#dc2626";
 
   const TABS: { id: ReportTab; label: string; icon: string }[] = [
-    { id: "summary", label: "الملخص العام", icon: "📊" },
-    { id: "daily", label: "المبيعات اليومية", icon: "📅" },
-    { id: "bestsellers", label: "الأكثر مبيعاً", icon: "🏆" },
+    { id: "summary", label: t("summaryTab"), icon: "📊" },
+    { id: "daily", label: t("dailySalesTab"), icon: "📅" },
+    { id: "bestsellers", label: t("bestsellersTab"), icon: "🏆" },
   ];
 
   return (
     <div className="page">
       <div className="page-head">
-        <h1>📈 التقارير</h1>
+        <h1>📈 {t("reports")}</h1>
         <div className="head-actions">
-          <button className="btn sm" onClick={handlePrint}>🖨️ طباعة</button>
-          <button className="btn sm primary" onClick={handleExportPDF}>📥 تصدير PDF</button>
+          <button className="btn sm" onClick={handlePrint}>🖨️ {t("print")}</button>
+          <button className="btn sm primary" onClick={handleExportPDF}>📥 {t("exportPDF")}</button>
         </div>
       </div>
 
       {/* شريط الفلاتر */}
       <div className="rpt-filters">
         <div className="rpt-quick-filters">
-          <button className="btn sm" onClick={() => { setFrom(todayISO()); setTo(todayISO()); }}>اليوم</button>
-          <button className="btn sm" onClick={() => { setFrom(monthStart()); setTo(todayISO()); }}>هذا الشهر</button>
-          <button className="btn sm" onClick={() => { setFrom(yearStart()); setTo(todayISO()); }}>هذه السنة</button>
-          <button className="btn sm" onClick={() => { setFrom(""); setTo(""); }}>الكل</button>
+          <button className="btn sm" onClick={() => { setFrom(todayISO()); setTo(todayISO()); }}>{t("todayLabel")}</button>
+          <button className="btn sm" onClick={() => { setFrom(monthStart()); setTo(todayISO()); }}>{t("thisMonth")}</button>
+          <button className="btn sm" onClick={() => { setFrom(yearStart()); setTo(todayISO()); }}>{t("thisYear")}</button>
+          <button className="btn sm" onClick={() => { setFrom(""); setTo(""); }}>{t("all")}</button>
         </div>
         <div className="rpt-date-range">
           <label className="rpt-date-field">
-            <span>من</span>
+            <span>{t("from")}</span>
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
           </label>
           <label className="rpt-date-field">
-            <span>إلى</span>
+            <span>{t("to")}</span>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </label>
         </div>
@@ -234,42 +235,42 @@ export function Reports() {
             <div className="rpt-kpi-icon">🛒</div>
             <div className="rpt-kpi-body">
               <div className="rpt-kpi-value">{money(data.sales_total)}</div>
-              <div className="rpt-kpi-label">إجمالي المبيعات</div>
+              <div className="rpt-kpi-label">{t("salesTotal")}</div>
             </div>
           </div>
           <div className="rpt-kpi rpt-kpi-blue">
             <div className="rpt-kpi-icon">📦</div>
             <div className="rpt-kpi-body">
               <div className="rpt-kpi-value">{money(data.cost_total)}</div>
-              <div className="rpt-kpi-label">تكلفة البضاعة</div>
+              <div className="rpt-kpi-label">{t("costOfGoods")}</div>
             </div>
           </div>
           <div className="rpt-kpi rpt-kpi-teal">
             <div className="rpt-kpi-icon">📈</div>
             <div className="rpt-kpi-body">
               <div className="rpt-kpi-value">{money(data.gross_profit)}</div>
-              <div className="rpt-kpi-label">المكسب الإجمالي</div>
+              <div className="rpt-kpi-label">{t("grossProfit")}</div>
             </div>
           </div>
           <div className="rpt-kpi rpt-kpi-amber">
             <div className="rpt-kpi-icon">🧾</div>
             <div className="rpt-kpi-body">
               <div className="rpt-kpi-value">{money(data.expenses_total)}</div>
-              <div className="rpt-kpi-label">المصروفات</div>
+              <div className="rpt-kpi-label">{t("expenses")}</div>
             </div>
           </div>
           <div className="rpt-kpi" style={{ borderRightColor: netProfitColor }}>
             <div className="rpt-kpi-icon">💰</div>
             <div className="rpt-kpi-body">
               <div className="rpt-kpi-value" style={{ color: netProfitColor }}>{money(data.net_profit)}</div>
-              <div className="rpt-kpi-label">صافي الربح</div>
+              <div className="rpt-kpi-label">{t("netProfit")}</div>
             </div>
           </div>
           <div className="rpt-kpi rpt-kpi-purple">
             <div className="rpt-kpi-icon">🚚</div>
             <div className="rpt-kpi-body">
               <div className="rpt-kpi-value">{money(data.purchases_total)}</div>
-              <div className="rpt-kpi-label">المشتريات</div>
+              <div className="rpt-kpi-label">{t("purchasesLabel")}</div>
             </div>
           </div>
         </div>
@@ -296,30 +297,30 @@ export function Reports() {
           <div className="rpt-content">
             {data && (
               <div className="rpt-section">
-                <h2 className="rpt-section-title">📊 الأرباح والخسائر</h2>
+                <h2 className="rpt-section-title">📊 {t("profitLoss")}</h2>
                 <div className="rpt-two-col">
                   <div className="rpt-card">
-                    <h3>تفاصيل الأرباح</h3>
+                    <h3>{t("details")}</h3>
                     <table className="rpt-summary-table">
                       <tbody>
-                        <tr><td>عدد فواتير المبيعات</td><td className="rpt-strong">{data.sales_count}</td></tr>
-                        <tr><td>إجمالي المبيعات</td><td className="rpt-strong">{money(data.sales_total)}</td></tr>
-                        <tr><td>تكلفة البضاعة المباعة</td><td className="rpt-strong rpt-text-red">- {money(data.cost_total)}</td></tr>
-                        <tr className="rpt-highlight"><td>المكسب الإجمالي</td><td className="rpt-strong rpt-text-green">{money(data.gross_profit)}</td></tr>
-                        <tr><td>المصروفات العامة</td><td className="rpt-strong rpt-text-red">- {money(data.expenses_total)}</td></tr>
-                        <tr className="rpt-highlight rpt-total-row"><td>صافي الربح</td><td className="rpt-strong" style={{ color: netProfitColor }}>{money(data.net_profit)}</td></tr>
+                        <tr><td>{t("invoiceCount")}</td><td className="rpt-strong">{data.sales_count}</td></tr>
+                        <tr><td>{t("salesTotal")}</td><td className="rpt-strong">{money(data.sales_total)}</td></tr>
+                        <tr><td>{t("costOfGoodsSold")}</td><td className="rpt-strong rpt-text-red">- {money(data.cost_total)}</td></tr>
+                        <tr className="rpt-highlight"><td>{t("grossProfit")}</td><td className="rpt-strong rpt-text-green">{money(data.gross_profit)}</td></tr>
+                        <tr><td>{t("generalExpenses")}</td><td className="rpt-strong rpt-text-red">- {money(data.expenses_total)}</td></tr>
+                        <tr className="rpt-highlight rpt-total-row"><td>{t("netProfit")}</td><td className="rpt-strong" style={{ color: netProfitColor }}>{money(data.net_profit)}</td></tr>
                       </tbody>
                     </table>
                   </div>
 
                   {stock && (
                     <div className="rpt-card">
-                      <h3>📦 المخزون</h3>
+                      <h3>📦 {t("inventory")}</h3>
                       <table className="rpt-summary-table">
                         <tbody>
-                          <tr><td>عدد المنتجات</td><td className="rpt-strong">{stock.product_count}</td></tr>
-                          <tr><td>قيمة المخزون الإجمالية</td><td className="rpt-strong">{money(stock.total_value)}</td></tr>
-                          <tr><td>منتجات مخزونها منخفض</td><td className="rpt-strong" style={{ color: stock.low_stock_count > 0 ? "#dc2626" : undefined }}>{stock.low_stock_count}</td></tr>
+                          <tr><td>{t("productCount")}</td><td className="rpt-strong">{stock.product_count}</td></tr>
+                          <tr><td>{t("inventoryValue")}</td><td className="rpt-strong">{money(stock.total_value)}</td></tr>
+                          <tr><td>{t("lowStockCount")}</td><td className="rpt-strong" style={{ color: stock.low_stock_count > 0 ? "#dc2626" : undefined }}>{stock.low_stock_count}</td></tr>
                         </tbody>
                       </table>
                     </div>
@@ -334,26 +335,26 @@ export function Reports() {
         {activeTab === "daily" && (
           <div className="rpt-content">
             <div className="rpt-section">
-              <h2 className="rpt-section-title">📅 المبيعات اليومية</h2>
+              <h2 className="rpt-section-title">📅 {t("dailySalesTab")}</h2>
               {daily.length === 0 ? (
-                <div className="rpt-empty">لا توجد بيانات مبيعات في هذه الفترة.</div>
+                <div className="rpt-empty">{t("noSalesData")}</div>
               ) : (
                 <>
                   <div className="rpt-daily-summary">
-                    <span>إجمالي الأيام: <strong>{daily.length}</strong></span>
-                    <span>إجمالي المبيعات: <strong>{money(daily.reduce((s, d) => s + d.sales_total, 0))}</strong></span>
-                    <span>إجمالي الأرباح: <strong style={{ color: "#16a34a" }}>{money(daily.reduce((s, d) => s + d.profit, 0))}</strong></span>
+                    <span>{t("totalDays")}: <strong>{daily.length}</strong></span>
+                    <span>{t("salesTotal")}: <strong>{money(daily.reduce((s, d) => s + d.sales_total, 0))}</strong></span>
+                    <span>{t("totalProfit")}: <strong style={{ color: "#16a34a" }}>{money(daily.reduce((s, d) => s + d.profit, 0))}</strong></span>
                   </div>
                   <div className="table-wrap">
                     <table className="table">
                       <thead>
                         <tr>
                           <th>#</th>
-                          <th>التاريخ</th>
-                          <th>عدد الفواتير</th>
-                          <th>المبيعات</th>
-                          <th>المكسب</th>
-                          <th>نسبة الربح</th>
+                          <th>{t("date")}</th>
+                          <th>{t("invoiceCount")}</th>
+                          <th>{t("salesLabel")}</th>
+                          <th>{t("profit")}</th>
+                          <th>{t("profitRatio")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -390,25 +391,25 @@ export function Reports() {
         {activeTab === "bestsellers" && (
           <div className="rpt-content">
             <div className="rpt-section">
-              <h2 className="rpt-section-title">🏆 الأكثر مبيعاً</h2>
+              <h2 className="rpt-section-title">🏆 {t("bestsellersTab")}</h2>
               {bestsellers.length === 0 ? (
-                <div className="rpt-empty">لا توجد بيانات مبيعات في هذه الفترة.</div>
+                <div className="rpt-empty">{t("noSalesData")}</div>
               ) : (
                 <>
                   <div className="rpt-daily-summary">
-                    <span>إجمالي المنتجات: <strong>{bestsellers.length}</strong></span>
-                    <span>إجمالي الإيراد: <strong>{money(bestsellers.reduce((s, b) => s + b.revenue, 0))}</strong></span>
-                    <span>إجمالي الكمية: <strong>{qty(bestsellers.reduce((s, b) => s + b.quantity, 0))}</strong></span>
+                    <span>{t("totalProducts")}: <strong>{bestsellers.length}</strong></span>
+                    <span>{t("totalRevenue")}: <strong>{money(bestsellers.reduce((s, b) => s + b.revenue, 0))}</strong></span>
+                    <span>{t("totalQuantity")}: <strong>{qty(bestsellers.reduce((s, b) => s + b.quantity, 0))}</strong></span>
                   </div>
                   <div className="table-wrap">
                     <table className="table">
                       <thead>
                         <tr>
                           <th>#</th>
-                          <th>المنتج</th>
-                          <th>الكمية المباعة</th>
-                          <th>الإيراد</th>
-                          <th>الترتيب</th>
+                          <th>{t("product")}</th>
+                          <th>{t("soldQuantity")}</th>
+                          <th>{t("revenue")}</th>
+                          <th>{t("rank")}</th>
                         </tr>
                       </thead>
                       <tbody>

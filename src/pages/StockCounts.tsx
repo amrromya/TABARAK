@@ -8,6 +8,7 @@ import {
   signed,
   useToast,
 } from "../components/ui";
+import { t } from "../i18n";
 import type { StockCount } from "../types";
 
 export function StockCounts({
@@ -54,7 +55,7 @@ export function StockCounts({
   const apply = async (c: StockCount) => {
     if (
       !confirmDialog(
-        `تسوية الجرد رقم ${c.id}؟\nسيتم ضبط أرصدة المنتجات لتطابق الكميات العدّية بالنظام.`,
+        `${t("settleConfirm")} ${c.id}؟\nسيتم ضبط أرصدة المنتجات لتطابق الكميات العدّية بالنظام.`,
       )
     ) {
       return;
@@ -62,7 +63,7 @@ export function StockCounts({
     setBusyId(c.id);
     try {
       await api.applyStockCount(c.id);
-      notify("تمت التسوية واعتماد الفروق في النظام");
+      notify(t("settleSuccess"));
       await load();
     } catch (e) {
       notify(String(e), "error");
@@ -72,11 +73,11 @@ export function StockCounts({
   };
 
   const del = async (c: StockCount) => {
-    if (!confirmDialog(`حذف فاتورة الجرد رقم ${c.id}؟`)) return;
+    if (!confirmDialog(`${t("confirmDeleteCount")} ${c.id}؟`)) return;
     setBusyId(c.id);
     try {
       await api.deleteStockCount(c.id);
-      notify("تم حذف الفاتورة");
+      notify(t("countDeleted"));
       await load();
     } catch (e) {
       notify(String(e), "error");
@@ -92,8 +93,8 @@ export function StockCounts({
           → رجوع
         </button>
         <div className="pos-title">
-          <h1>سجل فواتير الجرد</h1>
-          <span>تسوية الفروق واعتمادها بالنظام</span>
+          <h1>{t("stockCountsTitle")}</h1>
+          <span>{t("settleAndApply")}</span>
         </div>
         <div className="pos-head-actions">
           <button className="btn pos-nav-btn" onClick={load} disabled={loading}>
@@ -105,13 +106,13 @@ export function StockCounts({
       <div className="pos-body counts-body">
         <div className="toolbar-info">
           <span>
-            عدد الفواتير: <b>{counts.length}</b>
+            {t("invoiceCount")}: <b>{counts.length}</b>
           </span>
           <span>
-            معلّقة (مسودة): <b>{drafts.length}</b>
+            {t("pendingDrafts")}: <b>{drafts.length}</b>
           </span>
           <span>
-            زيادة المسودة:{" "}
+            {t("draftSurplus")}:{" "}
             <b
               className={`count-diff ${draftSurplus > 0 ? "pos" : ""}`}
               title={signed(draftSurplus)}
@@ -120,7 +121,7 @@ export function StockCounts({
             </b>
           </span>
           <span>
-            عجز المسودة:{" "}
+            {t("draftDeficit")}:{" "}
             <b
               className={`count-diff ${draftDeficit > 0 ? "neg" : ""}`}
               title={signed(-draftDeficit)}
@@ -129,7 +130,7 @@ export function StockCounts({
             </b>
           </span>
           <span>
-            صافي جرد المسودة:{" "}
+            {t("draftNet")}:{" "}
             <b
               className={`count-diff ${
                 draftNet > 0 ? "pos" : draftNet < 0 ? "neg" : ""
@@ -146,24 +147,24 @@ export function StockCounts({
             <thead>
               <tr>
                 <th>#</th>
-                <th>التاريخ</th>
-                <th>الأصناف</th>
-                <th>صافي الفرق</th>
-                <th>الحالة</th>
-                <th>إجراءات</th>
+                <th>{t("date")}</th>
+                <th>{t("itemsCol")}</th>
+                <th>{t("netDiffLabel")}</th>
+                <th>{t("status")}</th>
+                <th>{t("actions")}</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
                   <td colSpan={6} className="hint center">
-                    جارٍ التحميل...
+                    {t("loading")}
                   </td>
                 </tr>
               ) : counts.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="hint center">
-                    لا توجد فواتير جرد بعد
+                    {t("noStockCounts")}
                   </td>
                 </tr>
               ) : (
@@ -192,12 +193,12 @@ export function StockCounts({
                           c.status === "applied" ? "credit" : "cash"
                         }`}
                       >
-                        {c.status === "applied" ? "مطبّقة" : "مسودة"}
+                        {c.status === "applied" ? t("appliedLabel") : t("draftStatus")}
                       </span>
                     </td>
                     <td className="actions">
                       <button className="btn sm" onClick={() => openView(c)}>
-                        عرض
+                        {t("viewBtn")}
                       </button>
                       {c.status === "draft" && (
                         <>
@@ -205,21 +206,21 @@ export function StockCounts({
                             className="btn sm"
                             onClick={() => onEditCount(c.id)}
                           >
-                            تعديل
+                            {t("edit")}
                           </button>
                           <button
                             className="btn sm primary"
                             disabled={busyId === c.id}
                             onClick={() => apply(c)}
                           >
-                            تسوية
+                            {t("settleBtn")}
                           </button>
                           <button
                             className="btn sm danger"
                             disabled={busyId === c.id}
                             onClick={() => del(c)}
                           >
-                            حذف
+                            {t("delete")}
                           </button>
                         </>
                       )}
@@ -234,12 +235,12 @@ export function StockCounts({
 
       {view && (
         <Modal
-          title={`فاتورة الجرد رقم ${view.id} - ${fmtDate(view.date)}`}
+          title={`${t("countViewTitle")} ${view.id} - ${fmtDate(view.date)}`}
           onClose={() => setView(null)}
         >
           <div className="toolbar-info">
             <span>
-              صافي الفرق:{" "}
+              {t("netDifferenceLabel")}{" "}
               <b
                 className={`count-diff ${
                   view.total_difference > 0
@@ -258,17 +259,17 @@ export function StockCounts({
                 view.status === "applied" ? "credit" : "cash"
               }`}
             >
-              {view.status === "applied" ? "مطبّقة" : "مسودة"}
+              {view.status === "applied" ? t("appliedLabel") : t("draftStatus")}
             </span>
           </div>
           <div className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
-                  <th>الصنف</th>
-                  <th>الرصيد بالنظام</th>
-                  <th>الكمية الفعلية</th>
-                  <th>الفرق</th>
+                  <th>{t("viewItemCol")}</th>
+                  <th>{t("viewSystemBalance")}</th>
+                  <th>{t("viewActualQty")}</th>
+                  <th>{t("viewDifference")}</th>
                 </tr>
               </thead>
               <tbody>

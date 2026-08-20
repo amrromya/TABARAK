@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { Field, Modal, confirmDialog, fmtDate, money, useToast } from "../components/ui";
+import { t } from "../i18n";
 import type { NewSupplier, Settings, Supplier } from "../types";
 
 export function SuppliersPage() {
@@ -58,14 +59,14 @@ export function SuppliersPage() {
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name?.trim()) { notify("اسم المورد مطلوب", "error"); return; }
+    if (!form.name?.trim()) { notify(t("supplierNameRequired"), "error"); return; }
     try {
       if (editing) {
         await api.updateSupplier(editing.id, form);
-        notify("تم تعديل المورد");
+        notify(t("supplierUpdated"));
       } else {
         await api.createSupplier(form);
-        notify("تم إضافة المورد");
+        notify(t("supplierAddedLabel"));
       }
       setShowForm(false);
       load();
@@ -75,10 +76,10 @@ export function SuppliersPage() {
   };
 
   const remove = async (s: Supplier) => {
-    if (!confirmDialog("هل تريد حذف المورد \"" + s.name + "\"؟")) return;
+    if (!confirmDialog(t("confirmDeleteSupplier") + " \"" + s.name + "\"؟")) return;
     try {
       await api.deleteSupplier(s.id);
-      notify("تم حذف المورد");
+      notify(t("supplierDeleted"));
       load();
     } catch (err) {
       notify(String(err), "error");
@@ -108,7 +109,7 @@ export function SuppliersPage() {
 
   const saveVoucher = async () => {
     if (!selected) return;
-    if (voucherForm.amount <= 0) { notify("أدخل المبلغ", "error"); return; }
+    if (voucherForm.amount <= 0) { notify(t("enterAmount"), "error"); return; }
     try {
       if (showVoucher === "receipt") {
         await api.createReceiptVoucher({
@@ -121,7 +122,7 @@ export function SuppliersPage() {
           warehouse_id: null,
           notes: voucherForm.notes || null,
         });
-        notify("تم تسجيل سند القبض");
+        notify(t("receiptRecorded"));
       } else {
         await api.createPaymentVoucher({
           date: voucherForm.date,
@@ -133,7 +134,7 @@ export function SuppliersPage() {
           warehouse_id: null,
           notes: voucherForm.notes || null,
         });
-        notify("تم تسجيل سند الصرف");
+        notify(t("paymentRecorded"));
       }
       setShowVoucher(null);
       openAccountStatement(selected);
@@ -163,15 +164,15 @@ export function SuppliersPage() {
     w.print();
   };
 
-  const titleAccount = "كشف حساب - " + (selected?.name || "");
+  const titleAccount = t("supplierStatement") + " - " + (selected?.name || "");
 
   return (
     <div className="page">
       <div className="page-head">
-        <h1>الموردين</h1>
+        <h1>{t("suppliers")}</h1>
         <div className="head-actions">
-          <input className="search" placeholder="بحث بالاسم أو الهاتف..." value={search} onChange={(e) => setSearch(e.target.value)} />
-          <button className="btn primary" onClick={openNew}>+ مورد جديد</button>
+          <input className="search" placeholder={t("searchByNameOrPhone")} value={search} onChange={(e) => setSearch(e.target.value)} />
+          <button className="btn primary" onClick={openNew}>+ {t("newSupplier")}</button>
         </div>
       </div>
 
@@ -179,17 +180,17 @@ export function SuppliersPage() {
         <table className="table">
           <thead>
             <tr>
-              <th>المورد</th>
-              <th>الهاتف</th>
-              <th>العنوان</th>
-              <th>حد الائتمان</th>
-              <th>الملاحظات</th>
-              <th>إجراءات</th>
+              <th>{t("supplier")}</th>
+              <th>{t("phone")}</th>
+              <th>{t("address")}</th>
+              <th>{t("creditLimit")}</th>
+              <th>{t("notes")}</th>
+              <th>{t("actions")}</th>
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={6} className="empty">جارٍ التحميل...</td></tr>}
-            {!loading && filtered.length === 0 && <tr><td colSpan={6} className="empty">لا يوجد موردين</td></tr>}
+            {loading && <tr><td colSpan={6} className="empty">{t("loading")}</td></tr>}
+            {!loading && filtered.length === 0 && <tr><td colSpan={6} className="empty">{t("noSuppliers")}</td></tr>}
             {filtered.map((s) => (
               <tr key={s.id}>
                 <td className="strong">{s.name}</td>
@@ -198,9 +199,9 @@ export function SuppliersPage() {
                 <td>{s.credit_limit > 0 ? money(s.credit_limit) : "—"}</td>
                 <td>{s.notes ?? "—"}</td>
                 <td className="actions">
-                  <button className="btn sm" onClick={() => openAccountStatement(s)}>كشف حساب</button>
-                  <button className="btn sm outline" onClick={() => openEdit(s)}>تعديل</button>
-                  <button className="btn sm danger" onClick={() => remove(s)}>حذف</button>
+                  <button className="btn sm" onClick={() => openAccountStatement(s)}>{t("statement")}</button>
+                  <button className="btn sm outline" onClick={() => openEdit(s)}>{t("edit")}</button>
+                  <button className="btn sm danger" onClick={() => remove(s)}>{t("delete")}</button>
                 </td>
               </tr>
             ))}
@@ -209,26 +210,26 @@ export function SuppliersPage() {
       </div>
 
       {showForm && (
-        <Modal title={editing ? "تعديل المورد" : "مورد جديد"} onClose={() => setShowForm(false)} width="520px">
+        <Modal title={editing ? t("editSupplier") : t("newSupplier")} onClose={() => setShowForm(false)} width="520px">
           <form onSubmit={save} className="form-grid">
-            <Field label="اسم المورد *">
+            <Field label={t("supplierName") + " *"}>
               <input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
             </Field>
-            <Field label="رقم الهاتف">
+            <Field label={t("phoneNumber")}>
               <input value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </Field>
-            <Field label="العنوان">
+            <Field label={t("address")}>
               <input value={form.address ?? ""} onChange={(e) => setForm({ ...form, address: e.target.value })} />
             </Field>
-            <Field label="حد الائتمان">
+            <Field label={t("creditLimit")}>
               <input type="number" min={0} step="0.01" value={form.credit_limit ?? 0} onChange={(e) => setForm({ ...form, credit_limit: Number(e.target.value) })} />
             </Field>
-            <Field label="ملاحظات">
+            <Field label={t("notes")}>
               <input value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </Field>
             <div className="form-actions">
-              <button type="submit" className="btn primary">{editing ? "حفظ التعديلات" : "إضافة المورد"}</button>
-              <button type="button" className="btn" onClick={() => setShowForm(false)}>إلغاء</button>
+              <button type="submit" className="btn primary">{editing ? t("saveChanges") : t("addSupplier")}</button>
+              <button type="button" className="btn" onClick={() => setShowForm(false)}>{t("cancel")}</button>
             </div>
           </form>
         </Modal>
@@ -237,15 +238,15 @@ export function SuppliersPage() {
       {showAccount && selected && accountSummary && (
         <Modal title={titleAccount} onClose={() => setShowAccount(false)} width="760px">
           <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            <button className={accountTab === "summary" ? "btn sm primary" : "btn sm"} onClick={() => setAccountTab("summary")}>اجمالي</button>
-            <button className={accountTab === "detailed" ? "btn sm primary" : "btn sm"} onClick={() => setAccountTab("detailed")}>تفصيلي</button>
-            <button className="btn sm" onClick={printAccount}>🖨️ طباعة</button>
-            <button className="btn sm" onClick={() => openVoucher("receipt")}>📥 سند قبض</button>
-            <button className="btn sm" onClick={() => openVoucher("payment")}>📤 سند صرف</button>
+            <button className={accountTab === "summary" ? "btn sm primary" : "btn sm"} onClick={() => setAccountTab("summary")}>{t("summaryLabel")}</button>
+            <button className={accountTab === "detailed" ? "btn sm primary" : "btn sm"} onClick={() => setAccountTab("detailed")}>{t("detailedLabel")}</button>
+            <button className="btn sm" onClick={printAccount}>🖨️ {t("print")}</button>
+            <button className="btn sm" onClick={() => openVoucher("receipt")}>📥 {t("receiptVouchers")}</button>
+            <button className="btn sm" onClick={() => openVoucher("payment")}>📤 {t("paymentVouchers")}</button>
           </div>
 
           <div ref={printRef}>
-            <h2 style={{ textAlign: "center", margin: 0 }}>كشف حساب المورد</h2>
+            <h2 style={{ textAlign: "center", margin: 0 }}>{t("supplierStatement")}</h2>
             <div style={{ textAlign: "center", color: "#6b7280", fontSize: 12, marginBottom: 16 }}>
               {settings?.store_name || "تبارك"} — {new Date().toLocaleDateString("ar-EG")}
             </div>
@@ -253,23 +254,23 @@ export function SuppliersPage() {
             {accountTab === "summary" && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
                 <div style={{ padding: 14, borderRadius: 10, background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
-                  <div style={{ fontSize: 12, color: "#065f46" }}>اجمالي المشتريات</div>
+                  <div style={{ fontSize: 12, color: "#065f46" }}>{t("totalPurchases")}</div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: "#065f46" }}>{money(accountSummary.total_purchases)}</div>
                 </div>
                 <div style={{ padding: 14, borderRadius: 10, background: "#fef2f2", border: "1px solid #fecaca" }}>
-                  <div style={{ fontSize: 12, color: "#991b1b" }}>مردود المشتريات</div>
+                  <div style={{ fontSize: 12, color: "#991b1b" }}>{t("purchaseReturns")}</div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: "#991b1b" }}>{money(accountSummary.total_purchase_returns)}</div>
                 </div>
                 <div style={{ padding: 14, borderRadius: 10, background: "#eff6ff", border: "1px solid #bfdbfe" }}>
-                  <div style={{ fontSize: 12, color: "#1e40af" }}>المدفوعات (سندات قبض)</div>
+                  <div style={{ fontSize: 12, color: "#1e40af" }}>{t("paymentsReceipts")}</div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: "#1e40af" }}>{money(accountSummary.total_paid)}</div>
                 </div>
                 <div style={{ padding: 14, borderRadius: 10, background: "#fffbeb", border: "1px solid #fde68a" }}>
-                  <div style={{ fontSize: 12, color: "#92400e" }}>المبالغ المحصلة (سندات صرف)</div>
+                  <div style={{ fontSize: 12, color: "#92400e" }}>{t("collectedAmounts")}</div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: "#92400e" }}>{money(accountSummary.total_received)}</div>
                 </div>
                 <div style={{ gridColumn: "1 / -1", padding: 16, borderRadius: 10, background: accountSummary.balance > 0 ? "#fef2f2" : "#f0fdf4", border: "1px solid " + (accountSummary.balance > 0 ? "#fecaca" : "#bbf7d0"), textAlign: "center" }}>
-                  <div style={{ fontSize: 13, color: accountSummary.balance > 0 ? "#991b1b" : "#065f46" }}>الرصيد الحالي</div>
+                  <div style={{ fontSize: 13, color: accountSummary.balance > 0 ? "#991b1b" : "#065f46" }}>{t("currentBalance")}</div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: accountSummary.balance > 0 ? "#991b1b" : "#065f46" }}>{money(accountSummary.balance)}</div>
                 </div>
               </div>
@@ -280,15 +281,15 @@ export function SuppliersPage() {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>التاريخ</th>
-                      <th>البيان</th>
-                      <th>مدين</th>
-                      <th>دائن</th>
-                      <th>ملاحظات</th>
+                      <th>{t("date")}</th>
+                      <th>{t("description")}</th>
+                      <th>{t("debit")}</th>
+                      <th>{t("creditLabel")}</th>
+                      <th>{t("notes")}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {transactions.length === 0 && <tr><td colSpan={5} className="empty">لا توجد حركات</td></tr>}
+                    {transactions.length === 0 && <tr><td colSpan={5} className="empty">{t("noTransactions")}</td></tr>}
                     {transactions.map((t, i) => (
                       <tr key={i}>
                         <td>{fmtDate(t.date)}</td>
@@ -307,31 +308,31 @@ export function SuppliersPage() {
       )}
 
       {showVoucher && selected && (
-        <Modal title={showVoucher === "receipt" ? "📥 سند قبض - سداد للمورد" : "📤 سند صرف - تحصيل من المورد"} onClose={() => setShowVoucher(null)} width="420px">
+        <Modal title={showVoucher === "receipt" ? t("receiptVoucherTitleSupplier") : t("paymentVoucherTitleSupplier")} onClose={() => setShowVoucher(null)} width="420px">
           <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: "#f3f4f6", fontSize: 13 }}>
             <strong>{selected.name}</strong>
           </div>
           <div className="form-grid">
-            <Field label="التاريخ">
+            <Field label={t("date")}>
               <input type="date" value={voucherForm.date} onChange={(e) => setVoucherForm({ ...voucherForm, date: e.target.value })} />
             </Field>
-            <Field label="المبلغ *">
+            <Field label={t("amountRequired")}>
               <input type="number" min={0} step="0.01" value={voucherForm.amount} onChange={(e) => setVoucherForm({ ...voucherForm, amount: Number(e.target.value) })} autoFocus />
             </Field>
-            <Field label="طريقة الدفع">
+            <Field label={t("paymentMethod")}>
               <select value={voucherForm.payment_method} onChange={(e) => setVoucherForm({ ...voucherForm, payment_method: e.target.value })}>
-                <option value="cash">نقدي</option>
-                <option value="card">شبكة</option>
-                <option value="transfer">تحويل بنكي</option>
+                <option value="cash">{t("cash")}</option>
+                <option value="card">{t("card")}</option>
+                <option value="transfer">{t("bankTransfer")}</option>
               </select>
             </Field>
-            <Field label="ملاحظات">
+            <Field label={t("notes")}>
               <input value={voucherForm.notes} onChange={(e) => setVoucherForm({ ...voucherForm, notes: e.target.value })} />
             </Field>
           </div>
           <div className="form-actions">
-            <button className="btn primary" onClick={saveVoucher}>حفظ السند</button>
-            <button className="btn" onClick={() => setShowVoucher(null)}>إلغاء</button>
+            <button className="btn primary" onClick={saveVoucher}>{t("saveVoucher")}</button>
+            <button className="btn" onClick={() => setShowVoucher(null)}>{t("cancel")}</button>
           </div>
         </Modal>
       )}

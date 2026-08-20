@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { t } from "../i18n";
 import { api } from "../api";
 import { PrintInvoice } from "../components/PrintInvoice";
+import { PrintThermal } from "../components/PrintThermal";
 import { PrintSaleReturn } from "../components/PrintSaleReturn";
 import { ProductCard } from "../components/ProductCard";
 import { InvoiceBar, type DiscountType } from "../components/InvoiceBar";
@@ -29,17 +31,17 @@ interface Line {
 }
 
 const PAYMENT_METHODS = [
-  { value: "cash", label: "نقدي" },
-  { value: "card", label: "شبكة" },
-  { value: "credit", label: "آجل" },
+  { value: "cash", label: t("cash") },
+  { value: "card", label: t("card") },
+  { value: "credit", label: t("credit") },
 ];
 
 const PAYMENT_LABELS: Record<string, string> = {
-  cash: "نقدي",
-  credit: "آجل",
-  card: "شبكة",
-  card_visa: "شبكة - فيزا",
-  card_wallet: "شبكة - محفظة",
+  cash: t("cash"),
+  credit: t("credit"),
+  card: t("card"),
+  card_visa: t("cardVisa"),
+  card_wallet: t("cardWallet"),
 };
 
 export function Pos({ onBack }: { onBack: () => void }) {
@@ -143,7 +145,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
   }, [warehouses, warehouseId]);
 
   useEffect(() => {
-    searchRef.current?.focus();
+    // Don't auto-focus — only focus when user clicks the search bar
   }, []);
 
   const addWarehouse = async (name: string) => {
@@ -151,7 +153,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
       const w = await api.createWarehouse(name);
       setWarehouses((ws) => [...ws, w]);
       setWarehouseId(String(w.id));
-      notify(`تم إضافة المستودع "${w.name}"`);
+      notify(`${t("warehouseAdded")} "${w.name}"`);
     } catch (err) {
       notify(String(err), "error");
       throw err;
@@ -270,7 +272,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
         setSettings(await api.getSettings());
         setViewingReturn(ret);
       } else {
-        notify("عرض الفاتورة غير متاح من هنا", "error");
+        notify(t("viewInvoiceNotAvailable"), "error");
       }
     } catch (err) {
       notify(String(err), "error");
@@ -329,15 +331,15 @@ export function Pos({ onBack }: { onBack: () => void }) {
 
   const save = async () => {
     if (lines.length === 0) {
-      notify("أضف صنف واحد على الأقل للفاتورة", "error");
+      notify(t("addItemError"), "error");
       return;
     }
     if (paymentMethod === "credit" && !customerId) {
-      notify("اختر عميلًا للبيع الآجل", "error");
+      notify(t("chooseCreditCustomer"), "error");
       return;
     }
     if (paymentMethod === "card" && cardSubType === "wallet" && !walletPhone.trim()) {
-      notify("أدخل رقم الجوال للتحويل", "error");
+      notify(t("enterWalletPhone"), "error");
       return;
     }
     try {
@@ -373,8 +375,8 @@ export function Pos({ onBack }: { onBack: () => void }) {
       );
       notify(
         isNew
-          ? `تم تسجيل الفاتورة ${saved.invoice_no}`
-          : `تم حفظ التعديلات على الفاتورة ${saved.invoice_no}`,
+          ? `${t("invoiceRegistered")} ${saved.invoice_no}`
+          : `${t("invoiceUpdated")} ${saved.invoice_no}`,
       );
       await afterSave();
       setPrintSale(saved);
@@ -385,10 +387,10 @@ export function Pos({ onBack }: { onBack: () => void }) {
 
   const deleteCurrent = async () => {
     if (currentId == null) return;
-    if (!window.confirm("هل تريد حذف فاتورة المبيعات هذه؟")) return;
+    if (!window.confirm(t("confirmDeleteInvoice"))) return;
     try {
       await api.deleteSale(currentId);
-      notify("تم حذف الفاتورة");
+      notify(t("invoiceDeleted"));
       setCurrentId(null);
       setLines([]);
       setPaymentMethod("cash");
@@ -442,7 +444,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
       return;
     }
     if (lines.length === 0) {
-      notify("لا توجد أصناف لطباعتها", "error");
+      notify(t("noItemsToPrint"), "error");
       return;
     }
     const wh = warehouses.find((w) => w.id === Number(warehouseId));
@@ -453,7 +455,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
         : (paymentMethod === "card" && cardSubType === "wallet" && walletPhone.trim() ? walletPhone.trim() : (cashCustomer.trim() || null));
     const draft: Sale = {
       id: 0,
-      invoice_no: "مسودة",
+      invoice_no: t("draft"),
       date,
       total,
       discount: discountAmount,
@@ -479,7 +481,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
 
   const saveCustomer = async () => {
     if (!custForm.name.trim()) {
-      notify("أدخل اسم العميل", "error");
+      notify(t("enterCustomerName"), "error");
       return;
     }
     try {
@@ -492,7 +494,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
       setCustomerId(String(c.id));
       setShowCustomer(false);
       setCustForm({ name: "", phone: "", notes: "" });
-      notify(`تم إضافة العميل "${c.name}"`);
+      notify(`${t("customerAdded")} "${c.name}"`);
     } catch (err) {
       notify(String(err), "error");
     }
@@ -505,14 +507,14 @@ export function Pos({ onBack }: { onBack: () => void }) {
     <div className="pos">
       <header className="pos-head">
         <button className="btn" onClick={onBack}>
-          → رجوع
+          → {t("back")}
         </button>
         <div className="pos-title">
-          <h1>فاتورة مبيعات</h1>
+          <h1>{t("saleInvoice")}</h1>
           <span>
             {currentId != null
-              ? `فاتورة رقم ${currentId}`
-              : settings?.store_name || "تبارك"}
+              ? `${t("invoiceNumber")} ${currentId}`
+              : settings?.store_name || t("appTitle")}
           </span>
         </div>
         <div className="pos-head-actions">
@@ -520,7 +522,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
             className="btn pos-nav-btn"
             onClick={goPrev}
             disabled={!hasPrev}
-            title="الفاتورة السابقة"
+            title={t("previousInvoice")}
           >
             ‹
           </button>
@@ -528,40 +530,40 @@ export function Pos({ onBack }: { onBack: () => void }) {
             className="btn pos-nav-btn"
             onClick={goNext}
             disabled={!hasNext}
-            title="الفاتورة التالية"
+            title={t("nextInvoice")}
           >
             ›
           </button>
           <button
             className="btn pos-nav-btn"
             onClick={newInvoice}
-            title="فاتورة جديدة"
+            title={t("newInvoice")}
           >
-            📄 جديدة
+            📄 {t("new")}
           </button>
           <button
             className="btn pos-nav-btn"
             onClick={printCurrent}
-            title="طباعة الفاتورة"
+            title={t("printInvoice")}
           >
             🖨️
           </button>
           {currentId != null && (
-            <button className="btn pos-nav-btn" onClick={save} title="حفظ التعديلات">
-              ✏️ تعديل
+            <button className="btn pos-nav-btn" onClick={save} title={t("saveChanges")}>
+              ✏️ {t("edit")}
             </button>
           )}
           {currentId != null && (
             <button
               className="btn pos-nav-btn danger"
               onClick={deleteCurrent}
-              title="حذف الفاتورة"
+              title={t("deleteInvoice")}
             >
-              🗑️ حذف
+              🗑️ {t("delete")}
             </button>
           )}
           <button className="btn primary pos-save" onClick={save}>
-            {currentId == null ? "💾 حفظ الفاتورة" : "💾 حفظ التعديلات"}
+            {currentId == null ? `💾 ${t("saveInvoice")}` : `💾 ${t("saveChanges")}`}
           </button>
         </div>
       </header>
@@ -572,7 +574,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
             <input
               ref={searchRef}
               className="pos-search"
-              placeholder="🔍 اكتب اسم الصنف أو الباركود ثم Enter..."
+              placeholder={t("searchPlaceholder")}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -585,7 +587,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
             {showList && (
               <div className="pos-dropdown">
                 {filtered.length === 0 && (
-                  <div className="pos-dropdown-empty">لا توجد نتائج مطابقة</div>
+                  <div className="pos-dropdown-empty">{t("noResults")}</div>
                 )}
                 {filtered.map((p) => (
                   <div
@@ -602,7 +604,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
                         {money(p.sell_price)}
                       </span>
                       <span className="pos-item-cost">
-                        شراء: {money(p.cost_price)}
+                        {t("costPriceShort")}: {money(p.cost_price)}
                       </span>
                     </div>
                     <span
@@ -620,9 +622,9 @@ export function Pos({ onBack }: { onBack: () => void }) {
                         setMovementProduct(p);
                         setShowMovements(true);
                       }}
-                      title="حركة الصنف"
+                      title={t("productMovement")}
                     >
-                      حركة صنف
+                      {t("productMovement")}
                     </button>
                   </div>
                 ))}
@@ -634,16 +636,16 @@ export function Pos({ onBack }: { onBack: () => void }) {
             {lines.length === 0 ? (
               <div className="pos-empty">
                 <div>🛒</div>
-                <p>ابدأ بكتابة اسم الصنف أو الباركود لإضافة أصناف للفاتورة</p>
+                <p>{t("posEmptyHint")}</p>
               </div>
             ) : (
               <table className="table pos-cart">
                 <thead>
                   <tr>
-                    <th>الصنف</th>
-                    <th style={{ width: 100 }}>الكمية</th>
-                    <th style={{ width: 130 }}>السعر</th>
-                    <th style={{ width: 120 }}>الإجمالي</th>
+                    <th>{t("item")}</th>
+                    <th style={{ width: 100 }}>{t("quantity")}</th>
+                    <th style={{ width: 130 }}>{t("price")}</th>
+                    <th style={{ width: 120 }}>{t("total")}</th>
                     <th style={{ width: 50 }}></th>
                   </tr>
                 </thead>
@@ -652,7 +654,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
                     <tr
                       key={l.product_id}
                       className="pos-line-row"
-                      title="اضغط مرتين لفتح كرت الصنف"
+                      title={t("doubleClickHint")}
                       onDoubleClick={() => {
                         const p = products.find(
                           (x) => x.id === l.product_id,
@@ -663,10 +665,10 @@ export function Pos({ onBack }: { onBack: () => void }) {
                       <td>
                         <div className="pos-line-name">{l.name}</div>
                         <div className="hint">
-                          متوفر: {qty(l.available)} · شراء: {money(l.cost_price)}
+                          {t("availableLabel")}: {qty(l.available)} · {t("costPriceShort")}: {money(l.cost_price)}
                         </div>
                         {l.quantity > l.available && (
-                          <div className="pos-qty-warn">⚠️ الكمية أكبر من المتوفر</div>
+                          <div className="pos-qty-warn">⚠️ {t("qtyExceedsAvailable")}</div>
                         )}
                       </td>
                       <td>
@@ -741,17 +743,17 @@ export function Pos({ onBack }: { onBack: () => void }) {
 
         <aside className="pos-panel">
           <div className="pos-panel-total">
-            <span>الإجمالي</span>
+            <span>{t("total")}</span>
             <b>{money(total)}</b>
           </div>
 
           <div className="pos-panel-net">
-            <span>الصافي</span>
+            <span>{t("netTotal")}</span>
             <b>{money(netTotal)}</b>
           </div>
 
           <div className="pos-panel-field">
-            <label>طريقة الدفع</label>
+            <label>{t("paymentMethod")}</label>
             <div className="pay-btns">
               {PAYMENT_METHODS.map((m) => (
                 <button
@@ -770,19 +772,19 @@ export function Pos({ onBack }: { onBack: () => void }) {
 
           {paymentMethod === "card" && (
             <div className="pos-panel-field">
-              <label>نوع الشبكة</label>
+              <label>{t("cardType")}</label>
               <div className="pay-btns two">
                 <button
                   className={`pay-btn ${cardSubType === "visa" ? "active" : ""}`}
                   onClick={() => { setCardSubType("visa"); setWalletPhone(""); }}
                 >
-                  💳 فيزا
+                  💳 {t("visa")}
                 </button>
                 <button
                   className={`pay-btn ${cardSubType === "wallet" ? "active" : ""}`}
                   onClick={() => setCardSubType("wallet")}
                 >
-                  📱 محفظة إلكترونية
+                  📱 {t("eWallet")}
                 </button>
               </div>
             </div>
@@ -790,7 +792,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
 
           {paymentMethod === "card" && cardSubType === "wallet" && (
             <div className="pos-panel-field">
-              <label>رقم الجوال للتحويل *</label>
+              <label>{t("walletPhoneLabel")} *</label>
               <input
                 type="tel"
                 placeholder="05XXXXXXXX"
@@ -802,17 +804,17 @@ export function Pos({ onBack }: { onBack: () => void }) {
 
           {paymentMethod === "credit" ? (
             <div className="pos-panel-field">
-              <label>العميل * (بيع آجل)</label>
+              <label>{t("customer")} * ({t("credit")})</label>
               <div className="pos-select-row">
                 <select
                   value={customerId}
                   onChange={(e) => setCustomerId(e.target.value)}
                 >
-                  <option value="">— اختر العميل —</option>
+                  <option value="">— {t("chooseCustomer")} —</option>
                   {customers.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
-                      {c.balance > 0 ? ` (مدين: ${money(c.balance)})` : ""}
+                      {c.balance > 0 ? ` (${t("debtor")}: ${money(c.balance)})` : ""}
                     </option>
                   ))}
                 </select>
@@ -821,28 +823,28 @@ export function Pos({ onBack }: { onBack: () => void }) {
                   className="btn sm"
                   onClick={() => setShowCustomer(true)}
                 >
-                  + جديد
+                  + {t("new")}
                 </button>
               </div>
             </div>
           ) : (
             <div className="pos-panel-field">
-              <label>اسم العميل (اختياري)</label>
+              <label>{t("customerNameLabel")} ({t("optionalLabel")})</label>
               <input
-                placeholder="اكتب اسم العميل النقدي (اختياري)"
+                placeholder={t("cashCustomerPlaceholder")}
                 value={cashCustomer}
                 onChange={(e) => setCashCustomer(e.target.value)}
               />
               <div className="pos-panel-ok" style={{ marginTop: 10 }}>
                 {paid
-                  ? `المطلوب سداده: ${money(remaining)}`
-                  : "الفاتورة ستسجل على حساب العميل"}
+                  ? `${t("amountDue")}: ${money(remaining)}`
+                  : t("creditInvoiceNote")}
               </div>
             </div>
           )}
 
           <div className="pos-panel-field">
-            <label>التاريخ</label>
+            <label>{t("date")}</label>
             <input
               type="date"
               value={date}
@@ -851,12 +853,12 @@ export function Pos({ onBack }: { onBack: () => void }) {
           </div>
 
           <div className="pos-panel-field">
-            <label>الموظف (اختياري)</label>
+            <label>{t("employee")} ({t("optionalLabel")})</label>
             <select
               value={employeeId}
               onChange={(e) => setEmployeeId(e.target.value)}
             >
-              <option value="">— اختر الموظف —</option>
+              <option value="">— {t("chooseEmployee")} —</option>
               {employees.map((emp) => (
                 <option key={emp.id} value={emp.id}>
                   {emp.name}
@@ -866,10 +868,10 @@ export function Pos({ onBack }: { onBack: () => void }) {
           </div>
 
           <button className="btn primary pos-panel-save" onClick={save}>
-            {currentId == null ? "💾 حفظ الفاتورة" : "💾 حفظ التعديلات"}
+            {currentId == null ? `💾 ${t("saveInvoice")}` : `💾 ${t("saveChanges")}`}
           </button>
           <button className="btn pos-panel-clear" onClick={newInvoice}>
-            📄 فاتورة جديدة
+            📄 {t("newInvoice")}
           </button>
         </aside>
       </div>
@@ -891,12 +893,12 @@ export function Pos({ onBack }: { onBack: () => void }) {
 
       {showCustomer && (
         <Modal
-          title="👤 عميل جديد"
+          title={`👤 ${t("newCustomer")}`}
           onClose={() => setShowCustomer(false)}
           width="420px"
         >
           <div className="modal-grid">
-            <Field label="اسم العميل *">
+            <Field label={`${t("customerNameLabel")} *`}>
               <input
                 autoFocus
                 value={custForm.name}
@@ -905,7 +907,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
                 }
               />
             </Field>
-            <Field label="الهاتف">
+            <Field label={t("phone")}>
               <input
                 value={custForm.phone}
                 onChange={(e) =>
@@ -913,7 +915,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
                 }
               />
             </Field>
-            <Field label="ملاحظات">
+            <Field label={t("notes")}>
               <input
                 value={custForm.notes}
                 onChange={(e) =>
@@ -924,27 +926,27 @@ export function Pos({ onBack }: { onBack: () => void }) {
           </div>
           <div className="modal-actions">
             <button className="btn" onClick={() => setShowCustomer(false)}>
-              إلغاء
+              {t("cancel")}
             </button>
             <button className="btn primary" onClick={saveCustomer}>
-              💾 حفظ العميل
+              💾 {t("saveCustomer")}
             </button>
           </div>
         </Modal>
       )}
 
       {viewingSale && (
-        <Modal title={`فاتورة بيع ${viewingSale.invoice_no}`} onClose={() => setViewingSale(null)} width="720px">
+        <Modal title={`${t("saleInvoiceTitle")} ${viewingSale.invoice_no}`} onClose={() => setViewingSale(null)} width="720px">
           <div className="view-invoice">
             <div className="inv-meta">
-              <div><span>التاريخ:</span> <b>{fmtDate(viewingSale.date)}</b></div>
-              <div><span>العميل:</span> <b>{viewingSale.customer_name ?? "—"}</b></div>
-              <div><span>طريقة الدفع:</span> <b>{PAYMENT_LABELS[viewingSale.payment_method] ?? viewingSale.payment_method}</b></div>
-              {viewingSale.warehouse_name && <div><span>المستودع:</span> <b>{viewingSale.warehouse_name}</b></div>}
-              {viewingSale.employee_name && <div><span>الموظف:</span> <b>{viewingSale.employee_name}</b></div>}
+              <div><span>{t("date")}:</span> <b>{fmtDate(viewingSale.date)}</b></div>
+              <div><span>{t("customer")}:</span> <b>{viewingSale.customer_name ?? "—"}</b></div>
+              <div><span>{t("paymentMethod")}:</span> <b>{PAYMENT_LABELS[viewingSale.payment_method] ?? viewingSale.payment_method}</b></div>
+              {viewingSale.warehouse_name && <div><span>{t("warehouse")}:</span> <b>{viewingSale.warehouse_name}</b></div>}
+              {viewingSale.employee_name && <div><span>{t("employee")}:</span> <b>{viewingSale.employee_name}</b></div>}
             </div>
             <table className="table">
-              <thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+              <thead><tr><th>{t("item")}</th><th>{t("quantity")}</th><th>{t("price")}</th><th>{t("total")}</th></tr></thead>
               <tbody>
                 {viewingSale.items.map((it, i) => (
                   <tr key={i}>
@@ -957,27 +959,27 @@ export function Pos({ onBack }: { onBack: () => void }) {
               </tbody>
             </table>
             <div className="inv-totals">
-              <div><span>الإجمالي:</span> <b>{money(viewingSale.total)}</b></div>
-              {viewingSale.discount > 0 && <div><span>الخصم:</span> <b>{money(viewingSale.discount)}</b></div>}
-              {viewingSale.additional > 0 && <div><span>إضافي:</span> <b>{money(viewingSale.additional)}</b></div>}
-              <div className="inv-net"><span>الصافي:</span> <b>{money(viewingSale.net_total)}</b></div>
+              <div><span>{t("total")}:</span> <b>{money(viewingSale.total)}</b></div>
+              {viewingSale.discount > 0 && <div><span>{t("discount")}:</span> <b>{money(viewingSale.discount)}</b></div>}
+              {viewingSale.additional > 0 && <div><span>{t("additionalShort")}:</span> <b>{money(viewingSale.additional)}</b></div>}
+              <div className="inv-net"><span>{t("netTotal")}:</span> <b>{money(viewingSale.net_total)}</b></div>
             </div>
           </div>
         </Modal>
       )}
 
       {viewingReturn && (
-        <Modal title={`فاتورة مردود مبيعات ${viewingReturn.invoice_no}`} onClose={() => setViewingReturn(null)} width="720px">
+        <Modal title={`${t("returnInvoiceTitle")} ${viewingReturn.invoice_no}`} onClose={() => setViewingReturn(null)} width="720px">
           <div className="view-invoice">
             <div className="inv-meta">
-              <div><span>التاريخ:</span> <b>{fmtDate(viewingReturn.date)}</b></div>
-              <div><span>العميل:</span> <b>{viewingReturn.customer_name ?? "—"}</b></div>
-              <div><span>طريقة الدفع:</span> <b>{PAYMENT_LABELS[viewingReturn.payment_method] ?? viewingReturn.payment_method}</b></div>
-              {viewingReturn.warehouse_name && <div><span>المستودع:</span> <b>{viewingReturn.warehouse_name}</b></div>}
-              {viewingReturn.employee_name && <div><span>الموظف:</span> <b>{viewingReturn.employee_name}</b></div>}
+              <div><span>{t("date")}:</span> <b>{fmtDate(viewingReturn.date)}</b></div>
+              <div><span>{t("customer")}:</span> <b>{viewingReturn.customer_name ?? "—"}</b></div>
+              <div><span>{t("paymentMethod")}:</span> <b>{PAYMENT_LABELS[viewingReturn.payment_method] ?? viewingReturn.payment_method}</b></div>
+              {viewingReturn.warehouse_name && <div><span>{t("warehouse")}:</span> <b>{viewingReturn.warehouse_name}</b></div>}
+              {viewingReturn.employee_name && <div><span>{t("employee")}:</span> <b>{viewingReturn.employee_name}</b></div>}
             </div>
             <table className="table">
-              <thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+              <thead><tr><th>{t("item")}</th><th>{t("quantity")}</th><th>{t("price")}</th><th>{t("total")}</th></tr></thead>
               <tbody>
                 {viewingReturn.items.map((it, i) => (
                   <tr key={i}>
@@ -990,10 +992,10 @@ export function Pos({ onBack }: { onBack: () => void }) {
               </tbody>
             </table>
             <div className="inv-totals">
-              <div><span>الإجمالي:</span> <b>{money(viewingReturn.total)}</b></div>
-              {viewingReturn.discount > 0 && <div><span>الخصم:</span> <b>{money(viewingReturn.discount)}</b></div>}
-              {viewingReturn.additional > 0 && <div><span>إضافي:</span> <b>{money(viewingReturn.additional)}</b></div>}
-              <div className="inv-net"><span>الصافي:</span> <b>{money(viewingReturn.total - viewingReturn.discount + viewingReturn.additional)}</b></div>
+              <div><span>{t("total")}:</span> <b>{money(viewingReturn.total)}</b></div>
+              {viewingReturn.discount > 0 && <div><span>{t("discount")}:</span> <b>{money(viewingReturn.discount)}</b></div>}
+              {viewingReturn.additional > 0 && <div><span>{t("additionalShort")}:</span> <b>{money(viewingReturn.additional)}</b></div>}
+              <div className="inv-net"><span>{t("netTotal")}:</span> <b>{money(viewingReturn.total - viewingReturn.discount + viewingReturn.additional)}</b></div>
             </div>
           </div>
         </Modal>
@@ -1007,13 +1009,16 @@ export function Pos({ onBack }: { onBack: () => void }) {
         />
       )}
 
-      {printSale && settings && (
-        <PrintInvoice
-          sale={printSale}
-          settings={settings}
-          onClose={() => setPrintSale(null)}
-        />
-      )}
+      {printSale && settings && (() => {
+        let rp = "A4";
+        try { const raw = localStorage.getItem("tabarak_print_settings"); if (raw) { const ps = JSON.parse(raw); if (ps.receiptPrinter) rp = ps.receiptPrinter; } } catch {}
+        const isThermal = rp === "58mm" || rp === "80mm";
+        return isThermal ? (
+          <PrintThermal sale={printSale} settings={settings} printerType={rp as "58mm" | "80mm"} onClose={() => setPrintSale(null)} />
+        ) : (
+          <PrintInvoice sale={printSale} settings={settings} onClose={() => setPrintSale(null)} />
+        );
+      })()}
 
       {printReturn && settings && (
         <PrintSaleReturn

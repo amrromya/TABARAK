@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
 import type { Account } from "../types";
 import { api } from "../api";
+import { t } from "../i18n";
 
 const ACCOUNTS_KEY = "tabarak_accounts";
 
 const FEATURES_KEY = "tabarak_features";
 
-function getFeatures(): { maintenance: boolean; attendance: boolean } {
+function getFeatures(): { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean } {
   try {
     const raw = localStorage.getItem(FEATURES_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return { maintenance: false, attendance: false, dark_mode: false, language: false, ...JSON.parse(raw) };
   } catch {}
-  return { maintenance: false, attendance: false };
+  return { maintenance: false, attendance: false, dark_mode: false, language: false };
 }
 
 function getAccounts(): Account[] {
@@ -127,9 +128,15 @@ export function LoginScreen({ onLogin }: { onLogin: (account: Account) => void }
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [licenseInfo, setLicenseInfo] = useState<{ expiry_date: string; customer_name: string } | null>(null);
+  const [firstRun, setFirstRun] = useState(false);
+  const [adminName, setAdminName] = useState("");
+  const [adminPass, setAdminPass] = useState("");
+  const [adminPass2, setAdminPass2] = useState("");
+  const [setupMsg, setSetupMsg] = useState("");
 
   useEffect(() => {
     api.getLicenseInfo().then(setLicenseInfo).catch(() => {});
+    api.isFirstRun().then(setFirstRun).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -157,14 +164,59 @@ export function LoginScreen({ onLogin }: { onLogin: (account: Account) => void }
     setError("");
     const account = accounts.find((a) => a.id === selectedId);
     if (!account) {
-      setError("اختر الحساب");
+      setError(t("chooseAccount"));
       return;
     }
     if (account.password !== password) {
-      setError("الرقم السري غير صحيح");
+      setError(t("loginError"));
       return;
     }
     onLogin(account);
+  };
+
+  const handleFirstRun = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSetupMsg("");
+    if (!adminName.trim()) {
+      setSetupMsg(t("nameRequired"));
+      return;
+    }
+    if (adminPass.length < 6) {
+      setSetupMsg(t("passwordTooShort"));
+      return;
+    }
+    if (adminPass !== adminPass2) {
+      setSetupMsg(t("passwordsNotMatch"));
+      return;
+    }
+    try {
+      await api.initializeAdmin(adminName, adminPass);
+      setFirstRun(false);
+      // Create default account and log in
+      const newAccount: Account = {
+        id: "1",
+        name: adminName,
+        password: adminPass,
+        permissions: [
+          "view_dashboard", "view_inventory", "view_warehouses", "view_sales",
+          "view_purchases", "view_suppliers", "view_customers", "view_employees",
+          "view_expenses", "view_reports", "view_settings", "create_sale", "edit_sale",
+          "delete_sale", "create_purchase", "edit_purchase", "delete_purchase",
+          "create_customer", "edit_customer", "delete_customer", "create_employee",
+          "edit_employee", "delete_employee", "manage_accounts",
+          "view_receipt_vouchers", "view_payment_vouchers", "view_warehouse_transfers",
+        ],
+        visibleMenus: [
+          "dashboard", "inventory", "warehouses", "sales", "purchases", "suppliers",
+          "customers", "employees", "expenses", "receipt_vouchers", "payment_vouchers",
+          "warehouse_transfers", "reports", "settings", "pos", "ppos",
+        ],
+      };
+      localStorage.setItem(ACCOUNTS_KEY, JSON.stringify([newAccount]));
+      onLogin(newAccount);
+    } catch (err) {
+      setSetupMsg(String(err));
+    }
   };
 
   return (
@@ -172,45 +224,88 @@ export function LoginScreen({ onLogin }: { onLogin: (account: Account) => void }
       <div className="login-card">
         <div className="login-header">
           <img src="/app.png" alt="تبارك" className="login-logo" />
-          <h1>تبارك</h1>
-          <p>برنامج الحسابات</p>
+          <h1>{t("appTitle")}</h1>
+          <p>{t("appSubtitle")}</p>
         </div>
 
-        <form onSubmit={handleLogin} className="login-form">
-          <div className="form-group">
-            <label>الحساب</label>
-            <select
-              value={selectedId}
-              onChange={(e) => setSelectedId(e.target.value)}
-              className="login-select"
-            >
-              {accounts.length === 0 && <option value="">— لا توجد حسابات —</option>}
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        {firstRun ? (
+          <form onSubmit={handleFirstRun} className="login-form">
+            <div style={{ textAlign: "center", marginBottom: 12, color: "var(--primary)", fontWeight: 700 }}>
+              {t("firstRun")}
+            </div>
+            <div className="form-group">
+              <label>{t("adminName")}</label>
+              <input
+                type="text"
+                value={adminName}
+                onChange={(e) => setAdminName(e.target.value)}
+                placeholder={t("enterAdminName")}
+                className="login-input"
+                autoFocus
+              />
+            </div>
+            <div className="form-group">
+              <label>{t("adminPassword")}</label>
+              <input
+                type="password"
+                value={adminPass}
+                onChange={(e) => setAdminPass(e.target.value)}
+                placeholder={t("minPassword")}
+                className="login-input"
+              />
+            </div>
+            <div className="form-group">
+              <label>{t("confirmPassword")}</label>
+              <input
+                type="password"
+                value={adminPass2}
+                onChange={(e) => setAdminPass2(e.target.value)}
+                placeholder={t("reenterPassword")}
+                className="login-input"
+              />
+            </div>
+            {setupMsg && <div className="login-error">{setupMsg}</div>}
+            <button type="submit" className="login-btn">
+              {t("setupAccount")}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleLogin} className="login-form">
+            <div className="form-group">
+              <label>{t("selectAccount")}</label>
+              <select
+                value={selectedId}
+                onChange={(e) => setSelectedId(e.target.value)}
+                className="login-select"
+              >
+                {accounts.length === 0 && <option value="">{t("noAccounts")}</option>}
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div className="form-group">
-            <label>الرقم السري</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="أدخل الرقم السري"
-              className="login-input"
-              autoFocus
-            />
-          </div>
+            <div className="form-group">
+              <label>{t("password")}</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={t("enterPassword")}
+                className="login-input"
+                autoFocus
+              />
+            </div>
 
-          {error && <div className="login-error">{error}</div>}
+            {error && <div className="login-error">{error}</div>}
 
-          <button type="submit" className="login-btn">
-            دخول
-          </button>
-        </form>
+            <button type="submit" className="login-btn">
+              {t("login")}
+            </button>
+          </form>
+        )}
 
         {licenseInfo && (() => {
           const expiry = new Date(licenseInfo.expiry_date);
@@ -221,10 +316,10 @@ export function LoginScreen({ onLogin }: { onLogin: (account: Account) => void }
           return (
             <div className={`login-license-status ${isExpired ? "expired" : isWarning ? "warning" : "active"}`}>
               <div className="license-status-label">
-                {isExpired ? "انتهت الصلاحية" : isWarning ? "قريب من الانتهاء" : "التفعيل نشط"}
+                {isExpired ? t("licenseExpired") : isWarning ? t("licenseExpiring") : t("licenseActive")}
               </div>
               <div className="license-status-detail">
-                {isExpired ? `انتهى منذ ${Math.abs(daysLeft)} يوم` : `متبقي ${daysLeft} يوم`}
+                {isExpired ? `${Math.abs(daysLeft)} ${t("daysExpired")}` : `${daysLeft} ${t("daysRemaining")}`}
                 <span className="license-status-date"> — {licenseInfo.expiry_date}</span>
               </div>
             </div>

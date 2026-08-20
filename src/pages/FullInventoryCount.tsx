@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { confirmDialog, money, qty, signed, today, useToast } from "../components/ui";
+import { t } from "../i18n";
 import type { Product, StockCount } from "../types";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -107,7 +108,7 @@ export function FullInventoryCount({ onBack }: { onBack: () => void }) {
 
   const saveFullCount = useCallback(async () => {
     if (lines.length === 0) return;
-    if (!confirmDialog("حفظ الجرد والتسوية بالكامل في قاعدة البيانات؟")) return;
+    if (!confirmDialog(t("saveCountConfirm"))) return;
     setSaving(true);
     try {
       const items = lines.map((l) => ({ product_id: l.product_id, counted_qty: l.counted_qty }));
@@ -117,7 +118,7 @@ export function FullInventoryCount({ onBack }: { onBack: () => void }) {
         items,
       });
       await api.applyStockCount(count.id);
-      notify("تم حفظ الجرد والتسوية بنجاح", "success");
+      notify(t("countSavedSuccess"), "success");
       onBack();
     } catch (e) {
       notify(String(e), "error");
@@ -134,10 +135,10 @@ export function FullInventoryCount({ onBack }: { onBack: () => void }) {
         <div className="frc-header-left">
           <button className="sc-back-btn" onClick={onBack} title="رجوع">
             <span className="sc-back-icon">→</span>
-            <span className="sc-back-text">رجوع</span>
+            <span className="sc-back-text">{t("backBtn")}</span>
           </button>
           <h1 className="frc-title">
-            <span>📊</span> جرد كلي
+            <span>📊</span> {t("fullInventoryCountTitle")}
           </h1>
         </div>
       </header>
@@ -146,13 +147,13 @@ export function FullInventoryCount({ onBack }: { onBack: () => void }) {
         {view === "list" ? (
           <div className="frc-list-view">
             <div className="frc-list-header">
-              <h3>فواتير الجرد المؤقت</h3>
-              <span className="frc-list-count">{counts.length} فاتورة</span>
+              <h3>{t("tempStockCounts")}</h3>
+              <span className="frc-list-count">{counts.length} {t("invoiceCountLabel")}</span>
             </div>
             {loading ? (
-              <div className="frc-loading">جارٍ التحميل...</div>
+              <div className="frc-loading">{t("loading")}</div>
             ) : counts.length === 0 ? (
-              <div className="frc-empty">لا توجد فواتير جرد مؤقت بعد</div>
+              <div className="frc-empty">{t("noStockCountsYet")}</div>
             ) : (
               <div className="frc-counts-list">
                 {counts.map((c) => (
@@ -162,11 +163,11 @@ export function FullInventoryCount({ onBack }: { onBack: () => void }) {
                       <span className="frc-count-date">{c.date}</span>
                       <span className="frc-count-items">{c.items_count} صنف مُجرّد</span>
                       <span className={`frc-count-status frc-status-${c.status}`}>
-                        {c.status === "draft" ? "مسودة" : "مطبّقة"}
+                        {c.status === "draft" ? t("draftStatusFrc") : t("appliedStatusFrc")}
                       </span>
                     </div>
-                    <button className="btn primary sm" onClick={() => retrieveCount(c.id)}>
-                      📋 استحضار بيانات الجرد
+                      <button className="btn primary sm" onClick={() => retrieveCount(c.id)}>
+                        {t("retrieveCountData")}
                     </button>
                   </div>
                 ))}
@@ -176,10 +177,10 @@ export function FullInventoryCount({ onBack }: { onBack: () => void }) {
         ) : (
           <div className="frc-count-view">
             <div className="frc-toolbar">
-              <button className="btn sm" onClick={() => setView("list")}>← الرجوع للقائمة</button>
+              <button className="btn sm" onClick={() => setView("list")}>{t("backToList")}</button>
               <input
                 className="search"
-                placeholder="بحث بالاسم أو الكود..."
+                placeholder={t("searchByCodeOrName")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 style={{ flex: 1, maxWidth: 300 }}
@@ -189,30 +190,30 @@ export function FullInventoryCount({ onBack }: { onBack: () => void }) {
                   className={`frc-filter-tab ${filterMode === "all" ? "frc-filter-active" : ""}`}
                   onClick={() => setFilterMode("all")}
                 >
-                  الكل ({lines.length})
+                  {t("filterAllLabel")} ({lines.length})
                 </button>
                 <button
                   className={`frc-filter-tab ${filterMode === "uncounted_with_movement" ? "frc-filter-active" : ""}`}
                   onClick={() => setFilterMode("uncounted_with_movement")}
                 >
-                  لم يُجرّد له حركة ({uncountedWithMovement})
+                  {t("uncountedWithMovement")} ({uncountedWithMovement})
                 </button>
                 <button
                   className={`frc-filter-tab ${filterMode === "uncounted_no_movement" ? "frc-filter-active" : ""}`}
                   onClick={() => setFilterMode("uncounted_no_movement")}
                 >
-                  لم يُجرّد بدون حركة ({uncountedNoMovement})
+                  {t("uncountedNoMovement")} ({uncountedNoMovement})
                 </button>
               </div>
               <div className="frc-stats">
-                <span className="frc-stat frc-stat-counted">✓ مُجرّد: {countedCount}</span>
-                <span className="frc-stat frc-stat-uncounted">✗ غير مُجرّد: {uncountedCount}</span>
+                <span className="frc-stat frc-stat-counted">{t("countedStat")}: {countedCount}</span>
+                <span className="frc-stat frc-stat-uncounted">{t("uncountedStat")}: {uncountedCount}</span>
               </div>
               <button className="btn sm" onClick={() => window.print()}>
-                🖨️ طباعة
+                🖨️ {t("print")}
               </button>
               <button className="btn primary sm" onClick={saveFullCount} disabled={saving}>
-                {saving ? "جارٍ الحفظ..." : "💾 حفظ الجرد والتسوية"}
+                {saving ? t("savingLabel") : t("saveAndSettle")}
               </button>
             </div>
             <div className="frc-table-wrap">
@@ -220,12 +221,12 @@ export function FullInventoryCount({ onBack }: { onBack: () => void }) {
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>كود الصنف</th>
-                    <th>اسم الصنف</th>
-                    <th>الجرد بالحاسب</th>
-                    <th>الجرد الفعلي</th>
-                    <th>التسوية</th>
-                    <th>سعر الشراء</th>
+                    <th>{t("productCode")}</th>
+                    <th>{t("productNameLabel")}</th>
+                    <th>{t("computerCount")}</th>
+                    <th>{t("actualCount")}</th>
+                    <th>{t("settlement")}</th>
+                    <th>{t("purchasePriceCol")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -237,7 +238,7 @@ export function FullInventoryCount({ onBack }: { onBack: () => void }) {
                         <td>{l.code}</td>
                         <td className="strong">
                           {l.name}
-                          {!l.counted && <span className="frc-uncounted-badge">لم يُجرّد</span>}
+                          {!l.counted && <span className="frc-uncounted-badge">{t("uncountedBadge")}</span>}
                         </td>
                         <td>{qty(l.system_qty)}</td>
                         <td className="strong">
@@ -253,35 +254,35 @@ export function FullInventoryCount({ onBack }: { onBack: () => void }) {
                     );
                   })}
                   {filteredLines.length === 0 && (
-                    <tr><td colSpan={7} className="empty">لا توجد نتائج</td></tr>
+                    <tr><td colSpan={7} className="empty">{t("noResults2")}</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
             <div className="frc-bottom-bar">
               <div className="frc-bottom-item">
-                <span className="frc-bottom-label">قيمة الجرد قبل التسوية</span>
-                <span className="frc-bottom-value">{money(totals.totalBefore)} ج.م</span>
+                <span className="frc-bottom-label">{t("countValueBefore")}</span>
+                <span className="frc-bottom-value">{money(totals.totalBefore)} {t("currencyUnit")}</span>
               </div>
               <div className="frc-bottom-divider" />
               <div className="frc-bottom-item frc-bottom-surplus">
-                <span className="frc-bottom-label">قيمة التسوية بالزيادة</span>
-                <span className="frc-bottom-value">+{money(totals.surplusValue)} ج.م</span>
+                <span className="frc-bottom-label">{t("surplusSetValue")}</span>
+                <span className="frc-bottom-value">+{money(totals.surplusValue)} {t("currencyUnit")}</span>
               </div>
               <div className="frc-bottom-divider" />
               <div className="frc-bottom-item frc-bottom-deficit">
-                <span className="frc-bottom-label">قيمة التسوية بالنقص</span>
-                <span className="frc-bottom-value">-{money(totals.deficitValue)} ج.م</span>
+                <span className="frc-bottom-label">{t("deficitSetValue")}</span>
+                <span className="frc-bottom-value">-{money(totals.deficitValue)} {t("currencyUnit")}</span>
               </div>
               <div className="frc-bottom-divider" />
               <div className={`frc-bottom-item frc-bottom-net ${totals.totalDifference > 0 ? "frc-bottom-surplus" : totals.totalDifference < 0 ? "frc-bottom-deficit" : ""}`}>
-                <span className="frc-bottom-label">صافي قيمة التسوية</span>
-                <span className="frc-bottom-value">{signed(totals.surplusValue - totals.deficitValue)} ج.م</span>
+                <span className="frc-bottom-label">{t("netSetValue")}</span>
+                <span className="frc-bottom-value">{signed(totals.surplusValue - totals.deficitValue)} {t("currencyUnit")}</span>
               </div>
               <div className="frc-bottom-divider" />
               <div className="frc-bottom-item">
-                <span className="frc-bottom-label">قيمة الجرد بعد التسوية</span>
-                <span className="frc-bottom-value frc-bottom-final">{money(totals.totalAfter)} ج.م</span>
+                <span className="frc-bottom-label">{t("countValueAfter")}</span>
+                <span className="frc-bottom-value frc-bottom-final">{money(totals.totalAfter)} {t("currencyUnit")}</span>
               </div>
             </div>
           </div>

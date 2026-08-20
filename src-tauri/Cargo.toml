@@ -1,6 +1,6 @@
 [package]
 name = "tabarak"
-version = "0.2.6"
+version = "0.2.7"
 description = "Tabarak - برنامج حسابات المحلات والمتاجر"
 authors = ["you"]
 edition = "2021"
@@ -35,4 +35,5 @@ sha2 = "0.10"
 hex = "0.4"
 winreg = "0.52"
 gethostname = "0.4"
+lazy_static = "1"
 

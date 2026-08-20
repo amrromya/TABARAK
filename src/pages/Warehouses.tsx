@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import { Field, Modal, money, qty, useToast } from "../components/ui";
+import { t } from "../i18n";
 import type { Warehouse, WarehouseStats } from "../types";
 
 interface Row {
@@ -36,15 +37,15 @@ export function Warehouses() {
 
   const add = async () => {
     if (!name.trim()) {
-      notify("أدخل اسم المستودع", "error");
+      notify(t("enterWarehouseName"), "error");
       return;
     }
     try {
       const w = await api.createWarehouse(name.trim());
       notify(
         w.is_default
-          ? `تم إضافة المستودع "${w.name}" كافتراضي`
-          : `تم إضافة المستودع "${w.name}"`,
+          ? `${t("warehouseAddedDefault")} "${w.name}"`
+          : `${t("warehouseAdded")} "${w.name}"`,
       );
       setName("");
       await load();
@@ -56,12 +57,12 @@ export function Warehouses() {
   const saveEdit = async () => {
     if (!edit) return;
     if (!editName.trim()) {
-      notify("أدخل اسم المستودع", "error");
+      notify(t("enterWarehouseName"), "error");
       return;
     }
     try {
       await api.updateWarehouse(edit.id, editName.trim());
-      notify("تم تعديل المستودع");
+      notify(t("warehouseUpdated"));
       setEdit(null);
       await load();
     } catch (err) {
@@ -72,7 +73,7 @@ export function Warehouses() {
   const setDefault = async (id: number) => {
     try {
       await api.setDefaultWarehouse(id);
-      notify("تم تعيين المستودع الافتراضي");
+      notify(t("defaultWarehouseSet"));
       await load();
     } catch (err) {
       notify(String(err), "error");
@@ -82,13 +83,13 @@ export function Warehouses() {
   const remove = async (w: Warehouse) => {
     if (
       !window.confirm(
-        `حذف المستودع "${w.name}"؟ المنتجات المرتبطة به ستبقى دون مستودع.`,
+        `${t("confirmDeleteWarehouse")} "${w.name}"? ${t("warehouseProductsNote")}`,
       )
     )
       return;
     try {
       await api.deleteWarehouse(w.id);
-      notify("تم حذف المستودع");
+      notify(t("warehouseDeleted"));
       await load();
     } catch (err) {
       notify(String(err), "error");
@@ -98,13 +99,13 @@ export function Warehouses() {
   return (
     <div>
       <div className="page-head">
-        <h1>المستودعات</h1>
-        <span className="date-badge">{rows.length} مستودع</span>
+        <h1>{t("warehouses")}</h1>
+        <span className="date-badge">{rows.length} {t("warehouseCount")}</span>
       </div>
 
       <div className="wh-row">
         <input
-          placeholder="اسم المستودع الجديد..."
+          placeholder={t("newWarehousePlaceholder")}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
@@ -112,14 +113,14 @@ export function Warehouses() {
           }}
         />
         <button className="btn primary" onClick={add}>
-          + إضافة مستودع
+          {t("addWarehouseBtn")}
         </button>
       </div>
 
       {rows.length === 0 ? (
         <div className="table-wrap">
           <p className="empty">
-            لا توجد مستودعات بعد — أضف أول مستودع ليكون افتراضيًا.
+            {t("noWarehousesYet")}
           </p>
         </div>
       ) : (
@@ -127,11 +128,11 @@ export function Warehouses() {
           <table className="table">
             <thead>
               <tr>
-                <th>المستودع</th>
-                <th>الكمية</th>
-                <th>قيمة المخزون</th>
-                <th>الحالة</th>
-                <th style={{ width: 240 }}>إجراءات</th>
+                <th>{t("warehouse")}</th>
+                <th>{t("quantity")}</th>
+                <th>{t("inventoryValueCol")}</th>
+                <th>{t("status")}</th>
+                <th style={{ width: 240 }}>{t("actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -142,9 +143,9 @@ export function Warehouses() {
                   <td>{money(stats?.value ?? 0)}</td>
                   <td>
                     {w.is_default ? (
-                      <span className="pay-badge cash">⭐ المستودع الافتراضي</span>
+                      <span className="pay-badge cash">{t("defaultWarehouse")}</span>
                     ) : (
-                      <span className="pay-badge credit">عادي</span>
+                      <span className="pay-badge credit">{t("normalLabel")}</span>
                     )}
                   </td>
                   <td>
@@ -153,9 +154,9 @@ export function Warehouses() {
                         <button
                           className="btn sm"
                           onClick={() => setDefault(w.id)}
-                          title="جعله الافتراضي للبيع والشراء"
+                          title={t("setDefaultTitle")}
                         >
-                          ⭐ تعيين افتراضي
+                          {t("setDefaultBtn")}
                         </button>
                       )}
                       <button
@@ -165,10 +166,10 @@ export function Warehouses() {
                           setEditName(w.name);
                         }}
                       >
-                        ✏️ تعديل
+                        {t("editBtnWarehouse")}
                       </button>
                       <button className="btn sm danger" onClick={() => remove(w)}>
-                        🗑️ حذف
+                        {t("deleteBtnWarehouse")}
                       </button>
                     </div>
                   </td>
@@ -180,13 +181,12 @@ export function Warehouses() {
       )}
 
       <p className="settings-note">
-        المستودع الافتراضي يُحدد تلقائيًا كاختيار مبدئي في فواتير البيع والشراء،
-        ويمكن تغييره يدويًا في كل فاتورة.
+        {t("warehouseDefaultNote")}
       </p>
 
       {edit && (
-        <Modal title="تعديل المستودع" onClose={() => setEdit(null)} width="400px">
-          <Field label="اسم المستودع *">
+        <Modal title={t("editWarehouseTitle")} onClose={() => setEdit(null)} width="400px">
+          <Field label={t("warehouseNameField")}>
             <input
               autoFocus
               value={editName}
@@ -198,10 +198,10 @@ export function Warehouses() {
           </Field>
           <div className="modal-actions">
             <button className="btn" onClick={() => setEdit(null)}>
-              إلغاء
+              {t("cancel")}
             </button>
             <button className="btn primary" onClick={saveEdit}>
-              💾 حفظ
+              💾 {t("save")}
             </button>
           </div>
         </Modal>

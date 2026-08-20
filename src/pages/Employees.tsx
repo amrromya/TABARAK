@@ -9,6 +9,7 @@ import {
   today,
   useToast,
 } from "../components/ui";
+import { t } from "../i18n";
 import type {
   Employee,
   NewEmployee,
@@ -18,14 +19,14 @@ import type {
 } from "../types";
 
 const VACATION_TYPES: Record<string, string> = {
-  annual: "إجازة سنوية",
-  sick: "إجازة مرضية",
+  annual: "annualLeave",
+  sick: "sickLeave",
 };
 
 const VACATION_STATUS: Record<string, string> = {
-  pending: "معلقة",
-  approved: "موافق",
-  rejected: "مرفوض",
+  pending: "pendingStatus",
+  approved: "approvedStatus",
+  rejected: "rejectedStatus",
 };
 
 export function Employees() {
@@ -108,10 +109,10 @@ export function Employees() {
     try {
       if (editing) {
         await api.updateEmployee(editing.id, form);
-        notify("تم تعديل بيانات الموظف");
+        notify(t("employeeEdited"));
       } else {
         await api.createEmployee(form);
-        notify("تمت إضافة الموظف");
+        notify(t("employeeAdded"));
       }
       setShowForm(false);
       load();
@@ -122,12 +123,12 @@ export function Employees() {
 
   const remove = async (e: Employee) => {
     if (
-      !confirmDialog(`هل تريد حذف الموظف «${e.name}»؟ سيتم حذف جميع رواتبه وإجازاته.`)
+      !confirmDialog(t("confirmDeleteEmployeeMsg"))
     )
       return;
     try {
       await api.deleteEmployee(e.id);
-      notify("تم حذف الموظف");
+      notify(t("employeeDeleted"));
       load();
     } catch (err) {
       notify(String(err), "error");
@@ -138,7 +139,7 @@ export function Employees() {
     e.preventDefault();
     if (!paying) return;
     if (payAmount <= 0) {
-      notify("المبلغ يجب أن يكون أكبر من صفر", "error");
+      notify(t("amountMustBePositive"), "error");
       return;
     }
     try {
@@ -148,7 +149,7 @@ export function Employees() {
         amount: payAmount,
         notes: payNotes || null,
       });
-      notify(`تم صرف راتب ${money(payAmount)} لـ ${paying.name}`);
+      notify(`${t("salaryPaid")} ${money(payAmount)} - ${paying.name}`);
       setPaying(null);
       load();
     } catch (err) {
@@ -190,10 +191,10 @@ export function Employees() {
     try {
       if (editingVac) {
         await api.updateVacation(editingVac.id, vacForm);
-        notify("تم تعديل الإجازة");
+        notify(t("vacationEdited"));
       } else {
         await api.createVacation(vacForm);
-        notify("تمت إضافة الإجازة");
+        notify(t("vacationAdded"));
       }
       setVacForm({
         employee_id: vacationEmployee.id,
@@ -225,10 +226,10 @@ export function Employees() {
   };
 
   const removeVacation = async (v: Vacation) => {
-    if (!confirmDialog("هل تريد حذف هذه الإجازة؟")) return;
+    if (!confirmDialog(t("confirmDeleteVacation"))) return;
     try {
       await api.deleteVacation(v.id);
-      notify("تم حذف الإجازة");
+      notify(t("vacationDeleted"));
       if (vacationEmployee) await loadVacations(vacationEmployee);
     } catch (err) {
       notify(String(err), "error");
@@ -236,10 +237,10 @@ export function Employees() {
   };
 
   const removeSalary = async (s: Salary) => {
-    if (!confirmDialog("هل تريد حذف هذه العملية؟")) return;
+    if (!confirmDialog(t("confirmDeleteOperation"))) return;
     try {
       await api.deleteSalary(s.id);
-      notify("تم حذف الصرفية");
+      notify(t("paymentDeletedEmp"));
       if (vacationEmployee) await loadVacations(vacationEmployee);
       load();
     } catch (err) {
@@ -255,11 +256,11 @@ export function Employees() {
   return (
     <div className="page emp-page">
       <div className="page-head">
-        <h1>الموظفين</h1>
+        <h1>{t("employees")}</h1>
         <div className="head-actions">
           <input
             className="search"
-            placeholder="بحث بالاسم أو الوظيفة أو الهاتف..."
+            placeholder={t("searchPlaceholderEmp")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -279,7 +280,7 @@ export function Employees() {
               setShowForm(true);
             }}
           >
-            + موظف جديد
+            {t("newEmployeeBtn")}
           </button>
         </div>
       </div>
@@ -289,14 +290,14 @@ export function Employees() {
           <div className="cust-stat-icon">👥</div>
           <div className="cust-stat-info">
             <div className="cust-stat-value">{employees.length}</div>
-            <div className="cust-stat-label">إجمالي الموظفين</div>
+            <div className="cust-stat-label">{t("totalEmployeesLabel")}</div>
           </div>
         </div>
         <div className="cust-stat-card cust-stat-green">
           <div className="cust-stat-icon">💰</div>
           <div className="cust-stat-info">
             <div className="cust-stat-value">{money(totalSalaries)}</div>
-            <div className="cust-stat-label">إجمالي الرواتب الشهرية</div>
+            <div className="cust-stat-label">{t("monthlySalariesTotal")}</div>
           </div>
         </div>
         <div className="cust-stat-card cust-stat-amber">
@@ -304,7 +305,7 @@ export function Employees() {
           <div className="cust-stat-info">
             <div className="cust-stat-value">{money(totalPaid)}</div>
             <div className="cust-stat-label">
-              إجمالي صرفيات الرواتب ({salaries.length}
+              {t("salaryExpensesTotal")} ({salaries.length}
               {" "})
             </div>
           </div>
@@ -313,7 +314,7 @@ export function Employees() {
           <div className="cust-stat-icon">📅</div>
           <div className="cust-stat-info">
             <div className="cust-stat-value">{vacations.length}</div>
-            <div className="cust-stat-label">إجمالي الإجازات</div>
+            <div className="cust-stat-label">{t("totalVacationsLabel")}</div>
           </div>
         </div>
       </div>
@@ -322,28 +323,28 @@ export function Employees() {
         <table className="table">
           <thead>
             <tr>
-              <th>الاسم</th>
-              <th>الوظيفة</th>
-              <th>الهاتف</th>
-              <th>البريد</th>
-              <th>الراتب الشهري</th>
-              <th>تاريخ التوظيف</th>
-              <th>ملاحظات</th>
-              <th>إجراءات</th>
+              <th>{t("name")}</th>
+              <th>{t("positionLabel")}</th>
+              <th>{t("phone")}</th>
+              <th>{t("emailLabel")}</th>
+              <th>{t("monthlySalaryLabel")}</th>
+              <th>{t("hireDateLabel")}</th>
+              <th>{t("notes")}</th>
+              <th>{t("actions")}</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
                 <td colSpan={8} className="empty">
-                  جارٍ التحميل...
+                  {t("loading")}
                 </td>
               </tr>
             )}
             {!loading && filtered.length === 0 && (
               <tr>
                 <td colSpan={8} className="empty">
-                  لا يوجد موظفين بعد.
+                  {t("noEmployeesYet")}
                 </td>
               </tr>
             )}
@@ -378,14 +379,14 @@ export function Employees() {
                       setPayNotes("");
                       setPayDate(today());
                     }}
-                    title="صرف راتب"
+                    title={t("paySalaryTitle")}
                   >
                     💰
                   </button>
                   <button
                     className="btn sm"
                     onClick={() => openVacations(e)}
-                    title="الإجازات"
+                    title={t("vacationsTitle")}
                   >
                     📅
                   </button>
@@ -404,14 +405,14 @@ export function Employees() {
                       });
                       setShowForm(true);
                     }}
-                    title="تعديل"
+                    title={t("edit")}
                   >
                     ✏️
                   </button>
                   <button
                     className="btn sm danger"
                     onClick={() => remove(e)}
-                    title="حذف"
+                    title={t("delete")}
                   >
                     🗑️
                   </button>
@@ -424,40 +425,40 @@ export function Employees() {
 
       {showForm && (
         <Modal
-          title={editing ? "تعديل موظف" : "إضافة موظف جديد"}
+          title={editing ? t("editEmployeeTitle") : t("newEmployeeTitle")}
           onClose={() => setShowForm(false)}
         >
           <form onSubmit={save} className="form-grid">
-            <Field label="اسم الموظف *">
+            <Field label={t("employeeNameRequired")}>
               <input
                 required
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </Field>
-            <Field label="الوظيفة">
+            <Field label={t("positionLabel")}>
               <input
                 value={form.position ?? ""}
                 onChange={(e) =>
                   setForm({ ...form, position: e.target.value })
                 }
-                placeholder="مثال: أمين مكتبة"
+                placeholder={t("positionPlaceholder")}
               />
             </Field>
-            <Field label="رقم الهاتف">
+            <Field label={t("phoneNumberLabelEmp")}>
               <input
                 value={form.phone ?? ""}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
             </Field>
-            <Field label="البريد الإلكتروني">
+            <Field label={t("emailLabelEmp")}>
               <input
                 type="email"
                 value={form.email ?? ""}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
             </Field>
-            <Field label="الراتب الشهري *">
+            <Field label={t("monthlySalaryRequired")}>
               <input
                 required
                 type="number"
@@ -469,7 +470,7 @@ export function Employees() {
                 }
               />
             </Field>
-            <Field label="تاريخ التوظيف">
+            <Field label={t("hireDateLabelEmp")}>
               <input
                 type="date"
                 value={form.hire_date ?? today()}
@@ -478,7 +479,7 @@ export function Employees() {
                 }
               />
             </Field>
-            <Field label="ملاحظات">
+            <Field label={t("notes")}>
               <input
                 value={form.notes ?? ""}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -486,14 +487,14 @@ export function Employees() {
             </Field>
             <div className="form-actions">
               <button type="submit" className="btn primary">
-                {editing ? "حفظ التعديلات" : "إضافة"}
+                {editing ? t("saveChanges") : t("add")}
               </button>
               <button
                 type="button"
                 className="btn"
                 onClick={() => setShowForm(false)}
               >
-                إلغاء
+                {t("cancel")}
               </button>
             </div>
           </form>
@@ -502,14 +503,14 @@ export function Employees() {
 
       {paying && (
         <Modal
-          title={`صرف راتب: ${paying.name}`}
+          title={`${t("paySalaryModalTitle")} ${paying.name}`}
           onClose={() => setPaying(null)}
         >
           <form onSubmit={recordSalary} className="form-grid">
-            <Field label="الراتب الشهري">
+            <Field label={t("monthlySalaryLabel2")}>
               <input value={money(paying.salary)} disabled />
             </Field>
-            <Field label="مبلغ الصرف *">
+            <Field label={t("paymentAmountLabelEmp")}>
               <input
                 required
                 type="number"
@@ -519,30 +520,30 @@ export function Employees() {
                 onChange={(e) => setPayAmount(Number(e.target.value))}
               />
             </Field>
-            <Field label="التاريخ">
+            <Field label={t("date")}>
               <input
                 type="date"
                 value={payDate}
                 onChange={(e) => setPayDate(e.target.value)}
               />
             </Field>
-            <Field label="ملاحظات">
+            <Field label={t("notes")}>
               <input
                 value={payNotes}
                 onChange={(e) => setPayNotes(e.target.value)}
-                placeholder="اختياري"
+                placeholder={t("optionalLabelShort")}
               />
             </Field>
             <div className="form-actions">
               <button type="submit" className="btn primary">
-                تسجيل الصرفية
+                {t("recordPaymentBtnEmp")}
               </button>
               <button
                 type="button"
                 className="btn"
                 onClick={() => setPaying(null)}
               >
-                إلغاء
+                {t("cancel")}
               </button>
             </div>
           </form>
@@ -551,7 +552,7 @@ export function Employees() {
 
       {vacationEmployee && (
         <Modal
-          title={`إدارة الإجازات - ${vacationEmployee.name}`}
+          title={`${t("vacationManagementTitle")} ${vacationEmployee.name}`}
           onClose={() => {
             setVacationEmployee(null);
             setVacations([]);
@@ -563,34 +564,34 @@ export function Employees() {
             <div className="emp-vac-info">
               <div className="emp-vac-name">{vacationEmployee.name}</div>
               <div className="emp-vac-meta">
-                📞 {vacationEmployee.phone ?? "بدون هاتف"} | 💰{" "}
-                {money(vacationEmployee.salary)} / شهر
+                📞 {vacationEmployee.phone ?? t("noPhoneEmp")} | 💰{" "}
+                {money(vacationEmployee.salary)} {t("perMonth")}
               </div>
             </div>
             <div className="emp-vac-balance">
-              <span>إجمالي الصرفيات:</span>
+              <span>{t("totalExpenses")}</span>
               <b className="text-green">{money(totalPaid)}</b>
             </div>
           </div>
 
           <div className="emp-vac-section">
-            <h4 className="stmt-section-title">💵 سجل صرفيات الرواتب</h4>
+            <h4 className="stmt-section-title">{t("salaryPaymentsLog")}</h4>
             <div className="stmt-table-wrap">
               <table className="table stmt-table">
                 <thead>
                   <tr>
-                    <th>رقم العملية</th>
-                    <th>التاريخ</th>
-                    <th>المبلغ</th>
-                    <th>ملاحظات</th>
-                    <th>إجراءات</th>
+                    <th>{t("transactionNumberLabel")}</th>
+                    <th>{t("date")}</th>
+                    <th>{t("amountLabel")}</th>
+                    <th>{t("notes")}</th>
+                    <th>{t("actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {salaries.length === 0 && (
                     <tr>
                       <td colSpan={5} className="empty">
-                        لا توجد صرفيات رواتب مسجلة.
+                        {t("noSalaryPayments")}
                       </td>
                     </tr>
                   )}
@@ -605,7 +606,7 @@ export function Employees() {
                           className="btn sm danger"
                           onClick={() => removeSalary(s)}
                         >
-                          حذف
+                          {t("delete")}
                         </button>
                       </td>
                     </tr>
@@ -614,7 +615,7 @@ export function Employees() {
                     <tfoot>
                       <tr className="stmt-tfoot">
                         <td colSpan={2} className="strong">
-                          إجمالي الصرفيات
+                          {t("totalExpensesFooter")}
                         </td>
                         <td className="strong text-green">
                           {money(totalPaid)}
@@ -630,7 +631,7 @@ export function Employees() {
 
           <div className="emp-vac-section">
             <div className="stmt-section-head">
-              <h4 className="stmt-section-title">📅 إدارة الإجازات</h4>
+              <h4 className="stmt-section-title">{t("vacationManagement")}</h4>
               <button
                 className="btn sm primary"
                 onClick={() => {
@@ -646,24 +647,24 @@ export function Employees() {
                   });
                 }}
               >
-                + إجازة جديدة
+                {t("newVacationBtn")}
               </button>
             </div>
 
             {editingVac && (
               <form onSubmit={saveVacation} className="form-grid emp-vac-form">
-                <Field label="نوع الإجازة">
+                <Field label={t("vacationTypeLabel")}>
                   <select
                     value={vacForm.type ?? "annual"}
                     onChange={(e) =>
                       setVacForm({ ...vacForm, type: e.target.value })
                     }
                   >
-                    <option value="annual">إجازة سنوية</option>
-                    <option value="sick">إجازة مرضية</option>
+                    <option value="annual">{t("annualLeave")}</option>
+                    <option value="sick">{t("sickLeave")}</option>
                   </select>
                 </Field>
-                <Field label="من تاريخ *">
+                <Field label={t("fromDateRequired")}>
                   <input
                     required
                     type="date"
@@ -673,7 +674,7 @@ export function Employees() {
                     }
                   />
                 </Field>
-                <Field label="إلى تاريخ *">
+                <Field label={t("toDateRequired")}>
                   <input
                     required
                     type="date"
@@ -683,7 +684,7 @@ export function Employees() {
                     }
                   />
                 </Field>
-                <Field label="عدد الأيام *">
+                <Field label={t("daysCountRequired")}>
                   <input
                     required
                     type="number"
@@ -694,19 +695,19 @@ export function Employees() {
                     }
                   />
                 </Field>
-                <Field label="الحالة">
+                <Field label={t("status")}>
                   <select
                     value={vacForm.status ?? "pending"}
                     onChange={(e) =>
                       setVacForm({ ...vacForm, status: e.target.value })
                     }
                   >
-                    <option value="pending">معلقة</option>
-                    <option value="approved">موافق</option>
-                    <option value="rejected">مرفوض</option>
+                    <option value="pending">{t("pendingStatus")}</option>
+                    <option value="approved">{t("approvedStatus")}</option>
+                    <option value="rejected">{t("rejectedStatus")}</option>
                   </select>
                 </Field>
-                <Field label="ملاحظات">
+                <Field label={t("notes")}>
                   <input
                     value={vacForm.notes ?? ""}
                     onChange={(e) =>
@@ -716,14 +717,14 @@ export function Employees() {
                 </Field>
                 <div className="form-actions">
                   <button type="submit" className="btn primary">
-                    {editingVac ? "حفظ التعديلات" : "إضافة الإجازة"}
+                    {editingVac ? t("saveChanges") : t("addVacationBtn")}
                   </button>
                   <button
                     type="button"
                     className="btn"
                     onClick={() => setEditingVac(null)}
                   >
-                    إلغاء
+                    {t("cancel")}
                   </button>
                 </div>
               </form>
@@ -733,20 +734,20 @@ export function Employees() {
               <table className="table stmt-table">
                 <thead>
                   <tr>
-                    <th>نوع الإجازة</th>
-                    <th>من</th>
-                    <th>إلى</th>
-                    <th>عدد الأيام</th>
-                    <th>الحالة</th>
-                    <th>ملاحظات</th>
-                    <th>إجراءات</th>
+                    <th>{t("vacationTypeLabel")}</th>
+                    <th>{t("fromLabel")}</th>
+                    <th>{t("toLabel")}</th>
+                    <th>{t("daysCountHeader")}</th>
+                    <th>{t("status")}</th>
+                    <th>{t("notes")}</th>
+                    <th>{t("actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {vacations.length === 0 && (
                     <tr>
                       <td colSpan={7} className="empty">
-                        لا توجد إجازات مسجلة.
+                        {t("noVacationsRecorded")}
                       </td>
                     </tr>
                   )}
@@ -758,12 +759,12 @@ export function Employees() {
                             v.type === "sick" ? "type-payment" : "type-sale"
                           }`}
                         >
-                          {VACATION_TYPES[v.type ?? "annual"] ?? v.type}
+                          {t(VACATION_TYPES[v.type ?? "annual"] ?? v.type)}
                         </span>
                       </td>
                       <td>{fmtDate(v.start_date)}</td>
                       <td>{fmtDate(v.end_date)}</td>
-                      <td className="strong">{v.days} يوم</td>
+                      <td className="strong">{v.days} {t("daysUnit")}</td>
                       <td>
                         <span
                           className={`pay-badge ${
@@ -774,7 +775,7 @@ export function Employees() {
                                 : "cash"
                           }`}
                         >
-                          {VACATION_STATUS[v.status ?? "pending"] ?? v.status}
+                          {t(VACATION_STATUS[v.status ?? "pending"] ?? v.status)}
                         </span>
                       </td>
                       <td>{v.notes ?? "—"}</td>
@@ -782,14 +783,14 @@ export function Employees() {
                         <button
                           className="btn sm stmt-edit-btn"
                           onClick={() => editVacation(v)}
-                          title="تعديل"
+                          title={t("edit")}
                         >
                           ✏️
                         </button>
                         <button
                           className="btn sm danger"
                           onClick={() => removeVacation(v)}
-                          title="حذف"
+                          title={t("delete")}
                         >
                           🗑️
                         </button>

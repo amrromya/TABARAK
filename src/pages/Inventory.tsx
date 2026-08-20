@@ -8,6 +8,7 @@ import {
   qty,
   useToast,
 } from "../components/ui";
+import { t } from "../i18n";
 import type { Category, NewProduct, Product } from "../types";
 
 const emptyForm: NewProduct = {
@@ -94,10 +95,10 @@ export function Inventory({
     try {
       if (editing) {
         await api.updateProduct(editing.id, form);
-        notify("تم تعديل المنتج");
+        notify(t("productUpdated"));
       } else {
         await api.createProduct(form);
-        notify("تمت إضافة المنتج");
+        notify(t("productAdded"));
       }
       setShowForm(false);
       load();
@@ -107,10 +108,10 @@ export function Inventory({
   };
 
   const remove = async (p: Product) => {
-    if (!confirmDialog(`هل تريد حذف المنتج «${p.name}»؟`)) return;
+    if (!confirmDialog(t("confirmDeleteProduct").replace("{name}", p.name))) return;
     try {
       await api.deleteProduct(p.id);
-      notify("تم حذف المنتج");
+      notify(t("productDeleted"));
       load();
     } catch (err) {
       notify(String(err), "error");
@@ -167,7 +168,7 @@ export function Inventory({
             window.print();
             window.print = pf;
           }, 400);
-        } catch(e) { alert("خطأ في الباركود: " + e.message); }
+        } catch(e) { alert("${t("barcodeError")}" + e.message); }
       <\/script>
     </body></html>`);
     doc.close();
@@ -183,7 +184,7 @@ export function Inventory({
       setNewCategory("");
       setShowCategory(false);
       setCategories(await api.listCategories());
-      notify("تمت إضافة التصنيف");
+      notify(t("categoryAdded"));
     } catch (err) {
       notify(String(err), "error");
     }
@@ -197,59 +198,59 @@ export function Inventory({
   return (
     <div className="page">
       <div className="page-head">
-        <h1>المخزون والمنتجات</h1>
+        <h1>{t("inventoryTitle")}</h1>
         <div className="head-actions">
           <input
             className="search"
-            placeholder="بحث بالاسم أو الباركود..."
+            placeholder={t("searchNameOrBarcode")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           <button className="btn" onClick={onOpenCount}>
-            📋 فاتورة جرد مؤقت
+            📋 {t("temporaryInventoryCount")}
           </button>
           <button className="btn" onClick={onOpenCounts}>
-            🔎 سجل الجرد
+            🔎 {t("stockCounts")}
           </button>
           <button className="btn accent" onClick={onOpenFullCount}>
-            📊 جرد كلي
+            📊 {t("fullInventoryCount")}
           </button>
           <button className="btn primary" onClick={openNew}>
-            + منتج جديد
+            + {t("newProduct")}
           </button>
         </div>
       </div>
 
       <div className="toolbar-info">
-        <span>عدد المنتجات: <b>{products.length}</b></span>
-        <span>قيمة المخزون (سعر الشراء): <b>{money(totalValue)}</b></span>
+        <span>{t("productCount")} <b>{products.length}</b></span>
+        <span>{t("inventoryValueCost")} <b>{money(totalValue)}</b></span>
       </div>
 
       <div className="table-wrap">
         <table className="table inv-table">
           <thead>
             <tr>
-              <th>الاسم</th>
-              <th>التصنيف</th>
-              <th>الباركود</th>
-              <th>الوحدة</th>
-              <th>سعر الشراء</th>
-              <th>سعر البيع</th>
-              <th>الكمية</th>
-              <th>حد الطلب</th>
-              <th>إجراءات</th>
+              <th>{t("name")}</th>
+              <th>{t("category")}</th>
+              <th>{t("barcode")}</th>
+              <th>{t("unit")}</th>
+              <th>{t("costPrice")}</th>
+              <th>{t("sellPrice")}</th>
+              <th>{t("quantity")}</th>
+              <th>{t("minQuantity")}</th>
+              <th>{t("actions")}</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={9} className="empty">جارٍ التحميل...</td>
+                <td colSpan={9} className="empty">{t("loading")}</td>
               </tr>
             )}
             {!loading && products.length === 0 && (
               <tr>
                 <td colSpan={9} className="empty">
-                  لا توجد منتجات. أضف أول منتج الآن.
+                  {t("noProductsAddFirst")}
                 </td>
               </tr>
             )}
@@ -259,7 +260,7 @@ export function Inventory({
                 <tr
                   key={p.id}
                   className={low ? "row-low" : ""}
-                  title="انقر مرتين لفتح كرت المنتج"
+                  title={t("doubleClickHint")}
                   onDoubleClick={() => openEdit(p)}
                 >
                   <td className="strong">{p.name}</td>
@@ -274,16 +275,16 @@ export function Inventory({
                   <td>{qty(p.min_quantity)}</td>
                   <td className="actions">
                     <button className="btn sm" onClick={() => openEdit(p)}>
-                      تعديل
+                      {t("edit")}
                     </button>
                     <button className="btn sm" onClick={() => printBarcode(p)}>
-                      🏷️ باركود
+                      🏷️ {t("printBarcode")}
                     </button>
                     <button
                       className="btn sm danger"
                       onClick={() => remove(p)}
                     >
-                      حذف
+                      {t("delete")}
                     </button>
                   </td>
                 </tr>
@@ -295,24 +296,24 @@ export function Inventory({
 
       {showForm && (
         <Modal
-          title={editing ? "تعديل منتج" : "إضافة منتج جديد"}
+          title={editing ? t("editProduct") : t("addNewProduct")}
           onClose={() => setShowForm(false)}
         >
           <form onSubmit={save} className="form-grid">
-            <Field label="اسم المنتج *">
+            <Field label={t("productName") + " *"}>
               <input
                 required
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </Field>
-            <Field label="الباركود (تلقائي — يمكن تعديله)">
+            <Field label={t("barcodeAuto")}>
               <input
                 value={form.barcode ?? ""}
                 onChange={(e) => setForm({ ...form, barcode: e.target.value })}
               />
             </Field>
-            <Field label="التصنيف">
+            <Field label={t("category")}>
               <div className="select-row">
                 <select
                   value={form.category_id ?? ""}
@@ -325,7 +326,7 @@ export function Inventory({
                     })
                   }
                 >
-                  <option value="">بدون تصنيف</option>
+                  <option value="">{t("noCategory")}</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -341,20 +342,20 @@ export function Inventory({
                 </button>
               </div>
             </Field>
-            <Field label="الوحدة">
+            <Field label={t("unit")}>
               <select
                 value={form.unit ?? ""}
                 onChange={(e) => setForm({ ...form, unit: e.target.value })}
               >
-                <option value="قطعة">قطعة</option>
-                <option value="كرتونة">كرتونة</option>
-                <option value="كيلو">كيلو</option>
-                <option value="لتر">لتر</option>
-                <option value="علبة">علبة</option>
-                <option value="شنطة">شنطة</option>
+                <option value="قطعة">{t("unitPiece")}</option>
+                <option value="كرتونة">{t("unitCarton")}</option>
+                <option value="كيلو">{t("unitKilo")}</option>
+                <option value="لتر">{t("unitLiter")}</option>
+                <option value="علبة">{t("unitBox")}</option>
+                <option value="شنطة">{t("unitBag")}</option>
               </select>
             </Field>
-            <Field label="سعر الشراء *">
+            <Field label={t("costPrice") + " *"}>
               <input
                 required
                 type="number"
@@ -366,7 +367,7 @@ export function Inventory({
                 }
               />
             </Field>
-            <Field label="سعر البيع *">
+            <Field label={t("sellPrice") + " *"}>
               <input
                 required
                 type="number"
@@ -378,7 +379,7 @@ export function Inventory({
                 }
               />
             </Field>
-            <Field label="الكمية الافتتاحية">
+            <Field label={t("openingQuantity")}>
               <input
                 type="number"
                 min={0}
@@ -389,7 +390,7 @@ export function Inventory({
                 }
               />
             </Field>
-            <Field label="حد الطلب الأدنى">
+            <Field label={t("minQuantity")}>
               <input
                 type="number"
                 min={0}
@@ -402,14 +403,14 @@ export function Inventory({
             </Field>
             <div className="form-actions">
               <button type="submit" className="btn primary">
-                {editing ? "حفظ التعديلات" : "إضافة"}
+                {editing ? t("saveChanges") : t("add")}
               </button>
               <button
                 type="button"
                 className="btn"
                 onClick={() => setShowForm(false)}
               >
-                إلغاء
+                {t("cancel")}
               </button>
             </div>
           </form>
@@ -418,11 +419,11 @@ export function Inventory({
 
       {showCategory && (
         <Modal
-          title="إضافة تصنيف جديد"
+          title={t("addNewCategory")}
           onClose={() => setShowCategory(false)}
         >
           <form onSubmit={addCategory} className="form-grid">
-            <Field label="اسم التصنيف *">
+            <Field label={t("categoryNameLabel") + " *"}>
               <input
                 required
                 autoFocus
@@ -432,14 +433,14 @@ export function Inventory({
             </Field>
             <div className="form-actions">
               <button type="submit" className="btn primary">
-                إضافة
+                {t("add")}
               </button>
               <button
                 type="button"
                 className="btn"
                 onClick={() => setShowCategory(false)}
               >
-                إلغاء
+                {t("cancel")}
               </button>
             </div>
           </form>

@@ -3974,13 +3974,14 @@ dependencies = [
 
 [[package]]
 name = "tabarak"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "base64 0.22.1",
  "chrono",
  "dirs 5.0.1",
  "gethostname",
  "hex",
+ "lazy_static",
  "reqwest 0.12.28",
  "rsa",
  "rusqlite",

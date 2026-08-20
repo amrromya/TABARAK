@@ -11,6 +11,7 @@ import {
   today,
   useToast,
 } from "../components/ui";
+import { t } from "../i18n";
 import type {
   Customer,
   CustomerPayment,
@@ -21,11 +22,11 @@ import type {
 } from "../types";
 
 const PAYMENT_LABELS: Record<string, string> = {
-  cash: "نقدي",
-  credit: "آجل",
-  card: "شبكة",
-  card_visa: "شبكة - فيزا",
-  card_wallet: "شبكة - محفظة",
+  cash: "cash",
+  credit: "credit",
+  card: "card",
+  card_visa: "cardVisa",
+  card_wallet: "cardWallet",
 };
 
 type StatementMode = "summary" | "detailed" | null;
@@ -154,10 +155,10 @@ export function Customers({
     try {
       if (editing) {
         await api.updateCustomer(editing.id, form);
-        notify("تم تعديل بيانات العميل");
+        notify(t("customerEdited"));
       } else {
         await api.createCustomer(form);
-        notify("تمت إضافة العميل");
+        notify(t("customerAdded"));
       }
       setShowForm(false);
       load();
@@ -169,13 +170,13 @@ export function Customers({
   const remove = async (c: Customer) => {
     if (
       !confirmDialog(
-        `هل تريد حذف العميل «${c.name}»؟ سيفقد تاريخه في المبيعات والمدفوعات.`,
+        t("confirmDeleteCustomerMsg"),
       )
     )
       return;
     try {
       await api.deleteCustomer(c.id);
-      notify("تم حذف العميل");
+      notify(t("customerDeleted"));
       load();
     } catch (err) {
       notify(String(err), "error");
@@ -186,7 +187,7 @@ export function Customers({
     e.preventDefault();
     if (!paying) return;
     if (payAmount <= 0) {
-      notify("المبلغ يجب أن يكون أكبر من صفر", "error");
+      notify(t("amountMustBePositive"), "error");
       return;
     }
     try {
@@ -196,7 +197,7 @@ export function Customers({
         amount: payAmount,
         notes: payNotes || null,
       });
-      notify(`تم تحصيل ${money(payAmount)} من ${paying.name}`);
+      notify(`${t("paymentCollected")} ${money(payAmount)} - ${paying.name}`);
       setPaying(null);
       load();
       if (statementCustomer?.id === paying.id) {
@@ -249,14 +250,14 @@ export function Customers({
   };
 
   const removePayment = async (p: CustomerPayment) => {
-    if (!confirmDialog("هل تريد حذف هذا التحصيل؟")) return;
+    if (!confirmDialog(t("confirmDeletePayment"))) return;
     try {
       await api.deleteCustomerPayment(p.id);
       if (statementCustomer) {
         await reloadStatement(statementCustomer);
       }
       load();
-      notify("تم حذف التحصيل");
+      notify(t("paymentDeleted"));
     } catch (err) {
       notify(String(err), "error");
     }
@@ -304,9 +305,7 @@ export function Customers({
         date: s.date,
         type: "sale",
         reference: s.invoice_no,
-        description: `فاتورة مبيعات ${
-          s.payment_method === "credit" ? "(آجل)" : "(نقدي/شبكة)"
-        }${s.warehouse_name ? ` - ${s.warehouse_name}` : ""}`,
+        description: `${t("saleInvoiceCreditLabel")}${s.warehouse_name ? ` - ${s.warehouse_name}` : ""}`,
         debit: s.net_total,
         credit: 0,
         balance: 0,
@@ -319,8 +318,8 @@ export function Customers({
         id: `pay-${p.id}`,
         date: p.date,
         type: "payment",
-        reference: `تحصيل-${p.id}`,
-        description: "دفعة / تحصيل",
+        reference: `${t("paymentRefLabel")}-${p.id}`,
+        description: t("paymentDescLabel"),
         debit: 0,
         credit: p.amount,
         balance: 0,
@@ -354,11 +353,11 @@ export function Customers({
   return (
     <div className="page cust-page">
       <div className="page-head">
-        <h1>العملاء والديون</h1>
+        <h1>{t("customers")}</h1>
         <div className="head-actions">
           <input
             className="search"
-            placeholder="بحث بالاسم أو الهاتف..."
+            placeholder={t("searchByNameOrPhone")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -370,7 +369,7 @@ export function Customers({
               setShowForm(true);
             }}
           >
-            + عميل جديد
+            {t("newCustomerBtn")}
           </button>
         </div>
       </div>
@@ -380,21 +379,21 @@ export function Customers({
           <div className="cust-stat-icon">👥</div>
           <div className="cust-stat-info">
             <div className="cust-stat-value">{customers.length}</div>
-            <div className="cust-stat-label">إجمالي العملاء</div>
+            <div className="cust-stat-label">{t("totalCustomersLabel")}</div>
           </div>
         </div>
         <div className="cust-stat-card cust-stat-red">
           <div className="cust-stat-icon">💸</div>
           <div className="cust-stat-info">
             <div className="cust-stat-value">{money(totalDebts)}</div>
-            <div className="cust-stat-label">إجمالي الديون المستحقة</div>
+            <div className="cust-stat-label">{t("totalDebtsLabel")}</div>
           </div>
         </div>
         <div className="cust-stat-card cust-stat-green">
           <div className="cust-stat-icon">💳</div>
           <div className="cust-stat-info">
             <div className="cust-stat-value">{money(totalCredit)}</div>
-            <div className="cust-stat-label">أرصدة دائنة للعملاء</div>
+            <div className="cust-stat-label">{t("customerCreditBalance")}</div>
           </div>
         </div>
         <div className="cust-stat-card cust-stat-amber">
@@ -403,7 +402,7 @@ export function Customers({
             <div className="cust-stat-value">
               {customers.filter((c) => c.balance > 0).length}
             </div>
-            <div className="cust-stat-label">عدد العملاء مدينيون</div>
+            <div className="cust-stat-label">{t("debtorCountLabel")}</div>
           </div>
         </div>
       </div>
@@ -412,25 +411,25 @@ export function Customers({
         <table className="table">
           <thead>
             <tr>
-              <th>الاسم</th>
-              <th>الهاتف</th>
-              <th>المديونية</th>
-              <th>ملاحظات</th>
-              <th>إجراءات</th>
+              <th>{t("name")}</th>
+              <th>{t("phone")}</th>
+              <th>{t("debtLabel")}</th>
+              <th>{t("notes")}</th>
+              <th>{t("actions")}</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
                 <td colSpan={5} className="empty">
-                  جارٍ التحميل...
+                  {t("loading")}
                 </td>
               </tr>
             )}
             {!loading && filtered.length === 0 && (
               <tr>
                 <td colSpan={5} className="empty">
-                  لا يوجد عملاء بعد.
+                  {t("noCustomersYet")}
                 </td>
               </tr>
             )}
@@ -452,7 +451,7 @@ export function Customers({
                     <a
                       className="cust-phone-link"
                       href={`tel:${c.phone}`}
-                      title="اتصال"
+                      title={t("callLabel")}
                     >
                       📞 {c.phone}
                     </a>
@@ -471,10 +470,10 @@ export function Customers({
                     }`}
                   >
                     {money(c.balance)}
-                    {c.balance > 0 && <span className="cust-bal-tag">مدين</span>}
+                    {c.balance > 0 && <span className="cust-bal-tag">{t("debtor")}</span>}
                     {c.balance < 0 && (
                       <span className="cust-bal-tag cust-bal-tag-credit">
-                        دائن
+                        {t("creditorLabel")}
                       </span>
                     )}
                   </span>
@@ -497,7 +496,7 @@ export function Customers({
                         }
                       }}
                     >
-                      📑 الكشف
+                      {t("statementBtnLabel")}
                       <span className="cust-dd-arrow">
                         {dropdownOpen === c.id ? "▲" : "▼"}
                       </span>
@@ -512,10 +511,10 @@ export function Customers({
                           <span className="cust-dd-ico">📊</span>
                           <div className="cust-dd-text">
                             <div className="cust-dd-title">
-                              كشف حساب إجمالي
+                              {t("summaryStatement")}
                             </div>
                             <div className="cust-dd-desc">
-                              ملخص المبيعات والمدفوعات
+                              {t("summaryStatementDesc")}
                             </div>
                           </div>
                         </button>
@@ -527,10 +526,10 @@ export function Customers({
                           <span className="cust-dd-ico">📋</span>
                           <div className="cust-dd-text">
                             <div className="cust-dd-title">
-                              كشف حساب تفصيلي
+                              {t("detailedStatement")}
                             </div>
                             <div className="cust-dd-desc">
-                              حركات يومية برصيد متداول
+                              {t("detailedStatementDesc")}
                             </div>
                           </div>
                         </button>
@@ -546,9 +545,9 @@ export function Customers({
                       setPayNotes("");
                       setPayDate(today());
                     }}
-                    title={c.balance <= 0 ? "لا يوجد مديونية" : "تسجيل تحصيل"}
+                    title={c.balance <= 0 ? t("noDebtLabel") : t("collectPaymentLabel")}
                   >
-                    💰 تحصيل
+                    {t("collectBtn")}
                   </button>
                   <button
                     className="btn sm"
@@ -562,13 +561,13 @@ export function Customers({
                       setShowForm(true);
                     }}
                   >
-                    ✏️ تعديل
+                    ✏️ {t("edit")}
                   </button>
                   <button
                     className="btn sm danger"
                     onClick={() => remove(c)}
                   >
-                    🗑️ حذف
+                    🗑️ {t("delete")}
                   </button>
                 </td>
               </tr>
@@ -579,24 +578,24 @@ export function Customers({
 
       {showForm && (
         <Modal
-          title={editing ? "تعديل عميل" : "إضافة عميل جديد"}
+          title={editing ? t("editCustomerTitle") : t("newCustomerTitle")}
           onClose={() => setShowForm(false)}
         >
           <form onSubmit={save} className="form-grid">
-            <Field label="اسم العميل *">
+            <Field label={t("customerNameRequired")}>
               <input
                 required
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </Field>
-            <Field label="رقم الهاتف">
+            <Field label={t("phoneNumberLabel")}>
               <input
                 value={form.phone ?? ""}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
             </Field>
-            <Field label="ملاحظات">
+            <Field label={t("notes")}>
               <input
                 value={form.notes ?? ""}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -604,14 +603,14 @@ export function Customers({
             </Field>
             <div className="form-actions">
               <button type="submit" className="btn primary">
-                {editing ? "حفظ التعديلات" : "إضافة"}
+                {editing ? t("saveChanges") : t("add")}
               </button>
               <button
                 type="button"
                 className="btn"
                 onClick={() => setShowForm(false)}
               >
-                إلغاء
+                {t("cancel")}
               </button>
             </div>
           </form>
@@ -620,14 +619,14 @@ export function Customers({
 
       {paying && (
         <Modal
-          title={`تحصيل من: ${paying.name}`}
+          title={`${t("collectPaymentLabel")}: ${paying.name}`}
           onClose={() => setPaying(null)}
         >
           <form onSubmit={recordPayment} className="form-grid">
-            <Field label="المديونية الحالية">
+            <Field label={t("currentDebtLabel")}>
               <input value={money(paying.balance)} disabled />
             </Field>
-            <Field label="مبلغ التحصيل *">
+            <Field label={t("paymentAmountLabel")}>
               <input
                 required
                 type="number"
@@ -637,30 +636,30 @@ export function Customers({
                 onChange={(e) => setPayAmount(Number(e.target.value))}
               />
             </Field>
-            <Field label="التاريخ">
+            <Field label={t("date")}>
               <input
                 type="date"
                 value={payDate}
                 onChange={(e) => setPayDate(e.target.value)}
               />
             </Field>
-            <Field label="ملاحظات">
+            <Field label={t("notes")}>
               <input
                 value={payNotes}
                 onChange={(e) => setPayNotes(e.target.value)}
-                placeholder="اختياري"
+                placeholder={t("optionalLabelShort")}
               />
             </Field>
             <div className="form-actions">
               <button type="submit" className="btn primary">
-                تسجيل التحصيل
+                {t("recordPaymentLabel")}
               </button>
               <button
                 type="button"
                 className="btn"
                 onClick={() => setPaying(null)}
               >
-                إلغاء
+                {t("cancel")}
               </button>
             </div>
           </form>
@@ -669,7 +668,7 @@ export function Customers({
 
       {statementCustomer && statementMode === "summary" && (
         <Modal
-          title={`كشف حساب إجمالي - ${statementCustomer.name}`}
+          title={`${t("summaryStatement")} - ${statementCustomer.name}`}
           onClose={() => {
             setStatementCustomer(null);
             setStatementMode(null);
@@ -687,7 +686,7 @@ export function Customers({
                   {statementCustomer.name}
                 </div>
                 <div className="stmt-customer-meta">
-                  <span>📞 {statementCustomer.phone ?? "بدون هاتف"}</span>
+                  <span>📞 {statementCustomer.phone ?? t("noPhoneLabel")}</span>
                   {statementCustomer.notes && (
                     <span>📝 {statementCustomer.notes}</span>
                   )}
@@ -703,16 +702,16 @@ export function Customers({
                     : "stmt-bal-zero"
               }`}
             >
-              <span className="stmt-bal-label">الرصيد الحالي</span>
+              <span className="stmt-bal-label">{t("currentBalanceLabel")}</span>
               <span className="stmt-bal-value">
                 {money(statementCustomer.balance)}
               </span>
               <span className="stmt-bal-sub">
                 {statementCustomer.balance > 0
-                  ? "مدين لنا"
+                  ? t("debtorToUs")
                   : statementCustomer.balance < 0
-                    ? "دائن لـ العميل"
-                    : "رصيد صفر"}
+                    ? t("creditorToCustomer")
+                    : t("zeroBalanceLabel")}
               </span>
             </div>
           </div>
@@ -723,7 +722,7 @@ export function Customers({
               onClick={() => setPrintStatement("summary")}
               disabled={!settings}
             >
-              🖨️ طباعة كشف الحساب
+              {t("printStatementBtn")}
             </button>
           </div>
 
@@ -731,33 +730,33 @@ export function Customers({
             <div className="stmt-sum-card sc-sales">
               <div className="stmt-sum-ico">🧾</div>
               <div>
-                <div className="stmt-sum-label">إجمالي المبيعات</div>
+                <div className="stmt-sum-label">{t("totalSales")}</div>
                 <div className="stmt-sum-value">{money(totalSalesForCustomer)}</div>
-                <div className="stmt-sum-sub">{statementSales.length} فاتورة</div>
+                <div className="stmt-sum-sub">{statementSales.length} {t("invoiceCountLabel")}</div>
               </div>
             </div>
             <div className="stmt-sum-card sc-credit">
               <div className="stmt-sum-ico">⏳</div>
               <div>
-                <div className="stmt-sum-label">مبيعات آجل</div>
+                <div className="stmt-sum-label">{t("creditSalesLabel")}</div>
                 <div className="stmt-sum-value">{money(totalCreditSales)}</div>
-                <div className="stmt-sum-sub">{creditSales.length} فاتورة</div>
+                <div className="stmt-sum-sub">{creditSales.length} {t("invoiceCountLabel")}</div>
               </div>
             </div>
             <div className="stmt-sum-card sc-paid">
               <div className="stmt-sum-ico">💰</div>
               <div>
-                <div className="stmt-sum-label">إجمالي التحصيلات</div>
+                <div className="stmt-sum-label">{t("totalCollectionsLabel")}</div>
                 <div className="stmt-sum-value">{money(totalPaymentsForCustomer)}</div>
                 <div className="stmt-sum-sub">
-                  {statementPayments.length} تحصيل
+                  {statementPayments.length} {t("collectionCountLabel")}
                 </div>
               </div>
             </div>
             <div className="stmt-sum-card sc-net">
               <div className="stmt-sum-ico">📊</div>
               <div>
-                <div className="stmt-sum-label">صافي الحساب</div>
+                <div className="stmt-sum-label">{t("netAccountLabel")}</div>
                 <div
                   className={`stmt-sum-value ${
                     totalSalesForCustomer - totalPaymentsForCustomer > 0
@@ -768,7 +767,7 @@ export function Customers({
                   {money(totalSalesForCustomer - totalPaymentsForCustomer)}
                 </div>
                 <div className="stmt-sum-sub">
-                  مبيعات − تحصيلات
+                  {t("salesMinusCollections")}
                 </div>
               </div>
             </div>
@@ -778,22 +777,22 @@ export function Customers({
             <>
               <div className="stmt-section-head">
                 <h4 className="stmt-section-title">
-                  💳 فواتير البيع الآجل (المستحقة)
+                  {t("creditInvoicesTitle")}
                 </h4>
                 <span className="stmt-section-badge">
-                  إجماليها: {money(totalCreditSales)}
+                  {t("totalCollectionsLabel")}: {money(totalCreditSales)}
                 </span>
               </div>
               <div className="stmt-table-wrap">
                 <table className="table stmt-table">
                   <thead>
                     <tr>
-                      <th>رقم الفاتورة</th>
-                      <th>التاريخ</th>
-                      <th>المستودع</th>
-                      <th>الطريقة</th>
-                      <th>الصافي</th>
-                      <th>الإجراء</th>
+                      <th>{t("invoiceNumberLabel")}</th>
+                      <th>{t("date")}</th>
+                      <th>{t("warehouse")}</th>
+                      <th>{t("methodLabel")}</th>
+                      <th>{t("netLabel")}</th>
+                      <th>{t("actionLabel")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -808,8 +807,7 @@ export function Customers({
                           <span
                             className={`pay-badge ${s.payment_method}`}
                           >
-                            {PAYMENT_LABELS[s.payment_method] ??
-                              s.payment_method}
+                            {t(PAYMENT_LABELS[s.payment_method] ?? s.payment_method)}
                           </span>
                         </td>
                         <td className="strong text-red">
@@ -820,9 +818,9 @@ export function Customers({
                             <button
                               className="btn sm stmt-edit-btn"
                               onClick={() => onViewSale(s.id)}
-                              title="فتح الفاتورة للتعديل"
+                              title={t("openInvoiceForEdit")}
                             >
-                              ✏️ فتح / تعديل
+                              {t("openEditBtn")}
                             </button>
                           ) : (
                             <span className="stmt-inv-no">#{s.id}</span>
@@ -839,24 +837,24 @@ export function Customers({
           {statementSales.length > 0 && (
             <>
               <div className="stmt-section-head">
-                <h4 className="stmt-section-title">🧾 جميع فواتير المبيعات</h4>
+                <h4 className="stmt-section-title">{t("allSalesInvoices")}</h4>
                 <span className="stmt-section-badge">
-                  {statementSales.length} فاتورة
+                  {statementSales.length} {t("invoiceCountLabel")}
                 </span>
               </div>
               <div className="stmt-table-wrap">
                 <table className="table stmt-table">
                   <thead>
                     <tr>
-                      <th>الفاتورة</th>
-                      <th>التاريخ</th>
-                      <th>المستودع</th>
-                      <th>الطريقة</th>
-                      <th>الإجمالي</th>
-                      <th>خصم</th>
-                      <th>مصاريف</th>
-                      <th>الصافي</th>
-                      <th>إجراءات</th>
+                      <th>{t("invoiceLabel")}</th>
+                      <th>{t("date")}</th>
+                      <th>{t("warehouse")}</th>
+                      <th>{t("methodLabel")}</th>
+                      <th>{t("total")}</th>
+                      <th>{t("discountLabel")}</th>
+                      <th>{t("expensesLabel")}</th>
+                      <th>{t("netLabel")}</th>
+                      <th>{t("actions")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -869,8 +867,7 @@ export function Customers({
                           <span
                             className={`pay-badge ${s.payment_method}`}
                           >
-                            {PAYMENT_LABELS[s.payment_method] ??
-                              s.payment_method}
+                            {t(PAYMENT_LABELS[s.payment_method] ?? s.payment_method)}
                           </span>
                         </td>
                         <td>{money(s.total)}</td>
@@ -884,9 +881,9 @@ export function Customers({
                             <button
                               className="btn sm primary"
                               onClick={() => onViewSale(s.id)}
-                              title="فتح وتعديل الفاتورة"
+                              title={t("openEditInvoice")}
                             >
-                              تعديل
+                              {t("edit")}
                             </button>
                           )}
                         </td>
@@ -896,7 +893,7 @@ export function Customers({
                   <tfoot>
                     <tr className="stmt-tfoot">
                       <td colSpan={7} className="strong">
-                        الإجمالي
+                        {t("total")}
                       </td>
                       <td className="strong stmt-total-net">
                         {money(totalSalesForCustomer)}
@@ -910,27 +907,27 @@ export function Customers({
           )}
 
           <div className="stmt-section-head">
-            <h4 className="stmt-section-title">💵 التحصيلات والمدفوعات</h4>
+            <h4 className="stmt-section-title">{t("paymentsAndCollections")}</h4>
             <span className="stmt-section-badge">
-              {statementPayments.length} عملية
+              {statementPayments.length} {t("operationCountLabel")}
             </span>
           </div>
           <div className="stmt-table-wrap">
             <table className="table stmt-table">
               <thead>
                 <tr>
-                  <th>رقم العملية</th>
-                  <th>التاريخ</th>
-                  <th>المبلغ</th>
-                  <th>ملاحظات</th>
-                  <th>إجراءات</th>
+                  <th>{t("transactionNumberLabel")}</th>
+                  <th>{t("date")}</th>
+                  <th>{t("amountLabel")}</th>
+                  <th>{t("notes")}</th>
+                  <th>{t("actions")}</th>
                 </tr>
               </thead>
               <tbody>
                 {statementPayments.length === 0 && (
                   <tr>
                     <td colSpan={5} className="empty">
-                      لا توجد تحصيلات مسجلة لهذا العميل بعد.
+                      {t("noPaymentsYet")}
                     </td>
                   </tr>
                 )}
@@ -945,7 +942,7 @@ export function Customers({
                         className="btn sm danger"
                         onClick={() => removePayment(p)}
                       >
-                        حذف
+                        {t("delete")}
                       </button>
                     </td>
                   </tr>
@@ -955,7 +952,7 @@ export function Customers({
                 <tfoot>
                   <tr className="stmt-tfoot">
                     <td colSpan={2} className="strong">
-                      إجمالي التحصيلات
+                      {t("totalPaymentsLabel")}
                     </td>
                     <td className="strong text-green stmt-total-net">
                       {money(totalPaymentsForCustomer)}
@@ -971,7 +968,7 @@ export function Customers({
 
       {statementCustomer && statementMode === "detailed" && (
         <Modal
-          title={`كشف حساب تفصيلي - ${statementCustomer.name}`}
+          title={`${t("detailedStatement")} - ${statementCustomer.name}`}
           onClose={() => {
             setStatementCustomer(null);
             setStatementMode(null);
@@ -989,7 +986,7 @@ export function Customers({
                   {statementCustomer.name}
                 </div>
                 <div className="stmt-customer-meta">
-                  <span>📞 {statementCustomer.phone ?? "بدون هاتف"}</span>
+                  <span>📞 {statementCustomer.phone ?? t("noPhoneLabel")}</span>
                   <span>🆔 #{statementCustomer.id}</span>
                 </div>
               </div>
@@ -1003,31 +1000,31 @@ export function Customers({
                     : "stmt-bal-zero"
               }`}
             >
-              <span className="stmt-bal-label">الرصيد الحالي</span>
+              <span className="stmt-bal-label">{t("currentBalanceLabel")}</span>
               <span className="stmt-bal-value">
                 {money(statementCustomer.balance)}
               </span>
               <span className="stmt-bal-sub">
                 {statementCustomer.balance > 0
-                  ? "مدين لنا"
+                  ? t("debtorToUs")
                   : statementCustomer.balance < 0
-                    ? "دائن لـ العميل"
-                    : "رصيد صفري"}
+                    ? t("creditorToCustomer")
+                    : t("zeroBalanceShort")}
               </span>
             </div>
           </div>
 
           <div className="stmt-date-range">
-            <span className="stmt-dr-label">📅 نطاق التاريخ (اختياري):</span>
+            <span className="stmt-dr-label">📅 {t("dateRangeOptional")}</span>
             <div className="stmt-dr-fields">
-              <Field label="من تاريخ">
+              <Field label={t("fromDate")}>
                 <input
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
                 />
               </Field>
-              <Field label="إلى تاريخ">
+              <Field label={t("toDate")}>
                 <input
                   type="date"
                   value={dateTo}
@@ -1042,7 +1039,7 @@ export function Customers({
                     setDateTo("");
                   }}
                 >
-                  إعادة تعيين
+                  {t("resetDate")}
                 </button>
               )}
             </div>
@@ -1054,17 +1051,17 @@ export function Customers({
               onClick={() => setPrintStatement("detailed")}
               disabled={!settings}
             >
-              🖨️ طباعة كشف الحساب
+              {t("printStatementBtn")}
             </button>
           </div>
 
           <div className="stmt-det-totals">
             <div className="stmt-det-total debit">
-              <span>إجمالي المدين (المبيعات)</span>
+              <span>{t("totalDebitLabel")}</span>
               <b>{money(totalsFiltered.debit)}</b>
             </div>
             <div className="stmt-det-total credit">
-              <span>إجمالي الدائن (التحصيلات)</span>
+              <span>{t("totalCreditLabel")}</span>
               <b>{money(totalsFiltered.credit)}</b>
             </div>
             <div
@@ -1076,15 +1073,15 @@ export function Customers({
                     : ""
               }`}
             >
-              <span>الرصيد النهائي</span>
+              <span>{t("finalBalanceLabel")}</span>
               <b>{money(totalsFiltered.net)}</b>
             </div>
           </div>
 
           <div className="stmt-section-head">
-            <h4 className="stmt-section-title">📒 سجل الحركات التفصيلي</h4>
+            <h4 className="stmt-section-title">{t("detailedMovementsLog")}</h4>
             <span className="stmt-section-badge">
-              {detailedEntries.length} حركة
+              {detailedEntries.length} {t("movementCountLabel")}
             </span>
           </div>
           <div className="stmt-table-wrap stmt-det-wrap">
@@ -1092,20 +1089,20 @@ export function Customers({
               <thead>
                 <tr>
                   <th style={{ width: 48 }}>#</th>
-                  <th style={{ width: 100 }}>التاريخ</th>
-                  <th>النوع</th>
-                  <th>المرجع / الوصف</th>
-                  <th style={{ width: 110 }}>مدين</th>
-                  <th style={{ width: 110 }}>دائن</th>
-                  <th style={{ width: 110 }}>الرصيد المتداول</th>
-                  <th style={{ width: 90 }}>إجراءات</th>
+                  <th style={{ width: 100 }}>{t("date")}</th>
+                  <th>{t("typeLabel")}</th>
+                  <th>{t("referenceDescription")}</th>
+                  <th style={{ width: 110 }}>{t("debitLabel")}</th>
+                  <th style={{ width: 110 }}>{t("creditLabel")}</th>
+                  <th style={{ width: 110 }}>{t("runningBalanceLabel")}</th>
+                  <th style={{ width: 90 }}>{t("actions")}</th>
                 </tr>
               </thead>
               <tbody>
                 {detailedEntries.length === 0 && (
                   <tr>
                     <td colSpan={8} className="empty">
-                      لا توجد حركات في الفترة المحددة.
+                      {t("noMovementsInPeriod")}
                     </td>
                   </tr>
                 )}
@@ -1127,7 +1124,7 @@ export function Customers({
                                 : "type-payment"
                             }`}
                           >
-                            {e.type === "sale" ? "🧾 مبيعات" : "💰 تحصيل"}
+                            {e.type === "sale" ? t("saleTypeLabel") : t("paymentTypeLabel")}
                           </span>
                         </td>
                         <td>
@@ -1182,21 +1179,21 @@ export function Customers({
                                 onClick={() => toggleSaleDetails(e.saleId!)}
                                 title={
                                   expandedSaleId === e.saleId
-                                    ? "إخفاء التفاصيل"
-                                    : "عرض تفاصيل الفاتورة"
+                                    ? t("hideDetails")
+                                    : t("showDetails")
                                 }
                               >
                                 {expandedSaleId === e.saleId
-                                  ? "إخفاء"
-                                  : "تفاصيل"}
+                                  ? t("hideDetails")
+                                  : t("showDetails")}
                               </button>
                               {onViewSale && (
                                 <button
                                   className="btn sm stmt-edit-btn"
                                   onClick={() => onViewSale(e.saleId!)}
-                                  title="فتح الفاتورة للتعديل"
+                                  title={t("openInvoiceForEdit")}
                                 >
-                                  تعديل
+                                  {t("edit")}
                                 </button>
                               )}
                             </>
@@ -1210,9 +1207,9 @@ export function Customers({
                                 );
                                 if (p) removePayment(p);
                               }}
-                              title="حذف العملية"
+                              title={t("deleteTransactionLabel")}
                             >
-                              حذف
+                              {t("delete")}
                             </button>
                           ) : (
                             e.type === "sale" && (
@@ -1231,10 +1228,10 @@ export function Customers({
                                   <thead>
                                     <tr>
                                       <th>#</th>
-                                      <th>الصنف</th>
-                                      <th>الكمية</th>
-                                      <th>السعر</th>
-                                      <th>الإجمالي</th>
+                                      <th>{t("itemLabel")}</th>
+                                      <th>{t("quantity")}</th>
+                                      <th>{t("price")}</th>
+                                      <th>{t("totalItemLabel")}</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -1263,7 +1260,7 @@ export function Customers({
                 <tfoot>
                   <tr className="stmt-tfoot stmt-tfoot-det">
                     <td colSpan={4} className="strong">
-                      الإجمالي
+                      {t("total")}
                     </td>
                     <td className="strong text-red stmt-total-net">
                       {money(totalsFiltered.debit)}
