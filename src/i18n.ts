@@ -1209,6 +1209,12 @@ const translations: Record<string, Record<Lang, string>> = {
   supabaseUrl: { ar: "رابط Supabase", en: "Supabase URL" },
   invoiceDefaultPrinter: { ar: "الطابعة الافتراضية للفواتير", en: "Default Invoice Printer" },
   systemDefaultPrinter: { ar: "طابعة النظام الافتراضية", en: "System Default Printer" },
+  invoiceLogo: { ar: "لوجو الفاتورة", en: "Invoice Logo" },
+  uploadLogo: { ar: "رفع لوجو", en: "Upload Logo" },
+  removeLogo: { ar: "إزالة اللوجو", en: "Remove Logo" },
+  logoTooLarge: { ar: "حجم الصورة كبير جداً (الحد الأقصى 500 كيلوبايت)", en: "Image too large (max 500 KB)" },
+  warrantyTitle: { ar: "نص الضمان والسياسة", en: "Warranty & Policy Text" },
+  warrantyPlaceholder: { ar: "مثال: يشمل هذا المنتج ضماناً لمدة 12 شهراً من تاريخ الشراء. لا يشمل الضمان الأضرار الناتجة عن سوء الاستخدام...", en: "e.g.: This product includes a 12-month warranty from the date of purchase. The warranty does not cover damage caused by misuse..." },
 
   // --- Feature panel items (sync, branches, attendance_url) ---
   syncItem: { ar: "المزامنة السحابية", en: "Cloud Sync" },

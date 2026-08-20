@@ -184,6 +184,8 @@ export function SettingsPage() {
     invoiceHeader: boolean;
     invoiceFooter: boolean;
     invoicePrinter: string;
+    invoiceLogo: string;
+    warrantyText: string;
     receiptPrinter: string;
     barcodePrinter: string;
     barcodeWidth: number;
@@ -205,6 +207,8 @@ export function SettingsPage() {
       invoiceHeader: true,
       invoiceFooter: true,
       invoicePrinter: "",
+      invoiceLogo: "",
+      warrantyText: "",
       barcodePrinter: "",
       barcodeWidth: 50,
       barcodeHeight: 25,
@@ -922,6 +926,50 @@ export function SettingsPage() {
                   <input type="checkbox" checked={printSettings.invoiceFooter} onChange={(e) => setPrintSettings({ ...printSettings, invoiceFooter: e.target.checked })} />
                   {t("showFooter")}
                 </label>
+              </div>
+
+              {/* Logo upload */}
+              <div className="print-section" style={{ marginTop: 16 }}>
+                <h3>{t("invoiceLogo")}</h3>
+                <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      id="logoUpload"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 500 * 1024) { notify(t("logoTooLarge"), "error"); return; }
+                        const reader = new FileReader();
+                        reader.onload = () => setPrintSettings({ ...printSettings, invoiceLogo: reader.result as string });
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                    <button className="btn" onClick={() => document.getElementById("logoUpload")?.click()}>
+                      📷 {t("uploadLogo")}
+                    </button>
+                  </div>
+                  {printSettings.invoiceLogo && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <img src={printSettings.invoiceLogo} alt="logo" style={{ maxWidth: 120, maxHeight: 60, border: "1px solid #e5e7eb", borderRadius: 8, padding: 4, background: "#fff" }} />
+                      <button className="btn danger sm" onClick={() => setPrintSettings({ ...printSettings, invoiceLogo: "" })}>{t("removeLogo")}</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Warranty text */}
+              <div className="print-section" style={{ marginTop: 16 }}>
+                <h3>{t("warrantyTitle")}</h3>
+                <textarea
+                  value={printSettings.warrantyText}
+                  onChange={(e) => setPrintSettings({ ...printSettings, warrantyText: e.target.value })}
+                  placeholder={t("warrantyPlaceholder")}
+                  rows={4}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 13, resize: "vertical", fontFamily: "inherit", direction: "rtl" }}
+                />
               </div>
             </div>
 

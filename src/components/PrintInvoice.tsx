@@ -12,10 +12,14 @@ const PAYMENT_LABELS: Record<string, string> = {
 export function PrintInvoice({
   sale,
   settings,
+  invoiceLogo,
+  warrantyText,
   onClose,
 }: {
   sale: Sale;
   settings: Settings;
+  invoiceLogo?: string;
+  warrantyText?: string;
   onClose: () => void;
 }) {
   return (
@@ -31,6 +35,9 @@ export function PrintInvoice({
 
       <div className="invoice print-area">
         <div className="inv-head">
+          {invoiceLogo && (
+            <img src={invoiceLogo} alt="logo" style={{ maxWidth: 160, maxHeight: 80, marginBottom: 8, display: "block", marginInline: "auto" }} />
+          )}
           <h2>{settings.store_name || "تبارك"}</h2>
           {settings.phone && <p>هاتف: {settings.phone}</p>}
           {settings.address && <p>{settings.address}</p>}
@@ -113,6 +120,14 @@ export function PrintInvoice({
             </b>
           </div>
         </div>
+
+        {warrantyText && (
+          <div className="inv-warranty" style={{ marginTop: 12, padding: "10px 14px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, color: "#374151", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
+            <strong style={{ color: "#111827", fontSize: 13 }}>📋 سياسة الضمان:</strong>
+            <br />
+            {warrantyText}
+          </div>
+        )}
 
         {settings.invoice_footer && (
           <div className="inv-footer">{settings.invoice_footer}</div>
