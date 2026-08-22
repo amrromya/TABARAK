@@ -116,32 +116,46 @@ fn verify_rsa_signature(payload: &[u8], signature_b64: &str) -> Result<(), Strin
         .map_err(|_| "ØªÙˆÙ‚ÙŠØ¹ Ø§Ù„ØªÙØ¹ÙŠÙ„ ØºÙŠØ± ØµØ§Ù„Ø­".to_string())
 }
 
+fn parse_expiry(date_str: &str) -> Result<chrono::NaiveDateTime, String> {
+    let formats = [
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%dT%H:%M",
+        "%Y-%m-%d",
+    ];
+    for fmt in &formats {
+        if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(date_str, fmt) {
+            return Ok(dt);
+        }
+        if let Ok(d) = chrono::NaiveDate::parse_from_str(date_str, fmt) {
+            return Ok(d.and_hms_opt(23, 59, 59).unwrap());
+        }
+    }
+    Err("".to_string())
+}
+
 pub fn verify_license_data(license: &LicenseData) -> Result<bool, String> {
-    // 1. Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„ØªÙˆÙ‚ÙŠØ¹ Ø§Ù„Ø±Ù‚Ù…ÙŠ RSA
+    // 1. التحقق من التوقيع الرقمي RSA
     let payload = format!(
         "{}|{}|{}|{}|{}",
         license.hwid, license.customer_name, license.expiry_date, license.features, license.created_at
     );
     verify_rsa_signature(payload.as_bytes(), &license.checksum)?;
 
-    // 2. Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø¨ØµÙ…Ø© Ø§Ù„Ø¬Ù‡Ø§Ø²
+    // 2. التحقق من بصمة الجهاز
     let current_hwid = get_hwid();
     if license.hwid.to_uppercase() != current_hwid.to_uppercase() {
-        return Err("ÙƒÙˆØ¯ Ø§Ù„ØªÙØ¹ÙŠÙ„ Ù„Ø§ ÙŠØ¹Ù…Ù„ Ø¹Ù„Ù‰ Ù‡Ø°Ø§ Ø§Ù„Ø¬Ù‡Ø§Ø²".to_string());
+        return Err("كود التفعيل لا يعمل على هذا الجهاز".to_string());
     }
 
-    // 3. Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† ØªØ§Ø±ÙŠØ® Ø§Ù„Ø§Ù†ØªÙ‡Ø§Ø¡
-    let now = chrono::Local::now();
-    let valid = if let Ok(expiry_dt) = chrono::NaiveDateTime::parse_from_str(&license.expiry_date, "%Y-%m-%d %H:%M:%S") {
-        now.naive_local() <= expiry_dt
-    } else if let Ok(expiry_date) = chrono::NaiveDate::parse_from_str(&license.expiry_date, "%Y-%m-%d") {
-        now.date_naive() <= expiry_date
-    } else {
-        return Err("ØªØ§Ø±ÙŠØ® Ø§Ù†ØªÙ‡Ø§Ø¡ ØºÙŠØ± ØµØ§Ù„Ø­".to_string());
-    };
+    // 3. التحقق من تاريخ انتهاء الصلاحية
+    let expiry_dt = parse_expiry(&license.expiry_date)
+        .map_err(|_| format!("تاريخ انتهاء غير صالح: {}", license.expiry_date))?;
+    let now = chrono::Local::now().naive_local();
 
-    if !valid {
-        return Err("Ø§Ù†ØªÙ‡Øª ØµÙ„Ø§Ø­ÙŠØ© Ø§Ù„ØªÙØ¹ÙŠÙ„".to_string());
+    if now > expiry_dt {
+        return Err("انتهت صلاحية التفعيل".to_string());
     }
 
     Ok(true)
