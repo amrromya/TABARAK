@@ -359,6 +359,35 @@ function App() {
   // Start auto-backup
   useEffect(() => { api.startAutoBackup().catch(() => {}); }, [authenticated]);
 
+  // Periodic license check every 30 minutes
+  useEffect(() => {
+    if (!licenseActive) return;
+    const interval = setInterval(() => {
+      api.checkLicense()
+        .catch(() => {
+          setLicenseActive(false);
+          setAuthenticated(false);
+          setAccount(null);
+        });
+    }, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [licenseActive]);
+
+  // Check license on window focus
+  useEffect(() => {
+    if (!licenseActive) return;
+    const onFocus = () => {
+      api.checkLicense()
+        .catch(() => {
+          setLicenseActive(false);
+          setAuthenticated(false);
+          setAccount(null);
+        });
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [licenseActive]);
+
   const handleSplashFinish = () => {
     api.checkLicense()
       .then(() => {
