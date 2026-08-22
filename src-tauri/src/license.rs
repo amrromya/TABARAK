@@ -131,11 +131,16 @@ pub fn verify_license_data(license: &LicenseData) -> Result<bool, String> {
     }
 
     // 3. Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† ØªØ§Ø±ÙŠØ® Ø§Ù„Ø§Ù†ØªÙ‡Ø§Ø¡
-    let expiry = chrono::NaiveDate::parse_from_str(&license.expiry_date, "%Y-%m-%d")
-        .map_err(|_| "ØªØ§Ø±ÙŠØ® Ø§Ù†ØªÙ‡Ø§Ø¡ ØºÙŠØ± ØµØ§Ù„Ø­".to_string())?;
-    let today = chrono::Local::now().date_naive();
+    let now = chrono::Local::now();
+    let valid = if let Ok(expiry_dt) = chrono::NaiveDateTime::parse_from_str(&license.expiry_date, "%Y-%m-%d %H:%M:%S") {
+        now.naive_local() <= expiry_dt
+    } else if let Ok(expiry_date) = chrono::NaiveDate::parse_from_str(&license.expiry_date, "%Y-%m-%d") {
+        now.date_naive() <= expiry_date
+    } else {
+        return Err("ØªØ§Ø±ÙŠØ® Ø§Ù†ØªÙ‡Ø§Ø¡ ØºÙŠØ± ØµØ§Ù„Ø­".to_string());
+    };
 
-    if today > expiry {
+    if !valid {
         return Err("Ø§Ù†ØªÙ‡Øª ØµÙ„Ø§Ø­ÙŠØ© Ø§Ù„ØªÙØ¹ÙŠÙ„".to_string());
     }
 

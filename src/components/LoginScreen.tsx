@@ -314,7 +314,10 @@ export function LoginScreen({ onLogin }: { onLogin: (account: Account) => void }
         )}
 
         {licenseInfo && (() => {
-          const expiry = new Date(licenseInfo.expiry_date + "T23:59:59");
+          const raw = licenseInfo.expiry_date;
+          const expiry = raw.includes(" ")
+            ? new Date(raw.replace(" ", "T"))
+            : new Date(raw + "T23:59:59");
           const diffMs = expiry.getTime() - now;
           const isExpired = diffMs <= 0;
           const absDiffMs = Math.abs(diffMs);
