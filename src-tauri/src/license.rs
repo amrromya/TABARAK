@@ -36,6 +36,9 @@ fn load_public_key() -> Result<RsaPublicKey, String> {
 
 #[cfg(target_os = "windows")]
 pub fn get_hwid() -> String {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
     let mut hwid_parts = Vec::new();
 
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
@@ -47,6 +50,7 @@ pub fn get_hwid() -> String {
 
     if let Ok(output) = std::process::Command::new("powershell")
         .args(["-Command", "(Get-CimInstance Win32_Processor).ProcessorId"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
     {
         let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -55,6 +59,7 @@ pub fn get_hwid() -> String {
 
     if let Ok(output) = std::process::Command::new("powershell")
         .args(["-Command", "(Get-Disk | Select-Object -First 1).SerialNumber"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
     {
         let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
