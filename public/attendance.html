@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f8a5f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>تبارك - تسجيل الحضور والانصراف</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0f8a5f 0%, #0b6e4b 100%);
+      padding: 20px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 24px;
+      padding: 40px 28px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      text-align: center;
+      animation: slideUp 0.4s ease;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .logo { font-size: 60px; margin-bottom: 8px; }
+    h1 { font-size: 26px; color: #1a1a2e; margin-bottom: 4px; font-weight: 800; }
+    .subtitle { color: #6b7280; font-size: 14px; margin-bottom: 24px; }
+    .emp-name {
+      display: none;
+      font-size: 18px;
+      font-weight: 700;
+      color: #0f8a5f;
+      margin-bottom: 20px;
+      padding: 12px;
+      background: #d1fae5;
+      border-radius: 14px;
+    }
+    .emp-name.show { display: block; }
+    .form-group {
+      margin-bottom: 18px;
+      text-align: right;
+    }
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 8px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 16px;
+      border: 2px solid #e5e7eb;
+      border-radius: 14px;
+      font-size: 18px;
+      outline: none;
+      text-align: center;
+      direction: ltr;
+      transition: border 0.2s;
+    }
+    .form-group input:focus { border-color: #0f8a5f; }
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .submit-btn {
+      flex: 1;
+      padding: 18px;
+      border: none;
+      border-radius: 14px;
+      color: #fff;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.2s;
+    }
+    .submit-btn:active { transform: scale(0.97); }
+    .submit-btn:disabled { background: #9ca3af !important; cursor: not-allowed; box-shadow: none !important; }
+    .btn-in {
+      background: linear-gradient(135deg, #16a34a, #15803d);
+      box-shadow: 0 4px 15px rgba(22, 163, 74, 0.3);
+    }
+    .btn-out {
+      background: linear-gradient(135deg, #e53e3e, #c53030);
+      box-shadow: 0 4px 15px rgba(229, 62, 62, 0.3);
+    }
+    .result {
+      margin-top: 20px;
+      padding: 18px;
+      border-radius: 14px;
+      font-weight: 600;
+      font-size: 15px;
+      display: none;
+      line-height: 1.6;
+      white-space: pre-line;
+    }
+    .result.success { display: block; background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+    .result.error { display: block; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .footer { margin-top: 24px; font-size: 12px; color: #9ca3af; }
+    .loading { display: none; }
+    .loading.active {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #fff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">📦</div>
+    <h1>تبارك</h1>
+    <p class="subtitle">تسجيل الحضور والانصراف</p>
+
+    <div id="empName" class="emp-name"></div>
+
+    <form id="form">
+      <div class="form-group" id="phoneGroup">
+        <label>رقم الهاتف</label>
+        <input type="tel" id="phone" placeholder="01XXXXXXXXX" autocomplete="tel" inputmode="numeric">
+      </div>
+      <div class="btn-row">
+        <button type="submit" class="submit-btn btn-in" id="btnIn" data-mode="in">
+          ✅ حضور
+          <span class="loading" id="loadIn"></span>
+        </button>
+        <button type="submit" class="submit-btn btn-out" id="btnOut" data-mode="out">
+          🔴 انصراف
+          <span class="loading" id="loadOut"></span>
+        </button>
+      </div>
+    </form>
+
+    <div id="result" class="result"></div>
+    <div class="footer">تبارك - برنامج الحسابات</div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const supabaseUrl = params.get("url") || "";
+    const supabaseKey = params.get("key") || "";
+    const phoneParam = params.get("phone") || "";
+
+    const empNameDiv = document.getElementById("empName");
+    const phoneGroup = document.getElementById("phoneGroup");
+    const phoneInput = document.getElementById("phone");
+    const form = document.getElementById("form");
+    const btnIn = document.getElementById("btnIn");
+    const btnOut = document.getElementById("btnOut");
+    const loadIn = document.getElementById("loadIn");
+    const loadOut = document.getElementById("loadOut");
+    const resultDiv = document.getElementById("result");
+
+    let currentEmp = null;
+    let userLocation = null;
+
+    function getLocation() {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) { resolve(null); return; }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            userLocation = {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              accuracy: pos.coords.accuracy,
+            };
+            resolve(userLocation);
+          },
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+        );
+      });
+    }
+
+    getLocation();
+
+    if (phoneParam) {
+      phoneGroup.style.display = "none";
+      lookupEmployee(phoneParam);
+    }
+
+    async function lookupEmployee(phone) {
+      if (!supabaseUrl || !supabaseKey || !phone) return;
+      try {
+        const res = await fetch(
+          `${supabaseUrl}/rest/v1/employees?phone=eq.${encodeURIComponent(phone)}&select=id,name`,
+          {
+            headers: {
+              "apikey": supabaseKey,
+              "Authorization": `Bearer ${supabaseKey}`,
+            },
+          }
+        );
+        if (res.ok) {
+          const emps = await res.json();
+          if (emps.length > 0) {
+            currentEmp = emps[0];
+            empNameDiv.textContent = `مرحباً ${currentEmp.name}`;
+            empNameDiv.classList.add("show");
+          }
+        }
+      } catch {}
+    }
+
+    phoneInput.addEventListener("blur", () => {
+      const phone = phoneInput.value.trim();
+      if (phone) lookupEmployee(phone);
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const clickedBtn = e.submitter;
+      const mode = clickedBtn?.dataset.mode || "in";
+      const loading = mode === "in" ? loadIn : loadOut;
+
+      const phone = phoneParam || phoneInput.value.trim();
+      if (!phone) {
+        showResult("أدخل رقم الهاتف", false);
+        return;
+      }
+      if (!supabaseUrl || !supabaseKey) {
+        showResult("إعدادات الاتصال غير صحيحة\nتأكد من رفع الصفحة وربطها بقاعدة البيانات", false);
+        return;
+      }
+
+      btnIn.disabled = true;
+      btnOut.disabled = true;
+      loading.classList.add("active");
+
+      try {
+        let emp = currentEmp;
+        if (!emp) {
+          const empRes = await fetch(
+            `${supabaseUrl}/rest/v1/employees?phone=eq.${encodeURIComponent(phone)}&select=id,name`,
+            {
+              headers: {
+                "apikey": supabaseKey,
+                "Authorization": `Bearer ${supabaseKey}`,
+              },
+            }
+          );
+          if (!empRes.ok) {
+            const errBody = await empRes.text().catch(() => "");
+            throw new Error(`فشل البحث عن الموظف (${empRes.status}): ${errBody}`);
+          }
+          const emps = await empRes.json();
+          if (emps.length === 0) {
+            showResult("لا يوجد موظف بهذا الرقم", false);
+            return;
+          }
+          emp = emps[0];
+          currentEmp = emp;
+          empNameDiv.textContent = `مرحباً ${emp.name}`;
+          empNameDiv.classList.add("show");
+        }
+
+        const now = new Date();
+        const date = now.toISOString().slice(0, 10);
+        const time = now.toTimeString().slice(0, 5);
+
+        const field = mode === "in" ? "check_in" : "check_out";
+        const attRes = await fetch(
+          `${supabaseUrl}/rest/v1/attendance?employee_id=eq.${emp.id}&date=eq.${date}&${field}=not.is.null&select=id`,
+          {
+            method: "GET",
+            headers: {
+              "apikey": supabaseKey,
+              "Authorization": `Bearer ${supabaseKey}`,
+            },
+          }
+        );
+        if (attRes.ok) {
+          const existing = await attRes.json();
+          if (existing.length > 0) {
+            const label = mode === "in" ? "الحضور" : "الانصراف";
+            showResult(`تم تسجيل ${label} مسبقاً لهذا اليوم\n${emp.name} 🕐 ${time}`, true);
+            return;
+          }
+        }
+
+        const attendanceData = {
+          employee_id: emp.id,
+          date: date,
+          type: "qr",
+          notes: mode === "in" ? "حضور" : "انصراف",
+        };
+        if (userLocation) {
+          attendanceData.notes += ` |loc:${userLocation.lat.toFixed(6)},${userLocation.lng.toFixed(6)}`;
+        }
+        attendanceData[field] = time;
+
+        const attRes2 = await fetch(`${supabaseUrl}/rest/v1/attendance`, {
+          method: "POST",
+          headers: {
+            "apikey": supabaseKey,
+            "Authorization": `Bearer ${supabaseKey}`,
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+          },
+          body: JSON.stringify(attendanceData),
+        });
+
+        if (!attRes2.ok) {
+          const errBody = await attRes2.text().catch(() => "");
+          throw new Error(`فشل التسجيل (${attRes2.status}): ${errBody}`);
+        }
+
+        const label = mode === "in" ? "الحضور" : "الانصراف";
+        const icon = mode === "in" ? "✅" : "🔴";
+        const locInfo = userLocation ? `\n📍 الموقع: ${userLocation.lat.toFixed(4)}, ${userLocation.lng.toFixed(4)}` : "";
+        showResult(`${icon} تم تسجيل ${label} بنجاح\n${emp.name}\n🕐 ${time}${locInfo}`, true);
+
+      } catch (err) {
+        showResult(err.message || "حدث خطأ غير متوقع", false);
+      } finally {
+        btnIn.disabled = false;
+        btnOut.disabled = false;
+        loadIn.classList.remove("active");
+        loadOut.classList.remove("active");
+      }
+    });
+
+    function showResult(msg, ok) {
+      resultDiv.textContent = msg;
+      resultDiv.className = "result " + (ok ? "success" : "error");
+    }
+  </script>
+</body>
+</html>
