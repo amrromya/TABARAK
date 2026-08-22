@@ -123,8 +123,12 @@ const translations: Record<string, Record<Lang, string>> = {
   licenseActive: { ar: "التفعيل نشط", en: "License Active" },
   licenseExpiring: { ar: "قريب من الانتهاء", en: "Expiring Soon" },
   licenseExpired: { ar: "انتهت الصلاحية", en: "License Expired" },
-  daysRemaining: { ar: "متبقي يوم", en: "days remaining" },
-  daysExpired: { ar: "انتهى منذ يوم", en: "days ago" },
+  daysRemaining: { ar: "يوم", en: "days" },
+  daysExpired: { ar: "يوم", en: "days" },
+  hoursRemaining: { ar: "ساعة", en: "hours" },
+  hoursExpired: { ar: "ساعة", en: "hours" },
+  justExpired: { ar: "انتهت للتو", en: "Just expired" },
+  expiresToday: { ar: "تنتهي اليوم", en: "Expires today" },
 
   // ===== Settings =====
   darkMode: { ar: "الوضع الداكن", en: "Dark Mode" },

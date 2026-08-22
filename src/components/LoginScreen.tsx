@@ -310,16 +310,23 @@ export function LoginScreen({ onLogin }: { onLogin: (account: Account) => void }
         {licenseInfo && (() => {
           const expiry = new Date(licenseInfo.expiry_date);
           const now = new Date();
-          const daysLeft = Math.floor((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-          const isExpired = daysLeft <= 0;
-          const isWarning = daysLeft > 0 && daysLeft <= 30;
+          const diffMs = expiry.getTime() - now.getTime();
+          const isExpired = diffMs <= 0;
+          const absDiffMs = Math.abs(diffMs);
+          const days = Math.floor(absDiffMs / (1000 * 60 * 60 * 24));
+          const hours = Math.floor((absDiffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+          const isWarning = !isExpired && days <= 7;
+          const timeText = isExpired
+            ? (days > 0 ? `${days} ${t("daysExpired")} ` : "") + (hours > 0 ? `${hours} ${t("hoursExpired")}` : t("justExpired"))
+            : (days > 0 ? `${days} ${t("daysRemaining")} ` : "") + (hours > 0 ? `${hours} ${t("hoursRemaining")}` : t("expiresToday"));
           return (
             <div className={`login-license-status ${isExpired ? "expired" : isWarning ? "warning" : "active"}`}>
               <div className="license-status-label">
                 {isExpired ? t("licenseExpired") : isWarning ? t("licenseExpiring") : t("licenseActive")}
               </div>
               <div className="license-status-detail">
-                {isExpired ? `${Math.abs(daysLeft)} ${t("daysExpired")}` : `${daysLeft} ${t("daysRemaining")}`}
+                {!isExpired && timeText}
+                {isExpired && <span style={{ color: "var(--danger)" }}>{timeText}</span>}
                 <span className="license-status-date"> — {licenseInfo.expiry_date}</span>
               </div>
             </div>

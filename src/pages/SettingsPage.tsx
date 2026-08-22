@@ -769,11 +769,17 @@ export function SettingsPage() {
             {licenseInfo && (() => {
               const expiry = new Date(licenseInfo.expiry_date);
               const now = new Date();
-              const daysLeft = Math.floor((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-              const isExpired = daysLeft <= 0;
+              const diffMs = expiry.getTime() - now.getTime();
+              const isExpired = diffMs <= 0;
+              const absDiffMs = Math.abs(diffMs);
+              const days = Math.floor(absDiffMs / (1000 * 60 * 60 * 24));
+              const hours = Math.floor((absDiffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+              const timeText = isExpired
+                ? (days > 0 ? `${days} ${t("daysExpired")} ` : "") + (hours > 0 ? `${hours} ${t("hoursExpired")}` : t("justExpired"))
+                : (days > 0 ? `${days} ${t("daysRemaining")} ` : "") + (hours > 0 ? `${hours} ${t("hoursRemaining")}` : t("expiresToday"));
               return (
-                <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: isExpired ? "#fef2f2" : daysLeft <= 30 ? "#fffbeb" : "#ecfdf5", color: isExpired ? "#991b1b" : daysLeft <= 30 ? "#92400e" : "#065f46", fontSize: 13 }}>
-                  <div style={{ fontWeight: 700 }}>{isExpired ? t("licenseExpired") : `${t("daysRemainingLabel")} ${daysLeft} ${t("dayUnit")}`} — {licenseInfo.expiry_date}</div>
+                <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: isExpired ? "#fef2f2" : days <= 7 ? "#fffbeb" : "#ecfdf5", color: isExpired ? "#991b1b" : days <= 7 ? "#92400e" : "#065f46", fontSize: 13 }}>
+                  <div style={{ fontWeight: 700 }}>{isExpired ? t("licenseExpired") : timeText} — {licenseInfo.expiry_date}</div>
                 </div>
               );
             })()}
