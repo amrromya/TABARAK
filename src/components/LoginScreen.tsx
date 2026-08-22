@@ -133,6 +133,12 @@ export function LoginScreen({ onLogin }: { onLogin: (account: Account) => void }
   const [adminPass, setAdminPass] = useState("");
   const [adminPass2, setAdminPass2] = useState("");
   const [setupMsg, setSetupMsg] = useState("");
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     api.getLicenseInfo().then(setLicenseInfo).catch(() => {});
@@ -308,25 +314,29 @@ export function LoginScreen({ onLogin }: { onLogin: (account: Account) => void }
         )}
 
         {licenseInfo && (() => {
-          const expiry = new Date(licenseInfo.expiry_date);
-          const now = new Date();
-          const diffMs = expiry.getTime() - now.getTime();
+          const expiry = new Date(licenseInfo.expiry_date + "T23:59:59");
+          const diffMs = expiry.getTime() - now;
           const isExpired = diffMs <= 0;
           const absDiffMs = Math.abs(diffMs);
           const days = Math.floor(absDiffMs / (1000 * 60 * 60 * 24));
           const hours = Math.floor((absDiffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+          const minutes = Math.floor((absDiffMs % (1000 * 60 * 60)) / (1000 * 60));
+          const seconds = Math.floor((absDiffMs % (1000 * 60)) / 1000);
           const isWarning = !isExpired && days <= 7;
-          const timeText = isExpired
-            ? (days > 0 ? `${days} ${t("daysExpired")} ` : "") + (hours > 0 ? `${hours} ${t("hoursExpired")}` : t("justExpired"))
-            : (days > 0 ? `${days} ${t("daysRemaining")} ` : "") + (hours > 0 ? `${hours} ${t("hoursRemaining")}` : t("expiresToday"));
+          const parts: string[] = [];
+          if (days > 0) parts.push(`${days} ${t("dayUnit")}`);
+          if (hours > 0) parts.push(`${hours} ${t("hourUnit")}`);
+          if (minutes > 0) parts.push(`${minutes} ${t("minuteUnit")}`);
+          if (seconds > 0 || parts.length === 0) parts.push(`${seconds} ${t("secondUnit")}`);
+          const timeText = isExpired ? parts.join(" ") : parts.join(" ");
           return (
             <div className={`login-license-status ${isExpired ? "expired" : isWarning ? "warning" : "active"}`}>
               <div className="license-status-label">
                 {isExpired ? t("licenseExpired") : isWarning ? t("licenseExpiring") : t("licenseActive")}
               </div>
               <div className="license-status-detail">
-                {!isExpired && timeText}
-                {isExpired && <span style={{ color: "var(--danger)" }}>{timeText}</span>}
+                {!isExpired && <span>{t("expiresIn")} {timeText}</span>}
+                {isExpired && <span style={{ color: "var(--danger)" }}>{t("expiredAgo")} {timeText}</span>}
                 <span className="license-status-date"> — {licenseInfo.expiry_date}</span>
               </div>
             </div>

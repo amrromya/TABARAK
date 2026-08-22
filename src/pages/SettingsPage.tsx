@@ -767,19 +767,21 @@ export function SettingsPage() {
         return (
           <>
             {licenseInfo && (() => {
-              const expiry = new Date(licenseInfo.expiry_date);
-              const now = new Date();
-              const diffMs = expiry.getTime() - now.getTime();
+              const expiry = new Date(licenseInfo.expiry_date + "T23:59:59");
+              const diffMs = expiry.getTime() - Date.now();
               const isExpired = diffMs <= 0;
               const absDiffMs = Math.abs(diffMs);
               const days = Math.floor(absDiffMs / (1000 * 60 * 60 * 24));
               const hours = Math.floor((absDiffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-              const timeText = isExpired
-                ? (days > 0 ? `${days} ${t("daysExpired")} ` : "") + (hours > 0 ? `${hours} ${t("hoursExpired")}` : t("justExpired"))
-                : (days > 0 ? `${days} ${t("daysRemaining")} ` : "") + (hours > 0 ? `${hours} ${t("hoursRemaining")}` : t("expiresToday"));
+              const minutes = Math.floor((absDiffMs % (1000 * 60 * 60)) / (1000 * 60));
+              const parts: string[] = [];
+              if (days > 0) parts.push(`${days} ${t("dayUnit")}`);
+              if (hours > 0) parts.push(`${hours} ${t("hourUnit")}`);
+              if (minutes > 0 || parts.length === 0) parts.push(`${minutes} ${t("minuteUnit")}`);
+              const timeText = parts.join(" ");
               return (
                 <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: isExpired ? "#fef2f2" : days <= 7 ? "#fffbeb" : "#ecfdf5", color: isExpired ? "#991b1b" : days <= 7 ? "#92400e" : "#065f46", fontSize: 13 }}>
-                  <div style={{ fontWeight: 700 }}>{isExpired ? t("licenseExpired") : timeText} — {licenseInfo.expiry_date}</div>
+                  <div style={{ fontWeight: 700 }}>{isExpired ? `${t("licenseExpired")} — ${timeText}` : `${t("expiresIn")} ${timeText}`} — {licenseInfo.expiry_date}</div>
                 </div>
               );
             })()}

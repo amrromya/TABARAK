@@ -129,6 +129,12 @@ const translations: Record<string, Record<Lang, string>> = {
   hoursExpired: { ar: "ساعة", en: "hours" },
   justExpired: { ar: "انتهت للتو", en: "Just expired" },
   expiresToday: { ar: "تنتهي اليوم", en: "Expires today" },
+  dayUnit: { ar: "يوم", en: "day" },
+  hourUnit: { ar: "ساعة", en: "hour" },
+  minuteUnit: { ar: "دقيقة", en: "min" },
+  secondUnit: { ar: "ثانية", en: "sec" },
+  expiresIn: { ar: "متبقي", en: "Expires in" },
+  expiredAgo: { ar: "انتهى منذ", en: "Expired" },
 
   // ===== Settings =====
   darkMode: { ar: "الوضع الداكن", en: "Dark Mode" },
@@ -1174,7 +1180,6 @@ const translations: Record<string, Record<Lang, string>> = {
   accessTo: { ar: "الوصول إلى", en: "Access to" },
   enterAccessCode: { ar: "أدخل رمز الدخول", en: "Enter Access Code" },
   daysRemainingLabel: { ar: "متبقي", en: "days remaining" },
-  dayUnit: { ar: "يوم", en: "day" },
 
   // ===== Barcode Print =====
   barcodePrint: { ar: "طباعة", en: "Print" },
