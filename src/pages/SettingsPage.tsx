@@ -771,6 +771,7 @@ export function SettingsPage() {
               const expiry = raw.includes(" ")
                 ? new Date(raw.replace(" ", "T"))
                 : new Date(raw + "T23:59:59");
+              const isLifetime = expiry.getFullYear() >= 2099;
               const diffMs = expiry.getTime() - Date.now();
               const isExpired = diffMs <= 0;
               const absDiffMs = Math.abs(diffMs);
@@ -783,8 +784,8 @@ export function SettingsPage() {
               if (minutes > 0 || parts.length === 0) parts.push(`${minutes} ${t("minuteUnit")}`);
               const timeText = parts.join(" ");
               return (
-                <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: isExpired ? "#fef2f2" : days <= 7 ? "#fffbeb" : "#ecfdf5", color: isExpired ? "#991b1b" : days <= 7 ? "#92400e" : "#065f46", fontSize: 13 }}>
-                  <div style={{ fontWeight: 700 }}>{isExpired ? `${t("licenseExpired")} — ${timeText}` : `${t("expiresIn")} ${timeText}`} — {licenseInfo.expiry_date}</div>
+                <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: "#ecfdf5", color: "#065f46", fontSize: 13 }}>
+                  <div style={{ fontWeight: 700 }}>{isLifetime ? t("activatedForever") : isExpired ? `${t("licenseExpired")} — ${timeText}` : `${t("expiresIn")} ${timeText}`} — {licenseInfo.expiry_date}</div>
                 </div>
               );
             })()}

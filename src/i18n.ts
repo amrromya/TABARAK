@@ -135,6 +135,7 @@ const translations: Record<string, Record<Lang, string>> = {
   secondUnit: { ar: "ثانية", en: "sec" },
   expiresIn: { ar: "متبقي", en: "Expires in" },
   expiredAgo: { ar: "انتهى منذ", en: "Expired" },
+  activatedForever: { ar: "مفعل دائماً", en: "Activated forever" },
 
   // ===== Settings =====
   darkMode: { ar: "الوضع الداكن", en: "Dark Mode" },

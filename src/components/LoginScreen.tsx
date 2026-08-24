@@ -318,6 +318,7 @@ export function LoginScreen({ onLogin }: { onLogin: (account: Account) => void }
           const expiry = raw.includes(" ")
             ? new Date(raw.replace(" ", "T"))
             : new Date(raw + "T23:59:59");
+          const isLifetime = expiry.getFullYear() >= 2099;
           const diffMs = expiry.getTime() - now;
           const isExpired = diffMs <= 0;
           const absDiffMs = Math.abs(diffMs);
@@ -331,15 +332,16 @@ export function LoginScreen({ onLogin }: { onLogin: (account: Account) => void }
           if (hours > 0) parts.push(`${hours} ${t("hourUnit")}`);
           if (minutes > 0) parts.push(`${minutes} ${t("minuteUnit")}`);
           if (seconds > 0 || parts.length === 0) parts.push(`${seconds} ${t("secondUnit")}`);
-          const timeText = isExpired ? parts.join(" ") : parts.join(" ");
+          const timeText = parts.join(" ");
           return (
             <div className={`login-license-status ${isExpired ? "expired" : isWarning ? "warning" : "active"}`}>
               <div className="license-status-label">
                 {isExpired ? t("licenseExpired") : isWarning ? t("licenseExpiring") : t("licenseActive")}
               </div>
               <div className="license-status-detail">
-                {!isExpired && <span>{t("expiresIn")} {timeText}</span>}
-                {isExpired && <span style={{ color: "var(--danger)" }}>{t("expiredAgo")} {timeText}</span>}
+                {isLifetime && <span>{t("activatedForever")}</span>}
+                {!isLifetime && !isExpired && <span>{t("expiresIn")} {timeText}</span>}
+                {!isLifetime && isExpired && <span style={{ color: "var(--danger)" }}>{t("expiredAgo")} {timeText}</span>}
                 <span className="license-status-date"> — {licenseInfo.expiry_date}</span>
               </div>
             </div>
