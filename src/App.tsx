@@ -350,8 +350,7 @@ function App() {
   const [loading, setLoading] = useState(!isPopup);
   const [authenticated, setAuthenticated] = useState(false);
   const [account, setAccount] = useState<Account | null>(null);
-  const [licenseActive, setLicenseActive] = useState(isPopup);
-  const [licenseExpired, setLicenseExpired] = useState(false);
+  const [licenseState, setLicenseState] = useState<"loading" | "active" | "expired" | "none">("loading");
 
   // Initialize theme and language
   const [theme, toggleTheme] = useTheme();
@@ -362,49 +361,36 @@ function App() {
 
   // Auto-close after license expires
   useEffect(() => {
-    if (!licenseExpired) return;
+    if (licenseState !== "expired") return;
     const timer = setTimeout(() => {
       try { getCurrentWindow().close(); } catch { window.close(); }
     }, 3000);
     return () => clearTimeout(timer);
-  }, [licenseExpired]);
-
-  // Periodic license check every 30 minutes
-  useEffect(() => {
-    if (!licenseActive) return;
-    const interval = setInterval(() => {
-      api.checkLicense()
-        .then(() => {})
-        .catch(() => {
-          setLicenseActive(false);
-          setLicenseExpired(true);
-        });
-    }, 30 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [licenseActive]);
-
-  // Check license on window focus
-  useEffect(() => {
-    if (!licenseActive) return;
-    const onFocus = () => {
-      api.checkLicense()
-        .then(() => {})
-        .catch(() => {
-          setLicenseActive(false);
-          setLicenseExpired(true);
-        });
-    };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [licenseActive]);
+  }, [licenseState]);
 
   const handleSplashFinish = () => {
-    api.checkLicense()
-      .then(() => {
-        setLicenseActive(true);
+    // Only check if license exists and date — NO signature verification
+    api.getLicenseInfo()
+      .then((info) => {
+        if (!info) {
+          setLicenseState("none");
+          setLoading(false);
+          return;
+        }
+        // Simple date comparison — no HWID, no signature
+        const raw = info.expiry_date;
+        const expiry = raw.includes(" ")
+          ? new Date(raw.replace(" ", "T"))
+          : new Date(raw + "T23:59:59");
+        if (new Date() > expiry) {
+          setLicenseState("expired");
+        } else {
+          setLicenseState("active");
+        }
         setLoading(false);
       })
       .catch(() => {
+        setLicenseState("none");
         setLoading(false);
       });
   };
@@ -422,7 +408,7 @@ function App() {
     );
   }
 
-  if (licenseExpired) {
+  if (licenseState === "expired") {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", background: "#fef2f2" }}>
         <div style={{ textAlign: "center" }}>
@@ -434,10 +420,10 @@ function App() {
     );
   }
 
-  if (!licenseActive) {
+  if (licenseState === "none") {
     return (
       <ErrorBoundary>
-        <Activation onActivated={() => setLicenseActive(true)} />
+        <Activation onActivated={() => setLicenseState("active")} />
       </ErrorBoundary>
     );
   }

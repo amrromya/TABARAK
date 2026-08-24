@@ -10,12 +10,13 @@ import {
 } from "../components/ui";
 import { t } from "../i18n";
 import { ProductMovements } from "../components/ProductMovements";
-import type { Category, NewProduct, Product } from "../types";
+import type { Category, NewProduct, Product, Warehouse } from "../types";
 
 const emptyForm: NewProduct = {
   name: "",
   barcode: "",
   category_id: null,
+  warehouse_id: null,
   unit: "قطعة",
   cost_price: 0,
   sell_price: 0,
@@ -36,6 +37,7 @@ export function Inventory({
 }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -50,12 +52,14 @@ export function Inventory({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [p, c] = await Promise.all([
+      const [p, c, w] = await Promise.all([
         api.listProducts(search || undefined),
         api.listCategories(),
+        api.listWarehouses(),
       ]);
       setProducts(p);
       setCategories(c);
+      setWarehouses(w);
     } catch (e) {
       notify(String(e), "error");
     } finally {
@@ -85,6 +89,7 @@ export function Inventory({
       name: p.name,
       barcode: p.barcode ?? "",
       category_id: p.category_id,
+      warehouse_id: p.warehouse_id,
       unit: p.unit ?? "",
       cost_price: p.cost_price,
       sell_price: p.sell_price,
@@ -366,6 +371,24 @@ export function Inventory({
                 <option value="لتر">{t("unitLiter")}</option>
                 <option value="علبة">{t("unitBox")}</option>
                 <option value="شنطة">{t("unitBag")}</option>
+              </select>
+            </Field>
+            <Field label={t("warehouse")}>
+              <select
+                value={form.warehouse_id ?? ""}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    warehouse_id: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+              >
+                <option value="">{t("noWarehouse")}</option>
+                {warehouses.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label={t("costPrice") + " *"}>
