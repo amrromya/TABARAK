@@ -301,7 +301,11 @@ pub fn list_products(
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
         LEFT JOIN warehouses w ON w.id = p.warehouse_id
-        WHERE (?1 IS NULL OR p.name LIKE '%' || ?1 || '%' OR p.barcode LIKE '%' || ?1 || '%' OR c.name LIKE '%' || ?1 || '%')
+        WHERE (?1 IS NULL OR p.name LIKE '%' || ?1 || '%' OR p.barcode LIKE '%' || ?1 || '%'
+               OR c.name LIKE '%' || ?1 || '%' OR w.name LIKE '%' || ?1 || '%'
+               OR p.unit LIKE '%' || ?1 || '%'
+               OR CAST(p.cost_price AS INTEGER) = CAST(?1 AS INTEGER)
+               OR CAST(p.sell_price AS INTEGER) = CAST(?1 AS INTEGER))
         ORDER BY p.name COLLATE NOCASE";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt

@@ -1021,7 +1021,7 @@ const translations: Record<string, Record<Lang, string>> = {
 
   // ===== Inventory Page (additional) =====
   inventoryTitle: { ar: "المخزون", en: "Inventory" },
-  searchNameOrBarcode: { ar: "بحث بالاسم أو الباركود أو الفئة...", en: "Search by name, barcode or category..." },
+  searchNameOrBarcode: { ar: "بحث بالاسم أو الباركود أو التصنيف أو الوحدة أو المستودع أو السعر...", en: "Search by name, barcode, category, unit, warehouse or price..." },
   temporaryInventoryCount: { ar: "جرد مؤقت", en: "Temporary Stock Count" },
   newProduct: { ar: "منتج جديد", en: "New Product" },
   inventoryValueCost: { ar: "قيمة المخزون بالتكلفة", en: "Inventory Cost Value" },
@@ -1038,6 +1038,9 @@ const translations: Record<string, Record<Lang, string>> = {
   categoryAdded: { ar: "تم إضافة التصنيف", en: "Category added" },
   categoryNameLabel: { ar: "اسم التصنيف", en: "Category Name" },
   addNewCategory: { ar: "إضافة تصنيف جديد", en: "Add New Category" },
+  addNewUnit: { ar: "إضافة وحدة جديدة", en: "Add New Unit" },
+  unitAdded: { ar: "تم إضافة الوحدة", en: "Unit added" },
+  unitNamePlaceholder: { ar: "اسم الوحدة...", en: "Unit name..." },
   productUpdated: { ar: "تم تعديل المنتج", en: "Product updated" },
   productAdded: { ar: "تم إضافة المنتج", en: "Product added" },
   confirmDeleteProduct: { ar: "هل تريد حذف المنتج «{{name}}»؟", en: "Delete product \"{{name}}\"?" },

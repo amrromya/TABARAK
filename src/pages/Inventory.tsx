@@ -48,6 +48,8 @@ export function Inventory({
   const [newCategory, setNewCategory] = useState("");
   const [showWarehouse, setShowWarehouse] = useState(false);
   const [newWarehouse, setNewWarehouse] = useState("");
+  const [showUnit, setShowUnit] = useState(false);
+  const [newUnit, setNewUnit] = useState("");
   const [movementProduct, setMovementProduct] = useState<Product | null>(null);
   const notify = useToast();
 
@@ -222,6 +224,17 @@ export function Inventory({
     }
   };
 
+  const addUnitFromProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUnit.trim()) return;
+    setForm((f) => ({ ...f, unit: newUnit.trim() }));
+    setNewUnit("");
+    setShowUnit(false);
+    notify(t("unitAdded"));
+  };
+
+  const existingUnits = [...new Set(products.map((p) => p.unit).filter((u): u is string => !!u))];
+
   const totalValue = products.reduce(
     (s, p) => s + p.quantity * p.cost_price,
     0,
@@ -380,17 +393,32 @@ export function Inventory({
               </div>
             </Field>
             <Field label={t("unit")}>
-              <select
-                value={form.unit ?? ""}
-                onChange={(e) => setForm({ ...form, unit: e.target.value })}
-              >
-                <option value="قطعة">{t("unitPiece")}</option>
-                <option value="كرتونة">{t("unitCarton")}</option>
-                <option value="كيلو">{t("unitKilo")}</option>
-                <option value="لتر">{t("unitLiter")}</option>
-                <option value="علبة">{t("unitBox")}</option>
-                <option value="شنطة">{t("unitBag")}</option>
-              </select>
+              <div className="select-row">
+                <input
+                  list="inventory-units"
+                  value={form.unit ?? ""}
+                  onChange={(e) => setForm({ ...form, unit: e.target.value })}
+                  placeholder={t("unit")}
+                />
+                <datalist id="inventory-units">
+                  <option value="قطعة">{t("unitPiece")}</option>
+                  <option value="كرتونة">{t("unitCarton")}</option>
+                  <option value="كيلو">{t("unitKilo")}</option>
+                  <option value="لتر">{t("unitLiter")}</option>
+                  <option value="علبة">{t("unitBox")}</option>
+                  <option value="شنطة">{t("unitBag")}</option>
+                  {existingUnits.map((u) => (
+                    <option key={u} value={u} />
+                  ))}
+                </datalist>
+                <button
+                  type="button"
+                  className="btn sm"
+                  onClick={() => setShowUnit(true)}
+                >
+                  +
+                </button>
+              </div>
             </Field>
             <Field label={t("warehouse")}>
               <div className="select-row">
@@ -533,6 +561,36 @@ export function Inventory({
                 type="button"
                 className="btn"
                 onClick={() => setShowWarehouse(false)}
+              >
+                {t("cancel")}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      {showUnit && (
+        <Modal
+          title={t("addNewUnit")}
+          onClose={() => setShowUnit(false)}
+        >
+          <form onSubmit={addUnitFromProduct} className="form-grid">
+            <Field label={t("unit") + " *"}>
+              <input
+                required
+                autoFocus
+                value={newUnit}
+                onChange={(e) => setNewUnit(e.target.value)}
+                placeholder={t("unitNamePlaceholder")}
+              />
+            </Field>
+            <div className="form-actions">
+              <button type="submit" className="btn primary">
+                {t("add")}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setShowUnit(false)}
               >
                 {t("cancel")}
               </button>
