@@ -368,16 +368,17 @@ function App() {
     return () => clearTimeout(timer);
   }, [licenseState]);
 
-  const handleSplashFinish = () => {
-    // Only check if license exists and date — NO signature verification
-    api.getLicenseInfo()
-      .then((info) => {
+  // License check — runs immediately on mount, NOT dependent on splash screen
+  useEffect(() => {
+    if (isPopup) return;
+    const checkLicense = async () => {
+      try {
+        const info = await api.getLicenseInfo();
         if (!info) {
           setLicenseState("none");
           setLoading(false);
           return;
         }
-        // Simple date comparison — no HWID, no signature
         const raw = info.expiry_date;
         const expiry = raw.includes(" ")
           ? new Date(raw.replace(" ", "T"))
@@ -387,12 +388,16 @@ function App() {
         } else {
           setLicenseState("active");
         }
-        setLoading(false);
-      })
-      .catch(() => {
+      } catch {
         setLicenseState("none");
-        setLoading(false);
-      });
+      }
+      setLoading(false);
+    };
+    checkLicense();
+  }, [isPopup]);
+
+  const handleSplashFinish = () => {
+    setLoading(false);
   };
 
   const handleLogin = (acc: Account) => {

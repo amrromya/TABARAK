@@ -46,6 +46,8 @@ export function Inventory({
 
   const [showCategory, setShowCategory] = useState(false);
   const [newCategory, setNewCategory] = useState("");
+  const [showWarehouse, setShowWarehouse] = useState(false);
+  const [newWarehouse, setNewWarehouse] = useState("");
   const [movementProduct, setMovementProduct] = useState<Product | null>(null);
   const notify = useToast();
 
@@ -205,6 +207,21 @@ export function Inventory({
     }
   };
 
+  const addWarehouseFromProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newWarehouse.trim()) return;
+    try {
+      const w = await api.createWarehouse(newWarehouse.trim());
+      setForm((f) => ({ ...f, warehouse_id: w.id }));
+      setNewWarehouse("");
+      setShowWarehouse(false);
+      setWarehouses(await api.listWarehouses());
+      notify(t("warehouseAdded"));
+    } catch (err) {
+      notify(String(err), "error");
+    }
+  };
+
   const totalValue = products.reduce(
     (s, p) => s + p.quantity * p.cost_price,
     0,
@@ -247,6 +264,7 @@ export function Inventory({
             <tr>
               <th>{t("name")}</th>
               <th>{t("category")}</th>
+              <th>{t("warehouse")}</th>
               <th>{t("barcode")}</th>
               <th>{t("unit")}</th>
               <th>{t("costPrice")}</th>
@@ -259,12 +277,12 @@ export function Inventory({
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={9} className="empty">{t("loading")}</td>
+                <td colSpan={10} className="empty">{t("loading")}</td>
               </tr>
             )}
             {!loading && products.length === 0 && (
               <tr>
-                <td colSpan={9} className="empty">
+                <td colSpan={10} className="empty">
                   {t("noProductsAddFirst")}
                 </td>
               </tr>
@@ -280,6 +298,7 @@ export function Inventory({
                 >
                   <td className="strong">{p.name}</td>
                   <td>{p.category_name ?? "—"}</td>
+                  <td>{p.warehouse_name ?? "—"}</td>
                   <td>{p.barcode ?? "—"}</td>
                   <td>{p.unit ?? "—"}</td>
                   <td>{money(p.cost_price)}</td>
@@ -374,22 +393,31 @@ export function Inventory({
               </select>
             </Field>
             <Field label={t("warehouse")}>
-              <select
-                value={form.warehouse_id ?? ""}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    warehouse_id: e.target.value ? Number(e.target.value) : null,
-                  })
-                }
-              >
-                <option value="">{t("noWarehouse")}</option>
-                {warehouses.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
-                ))}
-              </select>
+              <div className="select-row">
+                <select
+                  value={form.warehouse_id ?? ""}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      warehouse_id: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                >
+                  <option value="">{t("noWarehouse")}</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn sm"
+                  onClick={() => setShowWarehouse(true)}
+                >
+                  +
+                </button>
+              </div>
             </Field>
             <Field label={t("costPrice") + " *"}>
               <input
@@ -475,6 +503,36 @@ export function Inventory({
                 type="button"
                 className="btn"
                 onClick={() => setShowCategory(false)}
+              >
+                {t("cancel")}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      {showWarehouse && (
+        <Modal
+          title={t("addWarehouse")}
+          onClose={() => setShowWarehouse(false)}
+        >
+          <form onSubmit={addWarehouseFromProduct} className="form-grid">
+            <Field label={t("warehouseName") + " *"}>
+              <input
+                required
+                autoFocus
+                value={newWarehouse}
+                onChange={(e) => setNewWarehouse(e.target.value)}
+                placeholder={t("newWarehousePlaceholder")}
+              />
+            </Field>
+            <div className="form-actions">
+              <button type="submit" className="btn primary">
+                {t("add")}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setShowWarehouse(false)}
               >
                 {t("cancel")}
               </button>
