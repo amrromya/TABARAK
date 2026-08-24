@@ -359,15 +359,6 @@ function App() {
   // Start auto-backup
   useEffect(() => { api.startAutoBackup().catch(() => {}); }, [authenticated]);
 
-  // Auto-close after license expires
-  useEffect(() => {
-    if (licenseState !== "expired") return;
-    const timer = setTimeout(() => {
-      try { getCurrentWindow().close(); } catch { window.close(); }
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [licenseState]);
-
   // License check — runs immediately on mount, NOT dependent on splash screen
   useEffect(() => {
     if (isPopup) return;
@@ -420,6 +411,29 @@ function App() {
           <div style={{ fontSize: 64, marginBottom: 16 }}>⛔</div>
           <h1 style={{ color: "#991b1b", fontSize: 32, fontWeight: 800, margin: 0 }}>{t("licenseExpired")}</h1>
           <p style={{ color: "#b91c1c", fontSize: 16, marginTop: 8 }}>{t("licenseExpiredMessage")}</p>
+          <button
+            onClick={async () => {
+              try {
+                await api.removeLicense();
+                setLicenseState("none");
+              } catch (err) {
+                console.error(err);
+              }
+            }}
+            style={{
+              marginTop: 24,
+              padding: "12px 32px",
+              fontSize: 16,
+              fontWeight: 700,
+              color: "#fff",
+              background: "#991b1b",
+              border: "none",
+              borderRadius: 8,
+              cursor: "pointer",
+            }}
+          >
+            {t("reactivate")}
+          </button>
         </div>
       </div>
     );

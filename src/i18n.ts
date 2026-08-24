@@ -124,6 +124,7 @@ const translations: Record<string, Record<Lang, string>> = {
   licenseExpiring: { ar: "قريب من الانتهاء", en: "Expiring Soon" },
   licenseExpired: { ar: "ترخيص منتهي", en: "License Expired" },
   licenseExpiredMessage: { ar: "انتهي الترخيص — يرجي الحذف وإعادة التفعيل مرة أخرى", en: "License expired — please delete and reactivate" },
+  reactivate: { ar: "حذف الترخيص وإعادة التفعيل", en: "Delete License & Reactivate" },
   daysRemaining: { ar: "يوم", en: "days" },
   daysExpired: { ar: "يوم", en: "days" },
   hoursRemaining: { ar: "ساعة", en: "hours" },
