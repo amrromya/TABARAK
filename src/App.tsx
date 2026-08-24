@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ToastProvider } from "./components/ui";
@@ -351,6 +351,7 @@ function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [account, setAccount] = useState<Account | null>(null);
   const [licenseState, setLicenseState] = useState<"loading" | "active" | "expired" | "none">("loading");
+  const expiryDateRef = useRef<Date | null>(null);
 
   // Initialize theme and language
   const [theme, toggleTheme] = useTheme();
@@ -359,32 +360,49 @@ function App() {
   // Start auto-backup
   useEffect(() => { api.startAutoBackup().catch(() => {}); }, [authenticated]);
 
-  // License check — runs immediately on mount, NOT dependent on splash screen
+  // License check — runs on mount + periodic check every 5 minutes
   useEffect(() => {
     if (isPopup) return;
+
+    const parseExpiry = (raw: string) => {
+      return raw.includes(" ")
+        ? new Date(raw.replace(" ", "T"))
+        : new Date(raw + "T23:59:59");
+    };
+
     const checkLicense = async () => {
       try {
         const info = await api.getLicenseInfo();
         if (!info) {
+          expiryDateRef.current = null;
           setLicenseState("none");
           setLoading(false);
           return;
         }
-        const raw = info.expiry_date;
-        const expiry = raw.includes(" ")
-          ? new Date(raw.replace(" ", "T"))
-          : new Date(raw + "T23:59:59");
+        const expiry = parseExpiry(info.expiry_date);
+        expiryDateRef.current = expiry;
         if (new Date() > expiry) {
           setLicenseState("expired");
         } else {
           setLicenseState("active");
         }
       } catch {
+        expiryDateRef.current = null;
         setLicenseState("none");
       }
       setLoading(false);
     };
+
     checkLicense();
+
+    // Periodic check every 5 minutes — only compares stored date, no Rust calls
+    const interval = setInterval(() => {
+      if (expiryDateRef.current && new Date() > expiryDateRef.current) {
+        setLicenseState("expired");
+      }
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
   }, [isPopup]);
 
   const handleSplashFinish = () => {
@@ -442,7 +460,18 @@ function App() {
   if (licenseState === "none") {
     return (
       <ErrorBoundary>
-        <Activation onActivated={() => setLicenseState("active")} />
+        <Activation onActivated={async () => {
+          try {
+            const info = await api.getLicenseInfo();
+            if (info) {
+              const raw = info.expiry_date;
+              expiryDateRef.current = raw.includes(" ")
+                ? new Date(raw.replace(" ", "T"))
+                : new Date(raw + "T23:59:59");
+            }
+          } catch {}
+          setLicenseState("active");
+        }} />
       </ErrorBoundary>
     );
   }
