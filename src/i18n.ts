@@ -122,7 +122,8 @@ const translations: Record<string, Record<Lang, string>> = {
   // License status
   licenseActive: { ar: "التفعيل نشط", en: "License Active" },
   licenseExpiring: { ar: "قريب من الانتهاء", en: "Expiring Soon" },
-  licenseExpired: { ar: "انتهت الصلاحية", en: "License Expired" },
+  licenseExpired: { ar: "ترخيص منتهي", en: "License Expired" },
+  licenseExpiredMessage: { ar: "تم انتهاء صلاحية الترخيص. يرجى التواصل مع المطور للحصول على تفعيل جديد.", en: "Your license has expired. Please contact the developer for a new activation." },
   daysRemaining: { ar: "يوم", en: "days" },
   daysExpired: { ar: "يوم", en: "days" },
   hoursRemaining: { ar: "ساعة", en: "hours" },

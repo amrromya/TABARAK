@@ -351,6 +351,7 @@ function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [account, setAccount] = useState<Account | null>(null);
   const [licenseActive, setLicenseActive] = useState(isPopup);
+  const [licenseExpired, setLicenseExpired] = useState(false);
 
   // Initialize theme and language
   const [theme, toggleTheme] = useTheme();
@@ -359,32 +360,38 @@ function App() {
   // Start auto-backup
   useEffect(() => { api.startAutoBackup().catch(() => {}); }, [authenticated]);
 
+  // Auto-close after license expires
+  useEffect(() => {
+    if (!licenseExpired) return;
+    const timer = setTimeout(() => {
+      try { getCurrentWindow().close(); } catch { window.close(); }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [licenseExpired]);
+
   // Periodic license check every 30 minutes
   useEffect(() => {
     if (!licenseActive) return;
     const interval = setInterval(() => {
       api.checkLicense()
-        .then(() => {
-          // License still valid — do nothing
-        })
+        .then(() => {})
         .catch(() => {
-          // License check failed — show activation screen but DON'T logout
           setLicenseActive(false);
+          setLicenseExpired(true);
         });
     }, 30 * 60 * 1000);
     return () => clearInterval(interval);
   }, [licenseActive]);
 
-  // Check license on window focus — silently ignore errors
+  // Check license on window focus
   useEffect(() => {
     if (!licenseActive) return;
     const onFocus = () => {
       api.checkLicense()
-        .then(() => {
-          // License valid
-        })
+        .then(() => {})
         .catch(() => {
-          // Silently fail on focus — don't disrupt the user
+          setLicenseActive(false);
+          setLicenseExpired(true);
         });
     };
     window.addEventListener("focus", onFocus);
@@ -412,6 +419,18 @@ function App() {
       <ErrorBoundary>
         <SplashScreen onFinish={handleSplashFinish} />
       </ErrorBoundary>
+    );
+  }
+
+  if (licenseExpired) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", background: "#fef2f2" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 64, marginBottom: 16 }}>⛔</div>
+          <h1 style={{ color: "#991b1b", fontSize: 32, fontWeight: 800, margin: 0 }}>{t("licenseExpired")}</h1>
+          <p style={{ color: "#b91c1c", fontSize: 16, marginTop: 8 }}>{t("licenseExpiredMessage")}</p>
+        </div>
+      </div>
     );
   }
 
