@@ -36,11 +36,9 @@ fn load_public_key() -> Result<RsaPublicKey, String> {
 
 #[cfg(target_os = "windows")]
 pub fn get_hwid() -> String {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-
     let mut hwid_parts = Vec::new();
 
+    // MachineGuid من Registry — الأكثر استقراراً
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     if let Ok(key) = hklm.open_subkey("SOFTWARE\\Microsoft\\Cryptography") {
         if let Ok(val) = key.get_value::<String, _>("MachineGuid") {
@@ -48,26 +46,21 @@ pub fn get_hwid() -> String {
         }
     }
 
-    if let Ok(output) = std::process::Command::new("powershell")
-        .args(["-Command", "(Get-CimInstance Win32_Processor).ProcessorId"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-    {
-        let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !s.is_empty() { hwid_parts.push(s); }
+    // ProductName من Registry — ثابت دائماً
+    if let Ok(key) = hklm.open_subkey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion") {
+        if let Ok(val) = key.get_value::<String, _>("ProductId") {
+            hwid_parts.push(val);
+        }
     }
 
-    if let Ok(output) = std::process::Command::new("powershell")
-        .args(["-Command", "(Get-Disk | Select-Object -First 1).SerialNumber"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-    {
-        let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !s.is_empty() { hwid_parts.push(s); }
-    }
-
+    // اسم الجهاز — ثابت
     if let Ok(name) = gethostname::gethostname().into_string() {
         hwid_parts.push(name);
+    }
+
+    // لو مفيش أي جزء، نستخدم قيمة افتراضية
+    if hwid_parts.is_empty() {
+        hwid_parts.push("tabarak-fallback".to_string());
     }
 
     let combined = hwid_parts.join("|");

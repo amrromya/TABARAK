@@ -364,24 +364,27 @@ function App() {
     if (!licenseActive) return;
     const interval = setInterval(() => {
       api.checkLicense()
+        .then(() => {
+          // License still valid — do nothing
+        })
         .catch(() => {
+          // License check failed — show activation screen but DON'T logout
           setLicenseActive(false);
-          setAuthenticated(false);
-          setAccount(null);
         });
     }, 30 * 60 * 1000);
     return () => clearInterval(interval);
   }, [licenseActive]);
 
-  // Check license on window focus
+  // Check license on window focus — silently ignore errors
   useEffect(() => {
     if (!licenseActive) return;
     const onFocus = () => {
       api.checkLicense()
+        .then(() => {
+          // License valid
+        })
         .catch(() => {
-          setLicenseActive(false);
-          setAuthenticated(false);
-          setAccount(null);
+          // Silently fail on focus — don't disrupt the user
         });
     };
     window.addEventListener("focus", onFocus);
