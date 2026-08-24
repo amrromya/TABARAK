@@ -1018,7 +1018,7 @@ const translations: Record<string, Record<Lang, string>> = {
 
   // ===== Inventory Page (additional) =====
   inventoryTitle: { ar: "المخزون", en: "Inventory" },
-  searchNameOrBarcode: { ar: "بحث بالاسم أو الباركود...", en: "Search by name or barcode..." },
+  searchNameOrBarcode: { ar: "بحث بالاسم أو الباركود أو الفئة...", en: "Search by name, barcode or category..." },
   temporaryInventoryCount: { ar: "جرد مؤقت", en: "Temporary Stock Count" },
   newProduct: { ar: "منتج جديد", en: "New Product" },
   inventoryValueCost: { ar: "قيمة المخزون بالتكلفة", en: "Inventory Cost Value" },
