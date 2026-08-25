@@ -140,52 +140,64 @@ export function Inventory({
     const showStore = ps.barcodeShowStoreName !== false && storeName;
     const barcodeValue = p.barcode || String(p.id);
 
-    const svgEl = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    let svgData = "";
     try {
-      JsBarcode(svgEl, barcodeValue, {
+      const canvas = document.createElement("canvas");
+      JsBarcode(canvas, barcodeValue, {
         format: "CODE128",
-        width: Math.max(1, Math.floor(ps.barcodeWidth / 30)),
+        width: Math.max(1, Math.floor(ps.barcodeWidth / 15)),
         height: Math.min(ps.barcodeHeight * 2, 60),
         displayValue: false,
         margin: 0,
       });
+      svgData = canvas.toDataURL("image/png");
     } catch (e: any) {
       notify(t("barcodeError") + e.message, "error");
       return;
     }
-    const svgString = svgEl.outerHTML;
+
     const storeLineH = showStore ? 10 : 0;
     const totalH = ps.barcodeHeight + storeLineH + (ps.barcodeShowName ? 12 : 0) + (ps.barcodeShowPrice ? 8 : 0);
 
-    const container = document.createElement("div");
-    container.id = "barcode-print-area";
-    container.style.cssText = "position:fixed;left:0;top:0;width:0;height:0;overflow:hidden";
-    container.innerHTML = `<div class="barcode-print-content" style="font-family:system-ui,sans-serif;display:flex;justify-content:center;align-items:center">
+    const frame = document.createElement("iframe");
+    frame.style.cssText = "position:fixed;left:-9999px;width:1px;height:1px;border:none";
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument;
+    if (!doc) { document.body.removeChild(frame); return; }
+
+    doc.open();
+    doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
       <style>
-        @media print {
-          @page{size:${ps.barcodeWidth}mm ${totalH}mm;margin:0}
-          body{margin:0;padding:0}
-          .barcode-print-content{display:flex!important;justify-content:center;align-items:center}
-        }
-        .barcode-print-content .box{display:flex;flex-direction:column;align-items:center;gap:2px}
-        .barcode-print-content .store{font-size:${ps.barcodeFontSize + 1}px;font-weight:600;color:#333}
-        .barcode-print-content .name{font-size:${ps.barcodeFontSize + 2}px;font-weight:700}
-        .barcode-print-content .code{font-size:9px;color:#666;letter-spacing:1px}
-        .barcode-print-content .price{font-size:${ps.barcodeFontSize}px;font-weight:700;color:#0f8a5f}
-      </style>
+        @page{size:${ps.barcodeWidth}mm ${totalH}mm;margin:0}
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{display:flex;justify-content:center;align-items:center;height:100vh;font-family:system-ui,sans-serif}
+        .box{display:flex;flex-direction:column;align-items:center;gap:2px}
+        .store{font-size:${ps.barcodeFontSize + 1}px;font-weight:600;color:#333}
+        .name{font-size:${ps.barcodeFontSize + 2}px;font-weight:700}
+        .code{font-size:9px;color:#666;letter-spacing:1px}
+        .price{font-size:${ps.barcodeFontSize}px;font-weight:700;color:#0f8a5f}
+        img{display:block}
+      </style></head><body>
       <div class="box">
         ${showStore ? `<div class="store">${storeName}</div>` : ""}
         ${ps.barcodeShowName ? `<div class="name">${p.name}</div>` : ""}
-        ${svgString}
+        <img src="${svgData}" />
         ${ps.barcodeShowBarcode ? `<div class="code">${barcodeValue}</div>` : ""}
         ${ps.barcodeShowPrice ? `<div class="price">${p.sell_price.toFixed(2)} ج.م</div>` : ""}
       </div>
-    </div>`;
-    document.body.appendChild(container);
-    setTimeout(() => {
-      window.print();
-      setTimeout(() => document.body.removeChild(container), 500);
-    }, 200);
+    </body></html>`);
+    doc.close();
+
+    const tryPrint = (attempt: number) => {
+      try {
+        frame.contentWindow?.print();
+        setTimeout(() => document.body.removeChild(frame), 1000);
+      } catch {
+        if (attempt < 5) setTimeout(() => tryPrint(attempt + 1), 300);
+        else document.body.removeChild(frame);
+      }
+    };
+    setTimeout(() => tryPrint(0), 500);
   };
 
   const addCategory = async (e: React.FormEvent) => {
