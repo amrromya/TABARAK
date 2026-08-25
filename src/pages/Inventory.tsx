@@ -154,20 +154,25 @@ export function Inventory({
       return;
     }
     const svgString = svgEl.outerHTML;
-
     const storeLineH = showStore ? 10 : 0;
-    const w = window.open("", "_blank", "width=400,height=300");
-    if (!w) { notify(t("barcodeError"), "error"); return; }
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+    const totalH = ps.barcodeHeight + storeLineH + (ps.barcodeShowName ? 12 : 0) + (ps.barcodeShowPrice ? 8 : 0);
+
+    const container = document.createElement("div");
+    container.id = "barcode-print-area";
+    container.style.cssText = "position:fixed;left:0;top:0;width:0;height:0;overflow:hidden";
+    container.innerHTML = `<div class="barcode-print-content" style="font-family:system-ui,sans-serif;display:flex;justify-content:center;align-items:center">
       <style>
-        @page{size:${ps.barcodeWidth}mm ${ps.barcodeHeight + storeLineH + (ps.barcodeShowName ? 12 : 0) + (ps.barcodeShowPrice ? 8 : 0)}mm;margin:0}
-        body{margin:0;padding:4px;font-family:system-ui,sans-serif;display:flex;justify-content:center;align-items:center}
-        .box{display:flex;flex-direction:column;align-items:center;gap:2px}
-        .store{font-size:${ps.barcodeFontSize + 1}px;font-weight:600;color:#333}
-        .name{font-size:${ps.barcodeFontSize + 2}px;font-weight:700}
-        .code{font-size:9px;color:#666;letter-spacing:1px}
-        .price{font-size:${ps.barcodeFontSize}px;font-weight:700;color:#0f8a5f}
-      </style></head><body>
+        @media print {
+          @page{size:${ps.barcodeWidth}mm ${totalH}mm;margin:0}
+          body{margin:0;padding:0}
+          .barcode-print-content{display:flex!important;justify-content:center;align-items:center}
+        }
+        .barcode-print-content .box{display:flex;flex-direction:column;align-items:center;gap:2px}
+        .barcode-print-content .store{font-size:${ps.barcodeFontSize + 1}px;font-weight:600;color:#333}
+        .barcode-print-content .name{font-size:${ps.barcodeFontSize + 2}px;font-weight:700}
+        .barcode-print-content .code{font-size:9px;color:#666;letter-spacing:1px}
+        .barcode-print-content .price{font-size:${ps.barcodeFontSize}px;font-weight:700;color:#0f8a5f}
+      </style>
       <div class="box">
         ${showStore ? `<div class="store">${storeName}</div>` : ""}
         ${ps.barcodeShowName ? `<div class="name">${p.name}</div>` : ""}
@@ -175,9 +180,12 @@ export function Inventory({
         ${ps.barcodeShowBarcode ? `<div class="code">${barcodeValue}</div>` : ""}
         ${ps.barcodeShowPrice ? `<div class="price">${p.sell_price.toFixed(2)} ج.م</div>` : ""}
       </div>
-      <script>window.onload=function(){window.print();window.close();}<\/script>
-    </body></html>`);
-    w.document.close();
+    </div>`;
+    document.body.appendChild(container);
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => document.body.removeChild(container), 500);
+    }, 200);
   };
 
   const addCategory = async (e: React.FormEvent) => {

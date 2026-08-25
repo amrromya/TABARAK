@@ -42,20 +42,6 @@ import { Activation } from "./pages/Activation";
 import type { Account } from "./types";
 import { api } from "./api";
 
-async function handleBackupAndClose() {
-  try {
-    const { save } = await import("@tauri-apps/plugin-dialog");
-    const path = await save({
-      defaultPath: `tabarak_backup_${new Date().toISOString().slice(0, 10)}.db`,
-      filters: [{ name: "Database", extensions: ["db"] }],
-    });
-    if (path) {
-      await api.exportBackup(path);
-    }
-  } catch {}
-  try { getCurrentWindow().destroy(); } catch { window.close(); }
-}
-
 function CloseDialog({ onBackup, onClose }: { onBackup: () => void; onClose: () => void }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 9999 }}>
@@ -177,10 +163,10 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
   }, []);
 
   // Close confirmation — show modal before closing
+  const mainWindowRef = useRef(getCurrentWindow());
   useEffect(() => {
     let cancelled = false;
-    const w = getCurrentWindow();
-    const unlisten = w.onCloseRequested((event) => {
+    const unlisten = mainWindowRef.current.onCloseRequested((event) => {
       event.preventDefault();
       if (cancelled) return;
       closePendingRef.current = true;
@@ -191,12 +177,20 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
 
   const handleCloseDialogBackup = async () => {
     setShowCloseDialog(false);
-    await handleBackupAndClose();
+    try {
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const path = await save({
+        defaultPath: `tabarak_backup_${new Date().toISOString().slice(0, 10)}.db`,
+        filters: [{ name: "Database", extensions: ["db"] }],
+      });
+      if (path) await api.exportBackup(path);
+    } catch {}
+    mainWindowRef.current.destroy();
   };
 
   const handleCloseDialogClose = () => {
     setShowCloseDialog(false);
-    try { getCurrentWindow().destroy(); } catch { window.close(); }
+    mainWindowRef.current.destroy();
   };
 
   // Keyboard shortcuts
