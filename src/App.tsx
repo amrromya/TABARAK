@@ -56,6 +56,26 @@ async function handleBackupAndClose() {
   try { getCurrentWindow().close(); } catch { window.close(); }
 }
 
+function CloseDialog({ onBackup, onClose }: { onBackup: () => void; onClose: () => void }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 9999 }}>
+      <div style={{ background: "#fff", borderRadius: 12, padding: 32, maxWidth: 420, width: "90%", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", textAlign: "center" }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>💾</div>
+        <h2 style={{ margin: "0 0 8px", fontSize: 20, color: "#1e293b" }}>{t("closeBackupTitle")}</h2>
+        <p style={{ margin: "0 0 24px", fontSize: 14, color: "#64748b" }}>{t("closeBackupPrompt")}</p>
+        <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+          <button onClick={onBackup} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: "#0f8a5f", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+            {t("yesBackup")}
+          </button>
+          <button onClick={onClose} style={{ padding: "10px 24px", borderRadius: 8, border: "1px solid #cbd5e1", background: "#fff", color: "#475569", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+            {t("noClose")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const NAV = [
   { key: "dashboard", labelKey: "dashboard", icon: "🏠" },
   { key: "inventory", labelKey: "inventory", icon: "📦" },
@@ -132,6 +152,8 @@ async function openFullCountWindow(account?: Account) {
 function Shell({ account, theme, toggleTheme }: { account: Account; theme: "light" | "dark"; toggleTheme: () => void }) {
   const [page, setPage] = useState("dashboard");
   const [appVersion, setAppVersion] = useState("");
+  const [showCloseDialog, setShowCloseDialog] = useState(false);
+  const closePendingRef = useRef(false);
   const [features, setFeatures] = useState<{ dark_mode: boolean; language: boolean }>(() => {
     try {
       const raw = localStorage.getItem("tabarak_features");
@@ -154,25 +176,28 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // Close confirmation — ask to backup before closing
+  // Close confirmation — show modal before closing
   useEffect(() => {
     let cancelled = false;
     const w = getCurrentWindow();
-    const unlisten = w.onCloseRequested(async (event) => {
+    const unlisten = w.onCloseRequested((event) => {
       event.preventDefault();
-      const msg = t("closeBackupPrompt");
-      const yesLabel = t("yesBackup");
-      const noLabel = t("noClose");
-      const confirmed = window.confirm(`${msg}\n\n${yesLabel} / ${noLabel}`);
       if (cancelled) return;
-      if (confirmed) {
-        await handleBackupAndClose();
-      } else {
-        try { w.close(); } catch { window.close(); }
-      }
+      closePendingRef.current = true;
+      setShowCloseDialog(true);
     });
     return () => { cancelled = true; unlisten.then((fn) => fn()); };
   }, []);
+
+  const handleCloseDialogBackup = async () => {
+    setShowCloseDialog(false);
+    await handleBackupAndClose();
+  };
+
+  const handleCloseDialogClose = () => {
+    setShowCloseDialog(false);
+    try { getCurrentWindow().close(); } catch { window.close(); }
+  };
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
@@ -371,6 +396,9 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
         {safePage === "maint_reports" && <MaintenanceReports />}
         {safePage.startsWith("maint_detail_") && <ServiceOrderDetail orderId={Number(safePage.replace("maint_detail_", ""))} onBack={() => setPage("maint_orders")} />}
       </main>
+      {showCloseDialog && (
+        <CloseDialog onBackup={handleCloseDialogBackup} onClose={handleCloseDialogClose} />
+      )}
     </div>
   );
 }

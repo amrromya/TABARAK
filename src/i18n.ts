@@ -1125,6 +1125,7 @@ const translations: Record<string, Record<Lang, string>> = {
   resetHint: { ar: "حذف جميع البيانات والعودة للوضع الافتراضي", en: "Delete all data and reset to default" },
   backupWarning: { ar: "⚠️ تحذير: لا يمكن التراجع عن الحذف. أنشئ نسخة احتياطية أولاً!", en: "⚠️ Warning: Deletion is irreversible. Create a backup first!" },
   closeBackupPrompt: { ar: "هل تريد عمل نسخة احتياطية قبل إغلاق البرنامج؟", en: "Do you want to create a backup before closing?" },
+  closeBackupTitle: { ar: "إغلاق البرنامج", en: "Close Program" },
   yesBackup: { ar: "نعم — احفظ النسخة", en: "Yes — Save Backup" },
   noClose: { ar: "لا — إغلاق مباشرة", en: "No — Close Now" },
   autoBackupSettings: { ar: "النسخ الاحتياطي التلقائي", en: "Auto Backup" },

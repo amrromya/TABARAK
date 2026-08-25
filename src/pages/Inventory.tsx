@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import JsBarcode from "jsbarcode";
 import { api } from "../api";
 import {
   Field,
@@ -138,6 +139,23 @@ export function Inventory({
     try { const settings = await api.getSettings(); storeName = settings.store_name || ""; } catch {}
     const showStore = ps.barcodeShowStoreName !== false && storeName;
     const barcodeValue = p.barcode || String(p.id);
+
+    // Generate barcode SVG in main window (no CSP issues)
+    const svgEl = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    try {
+      JsBarcode(svgEl, barcodeValue, {
+        format: "CODE128",
+        width: Math.max(1, Math.floor(ps.barcodeWidth / 30)),
+        height: Math.min(ps.barcodeHeight * 2, 60),
+        displayValue: false,
+        margin: 0,
+      });
+    } catch (e: any) {
+      notify(t("barcodeError") + e.message, "error");
+      return;
+    }
+    const svgString = svgEl.outerHTML;
+
     const storeLineH = showStore ? 10 : 0;
     const frame = document.createElement("iframe");
     frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:none";
@@ -158,36 +176,12 @@ export function Inventory({
       <div class="box">
         ${showStore ? `<div class="store">${storeName}</div>` : ""}
         ${ps.barcodeShowName ? `<div class="name">${p.name}</div>` : ""}
-        <svg id="bc"></svg>
+        ${svgString}
         ${ps.barcodeShowBarcode ? `<div class="code">${barcodeValue}</div>` : ""}
         ${ps.barcodeShowPrice ? `<div class="price">${p.sell_price.toFixed(2)} ج.م</div>` : ""}
       </div>
-      <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.12.3/dist/JsBarcode.all.min.js"><\/script>
       <script>
-        try {
-          JsBarcode("#bc", "${barcodeValue}", {
-            format: "CODE128",
-            width: ${Math.max(1, Math.floor(ps.barcodeWidth / 30))},
-            height: ${Math.min(ps.barcodeHeight * 2, 60)},
-            displayValue: false,
-            margin: 0
-          });
-          setTimeout(function(){
-            var pf = window.print;
-            ${ps.barcodePrinter ? `window.print = function(){
-              var iframe = document.createElement("iframe");
-              iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:none";
-              document.body.appendChild(iframe);
-              var idoc = iframe.contentDocument || iframe.contentWindow.document;
-              idoc.open();
-              idoc.write(document.documentElement.outerHTML);
-              idoc.close();
-              setTimeout(function(){ iframe.contentWindow.print(); }, 200);
-            };` : ""}
-            window.print();
-            window.print = pf;
-          }, 400);
-        } catch(e) { alert("${t("barcodeError")}" + e.message); }
+        setTimeout(function(){ window.print(); }, 200);
       <\/script>
     </body></html>`);
     doc.close();
