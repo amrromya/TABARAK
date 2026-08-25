@@ -163,10 +163,10 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
   }, []);
 
   // Close confirmation — show modal before closing
-  const mainWindowRef = useRef(getCurrentWindow());
   useEffect(() => {
     let cancelled = false;
-    const unlisten = mainWindowRef.current.onCloseRequested((event) => {
+    const w = getCurrentWindow();
+    const unlisten = w.onCloseRequested((event) => {
       event.preventDefault();
       if (cancelled) return;
       closePendingRef.current = true;
@@ -174,6 +174,15 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
     });
     return () => { cancelled = true; unlisten.then((fn) => fn()); };
   }, []);
+
+  const forceClose = async () => {
+    try {
+      await api.forceExit();
+    } catch {
+      try { getCurrentWindow().destroy(); } catch {}
+      try { window.close(); } catch {}
+    }
+  };
 
   const handleCloseDialogBackup = async () => {
     setShowCloseDialog(false);
@@ -185,12 +194,12 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
       });
       if (path) await api.exportBackup(path);
     } catch {}
-    mainWindowRef.current.destroy();
+    await forceClose();
   };
 
-  const handleCloseDialogClose = () => {
+  const handleCloseDialogClose = async () => {
     setShowCloseDialog(false);
-    mainWindowRef.current.destroy();
+    await forceClose();
   };
 
   // Keyboard shortcuts

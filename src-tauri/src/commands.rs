@@ -4839,3 +4839,8 @@ pub fn search_service_orders(
         .map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub fn force_exit() {
+    std::process::exit(0);
+}

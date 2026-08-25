@@ -231,6 +231,7 @@ export const api = {
   // النسخ الاحتياطي
   exportBackup: (path: string) => invoke<void>("export_backup", { path }),
   importBackup: (path: string) => invoke<void>("import_backup", { path }),
+  forceExit: () => invoke<void>("force_exit"),
 
   // التقارير
   getDashboard: () => invoke<Dashboard>("get_dashboard"),

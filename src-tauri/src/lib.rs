@@ -125,6 +125,7 @@ pub fn run() {
             commands::change_section_password,
             commands::export_backup,
             commands::import_backup,
+            commands::force_exit,
             commands::get_dashboard,
             commands::get_profit_loss,
             commands::get_stock_value,
