@@ -140,7 +140,6 @@ export function Inventory({
     const showStore = ps.barcodeShowStoreName !== false && storeName;
     const barcodeValue = p.barcode || String(p.id);
 
-    // Generate barcode SVG in main window (no CSP issues)
     const svgEl = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     try {
       JsBarcode(svgEl, barcodeValue, {
@@ -157,13 +156,9 @@ export function Inventory({
     const svgString = svgEl.outerHTML;
 
     const storeLineH = showStore ? 10 : 0;
-    const frame = document.createElement("iframe");
-    frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:none";
-    document.body.appendChild(frame);
-    const doc = frame.contentDocument || frame.contentWindow?.document;
-    if (!doc) { document.body.removeChild(frame); return; }
-    doc.open();
-    doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+    const w = window.open("", "_blank", "width=400,height=300");
+    if (!w) { notify(t("barcodeError"), "error"); return; }
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
       <style>
         @page{size:${ps.barcodeWidth}mm ${ps.barcodeHeight + storeLineH + (ps.barcodeShowName ? 12 : 0) + (ps.barcodeShowPrice ? 8 : 0)}mm;margin:0}
         body{margin:0;padding:4px;font-family:system-ui,sans-serif;display:flex;justify-content:center;align-items:center}
@@ -180,12 +175,9 @@ export function Inventory({
         ${ps.barcodeShowBarcode ? `<div class="code">${barcodeValue}</div>` : ""}
         ${ps.barcodeShowPrice ? `<div class="price">${p.sell_price.toFixed(2)} ج.م</div>` : ""}
       </div>
-      <script>
-        setTimeout(function(){ window.print(); }, 200);
-      <\/script>
+      <script>window.onload=function(){window.print();window.close();}<\/script>
     </body></html>`);
-    doc.close();
-    setTimeout(() => document.body.removeChild(frame), 3000);
+    w.document.close();
   };
 
   const addCategory = async (e: React.FormEvent) => {

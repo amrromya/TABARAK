@@ -53,7 +53,7 @@ async function handleBackupAndClose() {
       await api.exportBackup(path);
     }
   } catch {}
-  try { getCurrentWindow().close(); } catch { window.close(); }
+  try { getCurrentWindow().destroy(); } catch { window.close(); }
 }
 
 function CloseDialog({ onBackup, onClose }: { onBackup: () => void; onClose: () => void }) {
@@ -196,7 +196,7 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
 
   const handleCloseDialogClose = () => {
     setShowCloseDialog(false);
-    try { getCurrentWindow().close(); } catch { window.close(); }
+    try { getCurrentWindow().destroy(); } catch { window.close(); }
   };
 
   // Keyboard shortcuts
