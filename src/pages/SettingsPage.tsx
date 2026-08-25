@@ -483,6 +483,29 @@ export function SettingsPage() {
     }
   };
 
+  // Auto-backup settings
+  const [autoBackup, setAutoBackup] = useState<{ enabled: boolean; interval: string; path: string }>(() => {
+    try {
+      const raw = localStorage.getItem("tabarak_auto_backup");
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return { enabled: false, interval: "24", path: "" };
+  });
+
+  const selectBackupFolder = async () => {
+    try {
+      const selected = await open({ directory: true });
+      if (selected) {
+        setAutoBackup((prev) => ({ ...prev, path: selected as string }));
+      }
+    } catch {}
+  };
+
+  const saveAutoBackup = () => {
+    localStorage.setItem("tabarak_auto_backup", JSON.stringify(autoBackup));
+    notify(t("autoBackupSaved"));
+  };
+
   const saveSyncConfig = async () => {
     try {
       await api.saveSyncConfig(syncConfig);
@@ -1123,6 +1146,53 @@ export function SettingsPage() {
               <button className="btn" disabled={busy} onClick={restore}>{t("restoreDataBtn")}</button>
             </div>
             <p className="settings-note">{t("dataLocationNote")}</p>
+            <hr style={{ margin: "20px 0", borderTop: "1px solid #e2e8f0" }} />
+            <h3 style={{ margin: "0 0 12px", fontSize: 16 }}>{t("autoBackupSettings")}</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 400 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={autoBackup.enabled}
+                  onChange={(e) => setAutoBackup((prev) => ({ ...prev, enabled: e.target.checked }))}
+                />
+                <span>{t("autoBackupEnable")}</span>
+              </label>
+              <div>
+                <label style={{ display: "block", marginBottom: 4, fontWeight: 600 }}>{t("autoBackupInterval")}</label>
+                <select
+                  value={autoBackup.interval}
+                  onChange={(e) => setAutoBackup((prev) => ({ ...prev, interval: e.target.value }))}
+                  disabled={!autoBackup.enabled}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #cbd5e1" }}
+                >
+                  <option value="6">{t("interval6h")}</option>
+                  <option value="12">{t("interval12h")}</option>
+                  <option value="24">{t("interval24h")}</option>
+                  <option value="168">{t("intervalWeekly")}</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: 4, fontWeight: 600 }}>{t("autoBackupLocation")}</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    value={autoBackup.path}
+                    readOnly
+                    placeholder={t("autoBackupSelectFolder")}
+                    style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#f8fafc" }}
+                  />
+                  <button className="btn sm" onClick={selectBackupFolder} disabled={!autoBackup.enabled}>
+                    📁 {t("autoBackupSelectFolder")}
+                  </button>
+                </div>
+              </div>
+              <button
+                className="btn primary"
+                onClick={saveAutoBackup}
+                style={{ alignSelf: "flex-start" }}
+              >
+                💾 {t("saveChanges")}
+              </button>
+            </div>
           </>
         );
 

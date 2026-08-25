@@ -42,6 +42,20 @@ import { Activation } from "./pages/Activation";
 import type { Account } from "./types";
 import { api } from "./api";
 
+async function handleBackupAndClose() {
+  try {
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const path = await save({
+      defaultPath: `tabarak_backup_${new Date().toISOString().slice(0, 10)}.db`,
+      filters: [{ name: "Database", extensions: ["db"] }],
+    });
+    if (path) {
+      await api.exportBackup(path);
+    }
+  } catch {}
+  try { getCurrentWindow().close(); } catch { window.close(); }
+}
+
 const NAV = [
   { key: "dashboard", labelKey: "dashboard", icon: "🏠" },
   { key: "inventory", labelKey: "inventory", icon: "📦" },
@@ -138,6 +152,26 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  // Close confirmation — ask to backup before closing
+  useEffect(() => {
+    let cancelled = false;
+    const w = getCurrentWindow();
+    const unlisten = w.onCloseRequested(async (event) => {
+      event.preventDefault();
+      const msg = t("closeBackupPrompt");
+      const yesLabel = t("yesBackup");
+      const noLabel = t("noClose");
+      const confirmed = window.confirm(`${msg}\n\n${yesLabel} / ${noLabel}`);
+      if (cancelled) return;
+      if (confirmed) {
+        await handleBackupAndClose();
+      } else {
+        try { w.close(); } catch { window.close(); }
+      }
+    });
+    return () => { cancelled = true; unlisten.then((fn) => fn()); };
   }, []);
 
   // Keyboard shortcuts
@@ -357,8 +391,28 @@ function App() {
   const [theme, toggleTheme] = useTheme();
   useEffect(() => { initLang(); }, []);
 
-  // Start auto-backup
-  useEffect(() => { api.startAutoBackup().catch(() => {}); }, [authenticated]);
+  // Start auto-backup from localStorage settings
+  useEffect(() => {
+    if (!authenticated) return;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    try {
+      const raw = localStorage.getItem("tabarak_auto_backup");
+      if (raw) {
+        const cfg = JSON.parse(raw);
+        if (cfg.enabled && cfg.path) {
+          const intervalMs = (Number(cfg.interval) || 24) * 60 * 60 * 1000;
+          timer = setInterval(async () => {
+            try {
+              const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+              const filename = `tabarak_auto_${ts}.db`;
+              await api.exportBackup(cfg.path + "\\" + filename);
+            } catch {}
+          }, intervalMs);
+        }
+      }
+    } catch {}
+    return () => { if (timer) clearInterval(timer); };
+  }, [authenticated]);
 
   // License check — runs on mount + periodic check every 5 minutes
   useEffect(() => {
