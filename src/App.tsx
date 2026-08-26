@@ -118,6 +118,7 @@ async function openFullCountWindow(account?: Account) {
 function Shell({ account, theme, toggleTheme }: { account: Account; theme: "light" | "dark"; toggleTheme: () => void }) {
   const [page, setPage] = useState("dashboard");
   const [appVersion, setAppVersion] = useState("");
+  const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [features, setFeatures] = useState<{ dark_mode: boolean; language: boolean }>(() => {
     try {
       const raw = localStorage.getItem("tabarak_features");
@@ -140,16 +141,38 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // Close: force kill via Rust process::exit — no dialog needed
+  // Close behavior: popup windows close immediately, main window shows backup dialog
   useEffect(() => {
     const w = getCurrentWindow();
-    const unlisten = w.onCloseRequested(() => {
-      api.forceExit().catch(() => {
-        try { getCurrentWindow().destroy(); } catch {}
-      });
+    const isPopup = window.location.hash.includes("popup=1");
+    const unlisten = w.onCloseRequested(async () => {
+      if (isPopup) {
+        try { await w.destroy(); } catch {}
+        return;
+      }
+      setShowCloseDialog(true);
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
+
+  const handleBackupAndClose = async () => {
+    try {
+      const saved = localStorage.getItem("tabarak_auto_backup");
+      const auto = saved ? JSON.parse(saved) : null;
+      if (auto?.enabled && auto.path) {
+        const outPath = `${auto.path}/tabarak_backup_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.db`;
+        await api.exportBackup(outPath);
+        window.alert(`✅ تم حفظ النسخة الاحتياطية في:\n${outPath}`);
+      }
+    } catch (e: any) {
+      window.alert(`⚠️ فشل النسخ الاحتياطي: ${e?.message || e}`);
+    }
+    try { await api.forceExit(); } catch { try { getCurrentWindow().destroy(); } catch {} }
+  };
+
+  const handleCloseWithoutBackup = async () => {
+    try { await api.forceExit(); } catch { try { getCurrentWindow().destroy(); } catch {} }
+  };
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
@@ -348,6 +371,61 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
         {safePage === "maint_reports" && <MaintenanceReports />}
         {safePage.startsWith("maint_detail_") && <ServiceOrderDetail orderId={Number(safePage.replace("maint_detail_", ""))} onBack={() => setPage("maint_orders")} />}
       </main>
+
+      {showCloseDialog && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0,0,0,0.5)", display: "flex",
+          alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{
+            background: "#fff", borderRadius: 16, padding: "36px 40px",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.3)", textAlign: "center",
+            maxWidth: 420, width: "90%",
+          }}>
+            <div style={{ fontSize: 42, marginBottom: 12 }}>💾</div>
+            <h2 style={{ margin: "0 0 8px", fontSize: 20, color: "#1e293b" }}>
+              {t("closeBackupTitle")}
+            </h2>
+            <p style={{ margin: "0 0 24px", fontSize: 14, color: "#64748b" }}>
+              {t("closeBackupPrompt")}
+            </p>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <button
+                onClick={handleBackupAndClose}
+                style={{
+                  padding: "10px 24px", borderRadius: 10, border: "none",
+                  background: "#22c55e", color: "#fff", fontSize: 15,
+                  fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                {t("yesBackup")}
+              </button>
+              <button
+                onClick={handleCloseWithoutBackup}
+                style={{
+                  padding: "10px 24px", borderRadius: 10, border: "none",
+                  background: "#ef4444", color: "#fff", fontSize: 15,
+                  fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                {t("no")}
+              </button>
+              <button
+                onClick={() => setShowCloseDialog(false)}
+                style={{
+                  padding: "10px 24px", borderRadius: 10,
+                  border: "1px solid #cbd5e1", background: "#fff",
+                  color: "#475569", fontSize: 15, fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                {t("cancel")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
