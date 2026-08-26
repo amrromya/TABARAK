@@ -28,8 +28,9 @@ interface Line {
   sell_price: number;
   available: number;
   cost_price: number;
-  is_composite: boolean;
-  components?: { name: string; qty_per_unit: number; available: number; unit: string | null }[];
+  composite_category_id: number | null;
+  composite_category_name: string | null;
+  addons: { product_id: number; name: string; sell_price: number; quantity: number }[];
 }
 
 const PAYMENT_METHODS = [
@@ -92,6 +93,8 @@ export function Pos({ onBack }: { onBack: () => void }) {
 
   const searchRef = useRef<HTMLInputElement>(null);
   const notify = useToast();
+  const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
+  const [activeAddonLine, setActiveAddonLine] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -177,7 +180,9 @@ export function Pos({ onBack }: { onBack: () => void }) {
             sell_price: it.sell_price,
             available: prod ? prod.quantity : it.quantity,
             cost_price: prod ? prod.cost_price : 0,
-            is_composite: false,
+            composite_category_id: null,
+            composite_category_name: null,
+            addons: [],
           };
         }),
       );
@@ -238,29 +243,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
     )
     .slice(0, 20);
 
-  const addProduct = async (p: Product) => {
-    let isComposite = false;
-    let components: Line["components"] = undefined;
-    let available = p.quantity;
-    try {
-      const comps = await api.getProductComponents(p.id);
-      if (comps.length > 0) {
-        isComposite = true;
-        components = comps.map((c) => ({
-          name: c.component_name,
-          qty_per_unit: c.quantity_per_unit,
-          available: c.component_quantity,
-          unit: c.component_unit,
-        }));
-        available = Math.min(
-          ...comps.map((c) =>
-            c.quantity_per_unit > 0
-              ? Math.floor(c.component_quantity / c.quantity_per_unit)
-              : 0,
-          ),
-        );
-      }
-    } catch {}
+  const addProduct = (p: Product) => {
     setLines((ls) => {
       const existing = ls.find((l) => l.product_id === p.id);
       if (existing) {
@@ -277,16 +260,58 @@ export function Pos({ onBack }: { onBack: () => void }) {
           name: p.name,
           quantity: 1,
           sell_price: p.sell_price,
-          available,
+          available: p.quantity,
           cost_price: p.cost_price,
-          is_composite: isComposite,
-          components,
+          composite_category_id: p.composite_category_id,
+          composite_category_name: p.composite_category_name,
+          addons: [],
         },
       ];
     });
     setSearch("");
     setShowList(false);
     searchRef.current?.focus();
+  };
+
+  const openAddons = async (lineProductId: number) => {
+    const line = lines.find((l) => l.product_id === lineProductId);
+    if (!line?.composite_category_id) return;
+    setActiveAddonLine(lineProductId);
+    try {
+      const prods = await api.listProductsByCategory(line.composite_category_id);
+      setCategoryProducts(prods.filter((p) => p.id !== lineProductId));
+    } catch {
+      setCategoryProducts([]);
+    }
+  };
+
+  const addAddon = (lineProductId: number, addon: Product) => {
+    setLines((ls) =>
+      ls.map((l) => {
+        if (l.product_id !== lineProductId) return l;
+        const existing = l.addons.find((a) => a.product_id === addon.id);
+        if (existing) {
+          return {
+            ...l,
+            addons: l.addons.map((a) =>
+              a.product_id === addon.id ? { ...a, quantity: a.quantity + 1 } : a,
+            ),
+          };
+        }
+        return {
+          ...l,
+          addons: [
+            ...l.addons,
+            {
+              product_id: addon.id,
+              name: addon.name,
+              sell_price: addon.sell_price,
+              quantity: 1,
+            },
+          ],
+        };
+      }),
+    );
   };
 
   const handleViewMovement = async (movement: ProductMovement) => {
@@ -330,7 +355,13 @@ export function Pos({ onBack }: { onBack: () => void }) {
   const removeLine = (pid: number) =>
     setLines((ls) => ls.filter((l) => l.product_id !== pid));
 
-  const total = lines.reduce((s, l) => s + l.quantity * l.sell_price, 0);
+  const total = lines.reduce(
+    (s, l) =>
+      s +
+      l.quantity * l.sell_price +
+      l.addons.reduce((as2, a) => as2 + a.quantity * a.sell_price, 0),
+    0,
+  );
   const discountAmount =
     discountType === "percent" ? (total * (discount || 0)) / 100 : discount;
   const netTotal = Math.max(0, total - discountAmount + (additional || 0));
@@ -345,11 +376,14 @@ export function Pos({ onBack }: { onBack: () => void }) {
       paymentMethod === "credit" ? null : (paymentMethod === "card" && cardSubType === "wallet" && walletPhone.trim() ? walletPhone.trim() : (cashCustomer.trim() || null)),
     payment_method: paymentMethod === "card" ? (cardSubType === "wallet" ? "card_wallet" : "card_visa") : paymentMethod,
     employee_id: employeeId ? Number(employeeId) : null,
-    items: lines.map((l) => ({
-      product_id: l.product_id,
-      quantity: l.quantity,
-      sell_price: l.sell_price,
-    })),
+    items: lines.flatMap((l) => [
+      { product_id: l.product_id, quantity: l.quantity, sell_price: l.sell_price },
+      ...l.addons.map((a) => ({
+        product_id: a.product_id,
+        quantity: a.quantity,
+        sell_price: a.sell_price,
+      })),
+    ]),
   });
 
   const afterSave = async () => {
@@ -406,7 +440,9 @@ export function Pos({ onBack }: { onBack: () => void }) {
           sell_price: it.sell_price,
           available: it.quantity,
           cost_price: 0,
-          is_composite: false,
+          composite_category_id: null,
+          composite_category_name: null,
+          addons: [],
         })),
       );
       setPaymentMethod(saved.payment_method);
@@ -717,23 +753,36 @@ export function Pos({ onBack }: { onBack: () => void }) {
                       <td>
                         <div className="pos-line-name">
                           {l.name}
-                          {l.is_composite && (
+                          {l.composite_category_id && (
                             <span style={{ fontSize: 11, color: "#8b5cf6", marginRight: 6 }}>
-                              🔗 {t("compositeProduct")}
+                              🔗 {l.composite_category_name}
                             </span>
                           )}
                         </div>
                         <div className="hint">
                           {t("availableLabel")}: {qty(l.available)} · {t("costPriceShort")}: {money(l.cost_price)}
                         </div>
-                        {l.is_composite && l.components && l.components.length > 0 && (
-                          <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
-                            {l.components.map((c, i) => (
-                              <span key={i} style={{ marginRight: 8 }}>
-                                {c.name}: {c.qty_per_unit} {c.unit ?? ""} ({t("componentStock")}: {qty(c.available)})
+                        {l.addons.length > 0 && (
+                          <div style={{ fontSize: 11, color: "#16a34a", marginTop: 2 }}>
+                            {l.addons.map((a) => (
+                              <span key={a.product_id} style={{ marginRight: 8 }}>
+                                +{a.name} ×{a.quantity} ({money(a.sell_price)})
                               </span>
                             ))}
                           </div>
+                        )}
+                        {l.composite_category_id && (
+                          <button
+                            type="button"
+                            className="btn sm"
+                            style={{ marginTop: 4, fontSize: 11, padding: "2px 8px" }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openAddons(l.product_id);
+                            }}
+                          >
+                            + {t("addOn")}
+                          </button>
                         )}
                         {l.quantity > l.available && (
                           <div className="pos-qty-warn">⚠️ {t("qtyExceedsAvailable")}</div>
@@ -1144,6 +1193,50 @@ export function Pos({ onBack }: { onBack: () => void }) {
           onClose={() => setShowMovements(false)}
           onViewInvoice={handleViewMovement}
         />
+      )}
+
+      {activeAddonLine != null && (
+        <Modal
+          title={t("addOns")}
+          onClose={() => setActiveAddonLine(null)}
+          width="420px"
+        >
+          {categoryProducts.length === 0 ? (
+            <div style={{ padding: 16, textAlign: "center", color: "#999" }}>
+              {t("noAddOns")}
+            </div>
+          ) : (
+            <div style={{ maxHeight: 400, overflowY: "auto" }}>
+              {categoryProducts.map((p) => (
+                <div
+                  key={p.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "8px 12px",
+                    borderBottom: "1px solid #eee",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => {
+                    addAddon(activeAddonLine, p);
+                    setActiveAddonLine(null);
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{p.name}</div>
+                    <div style={{ fontSize: 12, color: "#888" }}>
+                      {t("componentStock")}: {qty(p.quantity)}
+                    </div>
+                  </div>
+                  <div style={{ fontWeight: 700, color: "#0f8a5f" }}>
+                    {money(p.sell_price)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   );

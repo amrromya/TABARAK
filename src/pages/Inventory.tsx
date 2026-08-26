@@ -11,7 +11,7 @@ import {
 } from "../components/ui";
 import { t } from "../i18n";
 import { ProductMovements } from "../components/ProductMovements";
-import type { Category, NewProduct, NewProductComponent, Product, ProductComponent, Warehouse } from "../types";
+import type { Category, NewProduct, Product, Warehouse } from "../types";
 
 const emptyForm: NewProduct = {
   name: "",
@@ -23,6 +23,7 @@ const emptyForm: NewProduct = {
   sell_price: 0,
   quantity: 0,
   min_quantity: 0,
+  composite_category_id: null,
 };
 
 export function Inventory({
@@ -52,11 +53,6 @@ export function Inventory({
   const [showUnit, setShowUnit] = useState(false);
   const [newUnit, setNewUnit] = useState("");
   const [movementProduct, setMovementProduct] = useState<Product | null>(null);
-  const [isComposite, setIsComposite] = useState(false);
-  const [components, setComponents] = useState<ProductComponent[]>([]);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [compProductId, setCompProductId] = useState("");
-  const [compQty, setCompQty] = useState(1);
   const notify = useToast();
 
   const load = useCallback(async () => {
@@ -90,11 +86,6 @@ export function Inventory({
       bc = "";
     }
     setForm({ ...emptyForm, barcode: bc });
-    setIsComposite(false);
-    setComponents([]);
-    setCompProductId("");
-    setCompQty(1);
-    api.listProducts().then(setAllProducts).catch(() => {});
     setShowForm(true);
   };
 
@@ -110,53 +101,21 @@ export function Inventory({
       sell_price: p.sell_price,
       quantity: p.quantity,
       min_quantity: p.min_quantity,
+      composite_category_id: p.composite_category_id,
     });
-    api.getProductComponents(p.id).then((cs) => {
-      setIsComposite(cs.length > 0);
-      setComponents(cs);
-    }).catch(() => {
-      setIsComposite(false);
-      setComponents([]);
-    });
-    api.listProducts().then(setAllProducts).catch(() => {});
-    setCompProductId("");
-    setCompQty(1);
     setShowForm(true);
   };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      if (isComposite && components.length === 0) {
-        notify(t("requiredComponents"), "error");
-        return;
-      }
-      let computedForm = { ...form };
-      if (isComposite) {
-        computedForm.cost_price = components.reduce(
-          (sum, c) =>
-            sum +
-            c.quantity_per_unit *
-              (allProducts.find((p) => p.id === c.component_product_id)
-                ?.cost_price ?? 0),
-          0,
-        );
-      }
-      let savedProduct: Product;
       if (editing) {
-        savedProduct = await api.updateProduct(editing.id, computedForm);
+        await api.updateProduct(editing.id, form);
         notify(t("productUpdated"));
       } else {
-        savedProduct = await api.createProduct(computedForm);
+        await api.createProduct(form);
         notify(t("productAdded"));
       }
-      const input: NewProductComponent[] = isComposite
-        ? components.map((c) => ({
-            component_product_id: c.component_product_id,
-            quantity_per_unit: c.quantity_per_unit,
-          }))
-        : [];
-      await api.saveProductComponents(savedProduct.id, input);
       setShowForm(false);
       load();
     } catch (err) {
@@ -502,27 +461,11 @@ export function Inventory({
                 type="number"
                 min={0}
                 step="0.01"
-                value={isComposite
-                  ? components.reduce(
-                      (s, c) =>
-                        s +
-                        c.quantity_per_unit *
-                          (allProducts.find(
-                            (p) => p.id === c.component_product_id,
-                          )?.cost_price ?? 0),
-                      0,
-                    ).toFixed(2)
-                  : form.cost_price}
-                disabled={isComposite}
+                value={form.cost_price}
                 onChange={(e) =>
                   setForm({ ...form, cost_price: Number(e.target.value) })
                 }
               />
-              {isComposite && (
-                <small style={{ color: "#888", fontSize: 11 }}>
-                  {t("compositeProductDesc")}
-                </small>
-              )}
             </Field>
             <Field label={t("sellPrice") + " *"}>
               <input
@@ -559,150 +502,29 @@ export function Inventory({
               />
             </Field>
 
-            <div style={{ margin: "8px 0", display: "flex", alignItems: "center", gap: 8, gridColumn: "1 / -1" }}>
-              <input
-                type="checkbox"
-                id="inv-is-composite"
-                checked={isComposite}
-                onChange={(e) => {
-                  setIsComposite(e.target.checked);
-                  if (!e.target.checked) setComponents([]);
-                }}
-                style={{ width: 18, height: 18 }}
-              />
-              <label htmlFor="inv-is-composite" style={{ fontWeight: 600, cursor: "pointer" }}>
-                {t("compositeProduct")}
-              </label>
-            </div>
-
-            {isComposite && (
-              <div
-                style={{
-                  border: "1px solid #ddd",
-                  borderRadius: 8,
-                  padding: 12,
-                  background: "#fafafa",
-                  gridColumn: "1 / -1",
-                }}
+            <Field label={t("compositeCategory") + " (" + t("optionalLabel") + ")"}>
+              <select
+                value={form.composite_category_id ?? ""}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    composite_category_id: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
               >
-                <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13 }}>
-                  {t("components")}
-                </div>
-                {components.length > 0 && (
-                  <table
-                    style={{
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      fontSize: 13,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <thead>
-                      <tr style={{ borderBottom: "1px solid #ddd" }}>
-                        <th style={{ textAlign: "right", padding: "4px 0" }}>{t("componentName")}</th>
-                        <th style={{ textAlign: "center", padding: "4px 0", width: 90 }}>{t("quantityPerUnit")}</th>
-                        <th style={{ textAlign: "center", padding: "4px 0", width: 80 }}>{t("componentStock")}</th>
-                        <th style={{ width: 40 }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {components.map((c) => (
-                        <tr key={c.component_product_id} style={{ borderBottom: "1px solid #eee" }}>
-                          <td style={{ padding: "4px 0" }}>
-                            {c.component_name}
-                            {c.component_unit ? ` (${c.component_unit})` : ""}
-                          </td>
-                          <td style={{ textAlign: "center", padding: "4px 0" }}>{c.quantity_per_unit}</td>
-                          <td style={{ textAlign: "center", padding: "4px 0" }}>{qty(c.component_quantity)}</td>
-                          <td>
-                            <button
-                              type="button"
-                              className="btn sm danger"
-                              onClick={() =>
-                                setComponents((prev) =>
-                                  prev.filter((x) => x.component_product_id !== c.component_product_id),
-                                )
-                              }
-                              style={{ padding: "2px 6px", fontSize: 12 }}
-                            >
-                              ✕
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-                {components.length === 0 && (
-                  <div style={{ color: "#999", fontSize: 13, marginBottom: 8 }}>{t("noComponents")}</div>
-                )}
-                <div style={{ display: "flex", gap: 6, alignItems: "end" }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600 }}>{t("selectComponent")}</label>
-                    <select
-                      value={compProductId}
-                      onChange={(e) => setCompProductId(e.target.value)}
-                      style={{ width: "100%", padding: "4px 6px", fontSize: 13 }}
-                    >
-                      <option value="">— {t("selectComponent")} —</option>
-                      {allProducts
-                        .filter((p) => !components.some((c) => c.component_product_id === p.id))
-                        .map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} ({p.unit ?? "-"}) — {t("componentStock")}: {qty(p.quantity)}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  <div style={{ width: 80 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600 }}>{t("quantityPerUnit")}</label>
-                    <input
-                      type="number"
-                      min={0.01}
-                      step="0.01"
-                      value={compQty}
-                      onChange={(e) => setCompQty(Number(e.target.value))}
-                      style={{ width: "100%", padding: "4px 6px", fontSize: 13 }}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="btn sm"
-                    onClick={() => {
-                      const pid = Number(compProductId);
-                      if (!pid) return;
-                      if (compQty <= 0) { notify(t("requiredComponents"), "error"); return; }
-                      if (components.some((c) => c.component_product_id === pid)) {
-                        notify("المكون موجود بالفعل", "error");
-                        return;
-                      }
-                      const p = allProducts.find((x) => x.id === pid);
-                      if (!p) return;
-                      setComponents((prev) => [
-                        ...prev,
-                        {
-                          id: 0,
-                          composite_product_id: editing?.id ?? 0,
-                          component_product_id: pid,
-                          component_name: p.name,
-                          component_unit: p.unit,
-                          component_quantity: p.quantity,
-                          quantity_per_unit: compQty,
-                        },
-                      ]);
-                      setCompProductId("");
-                      setCompQty(1);
-                    }}
-                    style={{ marginBottom: 0, height: 30 }}
-                  >
-                    + {t("addComponent")}
-                  </button>
-                </div>
-                <div style={{ marginTop: 6, fontSize: 11, color: "#888" }}>
-                  ℹ️ {t("componentsInfo")}
-                </div>
-              </div>
-            )}
+                <option value="">— {t("notComposite")} —</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              {form.composite_category_id && (
+                <small style={{ color: "#8b5cf6", fontSize: 11, display: "block", marginTop: 4 }}>
+                  ℹ️ {t("compositeCategoryHint")}
+                </small>
+              )}
+            </Field>
 
             <div className="form-actions">
               <button type="submit" className="btn primary">

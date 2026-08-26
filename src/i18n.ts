@@ -182,6 +182,13 @@ const translations: Record<string, Record<Lang, string>> = {
   saveComponents: { ar: "حفظ المكونات", en: "Save Components" },
   componentsSaved: { ar: "تم حفظ المكونات", en: "Components saved" },
   requiredComponents: { ar: "يجب إضافة مكون واحد على الأقل", en: "Add at least one component" },
+  compositeCategory: { ar: "تصنيف الإضافات", en: "Add-ons Category" },
+  compositeCategoryHint: { ar: "عند البيع تظهر منتجات هذا التصنيف كإضافات可以选择", en: "Products from this category appear as add-ons during sale" },
+  notComposite: { ar: "منتج عادي (غير مركب)", en: "Normal product (not composite)" },
+  addOn: { ar: "إضافة", en: "Add-on" },
+  addOns: { ar: "الإضافات", en: "Add-ons" },
+  selectAddOn: { ar: "اختر إضافة", en: "Select add-on" },
+  noAddOns: { ar: "لا توجد إضافات", en: "No add-ons available" },
 
   // ===== POS =====
   invoiceItems: { ar: "عناصر الفاتورة", en: "Invoice Items" },

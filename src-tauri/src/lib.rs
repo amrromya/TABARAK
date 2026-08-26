@@ -128,6 +128,7 @@ pub fn run() {
             commands::force_exit,
             commands::get_product_components,
             commands::save_product_components,
+            commands::list_products_by_category,
             commands::get_dashboard,
             commands::get_profit_loss,
             commands::get_stock_value,

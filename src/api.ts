@@ -97,6 +97,8 @@ export const api = {
     invoke<ProductComponent[]>("get_product_components", { productId }),
   saveProductComponents: (productId: number, components: NewProductComponent[]) =>
     invoke<void>("save_product_components", { productId, components }),
+  listProductsByCategory: (categoryId: number) =>
+    invoke<Product[]>("list_products_by_category", { categoryId }),
 
   // الموردون
   listSuppliers: () => invoke<Supplier[]>("list_suppliers"),

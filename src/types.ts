@@ -28,6 +28,8 @@ export interface Product {
   quantity: number;
   min_quantity: number;
   opening_balance: number;
+  composite_category_id: number | null;
+  composite_category_name: string | null;
 }
 
 export interface Supplier {
@@ -406,6 +408,7 @@ export interface NewProduct {
   sell_price: number;
   quantity: number;
   min_quantity: number;
+  composite_category_id?: number | null;
 }
 
 export interface OpeningBalanceItem {

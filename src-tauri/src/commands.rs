@@ -297,10 +297,12 @@ pub fn list_products(
     let conn = get_db(&state)?;
     let sql = "
         SELECT p.id, p.name, p.barcode, p.category_id, c.name, p.warehouse_id, w.name, p.unit,
-               p.cost_price, p.sell_price, p.quantity, p.min_quantity, p.opening_balance
+               p.cost_price, p.sell_price, p.quantity, p.min_quantity, p.opening_balance,
+               p.composite_category_id, cc.name
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
         LEFT JOIN warehouses w ON w.id = p.warehouse_id
+        LEFT JOIN categories cc ON cc.id = p.composite_category_id
         WHERE (?1 IS NULL OR p.name LIKE '%' || ?1 || '%' OR p.barcode LIKE '%' || ?1 || '%'
                OR c.name LIKE '%' || ?1 || '%' OR w.name LIKE '%' || ?1 || '%'
                OR p.unit LIKE '%' || ?1 || '%'
@@ -324,6 +326,8 @@ pub fn list_products(
                 quantity: r.get(10)?,
                 min_quantity: r.get(11)?,
                 opening_balance: r.get(12)?,
+                composite_category_id: r.get(13)?,
+                composite_category_name: r.get(14)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -352,10 +356,12 @@ pub fn list_products_paged(
 
     let sql = "
         SELECT p.id, p.name, p.barcode, p.category_id, c.name, p.warehouse_id, w.name, p.unit,
-               p.cost_price, p.sell_price, p.quantity, p.min_quantity, p.opening_balance
+               p.cost_price, p.sell_price, p.quantity, p.min_quantity, p.opening_balance,
+               p.composite_category_id, cc.name
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
         LEFT JOIN warehouses w ON w.id = p.warehouse_id
+        LEFT JOIN categories cc ON cc.id = p.composite_category_id
         WHERE (?1 IS NULL OR p.name LIKE '%' || ?1 || '%' OR p.barcode LIKE '%' || ?1 || '%')
         ORDER BY p.name COLLATE NOCASE
         LIMIT ?2 OFFSET ?3";
@@ -376,6 +382,8 @@ pub fn list_products_paged(
                 quantity: r.get(10)?,
                 min_quantity: r.get(11)?,
                 opening_balance: r.get(12)?,
+                composite_category_id: r.get(13)?,
+                composite_category_name: r.get(14)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -415,8 +423,8 @@ pub fn create_product(state: State<AppState>, input: NewProduct) -> Result<Produ
         _ => Some(next_barcode_value(&conn)?),
     };
     conn.execute(
-        "INSERT INTO products (name, barcode, category_id, warehouse_id, unit, cost_price, sell_price, quantity, min_quantity)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO products (name, barcode, category_id, warehouse_id, unit, cost_price, sell_price, quantity, min_quantity, composite_category_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             input.name.trim(),
             barcode,
@@ -426,7 +434,8 @@ pub fn create_product(state: State<AppState>, input: NewProduct) -> Result<Produ
             input.cost_price,
             input.sell_price,
             input.quantity,
-            input.min_quantity
+            input.min_quantity,
+            input.composite_category_id,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -447,7 +456,7 @@ pub fn update_product(
     };
     conn.execute(
         "UPDATE products SET name=?1, barcode=?2, category_id=?3, warehouse_id=?4, unit=?5,
-         cost_price=?6, sell_price=?7, quantity=?8, min_quantity=?9 WHERE id=?10",
+         cost_price=?6, sell_price=?7, quantity=?8, min_quantity=?9, composite_category_id=?10 WHERE id=?11",
         params![
             input.name.trim(),
             barcode,
@@ -458,6 +467,7 @@ pub fn update_product(
             input.sell_price,
             input.quantity,
             input.min_quantity,
+            input.composite_category_id,
             id
         ],
     )
@@ -522,10 +532,12 @@ pub fn get_opening_balance_summary(
 fn get_product(conn: &Connection, id: i64) -> Result<Product, String> {
     conn.query_row(
         "SELECT p.id, p.name, p.barcode, p.category_id, c.name, p.warehouse_id, w.name, p.unit,
-                p.cost_price, p.sell_price, p.quantity, p.min_quantity, p.opening_balance
+                p.cost_price, p.sell_price, p.quantity, p.min_quantity, p.opening_balance,
+                p.composite_category_id, cc.name
          FROM products p
          LEFT JOIN categories c ON c.id = p.category_id
          LEFT JOIN warehouses w ON w.id = p.warehouse_id
+         LEFT JOIN categories cc ON cc.id = p.composite_category_id
          WHERE p.id = ?1",
         params![id],
         |r| {
@@ -543,6 +555,8 @@ fn get_product(conn: &Connection, id: i64) -> Result<Product, String> {
                 quantity: r.get(10)?,
                 min_quantity: r.get(11)?,
                 opening_balance: r.get(12)?,
+                composite_category_id: r.get(13)?,
+                composite_category_name: r.get(14)?,
             })
         },
     )
@@ -1153,6 +1167,42 @@ pub fn save_product_components(
     }
     tx.commit().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn list_products_by_category(state: State<AppState>, category_id: i64) -> Result<Vec<Product>, String> {
+    let conn = get_db(&state)?;
+    let mut stmt = conn.prepare(
+        "SELECT p.id, p.name, p.barcode, p.category_id, c.name, p.warehouse_id, w.name, p.unit,
+                p.cost_price, p.sell_price, p.quantity, p.min_quantity, p.opening_balance,
+                p.composite_category_id, cc.name
+         FROM products p
+         LEFT JOIN categories c ON c.id = p.category_id
+         LEFT JOIN warehouses w ON w.id = p.warehouse_id
+         LEFT JOIN categories cc ON cc.id = p.composite_category_id
+         WHERE p.category_id = ?1
+         ORDER BY p.name COLLATE NOCASE"
+    ).map_err(|e| e.to_string())?;
+    let rows = stmt.query_map(params![category_id], |r| {
+        Ok(Product {
+            id: r.get(0)?,
+            name: r.get(1)?,
+            barcode: r.get(2)?,
+            category_id: r.get(3)?,
+            category_name: r.get(4)?,
+            warehouse_id: r.get(5)?,
+            warehouse_name: r.get(6)?,
+            unit: r.get(7)?,
+            cost_price: r.get(8)?,
+            sell_price: r.get(9)?,
+            quantity: r.get(10)?,
+            min_quantity: r.get(11)?,
+            opening_balance: r.get(12)?,
+            composite_category_id: r.get(13)?,
+            composite_category_name: r.get(14)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
