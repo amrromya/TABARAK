@@ -853,9 +853,9 @@ export function Sales({
             <table className="table">
               <thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
               <tbody>
-                {viewingSale.items.map((it, i) => (
+                {viewingSale.items.filter((it) => !(it.sell_price === 0 && !it.item_name)).map((it, i) => (
                   <tr key={i}>
-                    <td>{it.product_name}</td>
+                    <td>{it.item_name || it.product_name}</td>
                     <td>{qty(it.quantity)}</td>
                     <td>{money(it.sell_price)}</td>
                     <td>{money(it.quantity * it.sell_price)}</td>
@@ -886,9 +886,9 @@ export function Sales({
             <table className="table">
               <thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
               <tbody>
-                {viewingReturn.items.map((it, i) => (
+                {viewingReturn.items.filter((it) => !(it.sell_price === 0 && !it.item_name)).map((it, i) => (
                   <tr key={i}>
-                    <td>{it.product_name}</td>
+                    <td>{it.item_name || it.product_name}</td>
                     <td>{qty(it.quantity)}</td>
                     <td>{money(it.sell_price)}</td>
                     <td>{money(it.total)}</td>

@@ -86,10 +86,10 @@ export function PrintInvoice({
             </tr>
           </thead>
           <tbody>
-            {sale.items.map((it, i) => (
+            {sale.items.filter((it) => !(it.sell_price === 0 && !it.item_name)).map((it, i) => (
               <tr key={i}>
                 <td>{i + 1}</td>
-                <td>{it.product_name}</td>
+                <td>{it.item_name || it.product_name}</td>
                 <td>{qty(it.quantity)}</td>
                 <td>{money(it.sell_price)}</td>
                 <td>{money(it.total)}</td>

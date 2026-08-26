@@ -74,6 +74,7 @@ export interface SaleItem {
   quantity: number;
   sell_price: number;
   total: number;
+  item_name?: string | null;
 }
 
 export interface Sale {
@@ -168,6 +169,7 @@ export interface SaleReturnItem {
   sell_price: number;
   cost_price: number;
   total: number;
+  item_name?: string | null;
 }
 
 export interface SaleReturn {
@@ -192,6 +194,7 @@ export interface NewSaleReturnItem {
   product_id: number;
   quantity: number;
   sell_price: number;
+  item_name?: string | null;
 }
 
 export interface NewSaleReturn {
@@ -420,6 +423,7 @@ export interface NewSaleItem {
   product_id: number;
   quantity: number;
   sell_price: number;
+  item_name?: string | null;
 }
 
 export interface NewSale {

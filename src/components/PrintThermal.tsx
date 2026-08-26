@@ -135,11 +135,11 @@ export function PrintThermal({
           </div>
 
           {/* Items */}
-          {sale.items.map((it, i) => (
+          {sale.items.filter((it) => !(it.sell_price === 0 && !it.item_name)).map((it, i) => (
             <div key={i} style={{ ...itemRow, ...small, padding: "1px 0" }}>
               <span style={{ width: "20px" }}>{i + 1}</span>
               <span style={{ width: nameCol, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {it.product_name}
+                {it.item_name || it.product_name}
               </span>
               <span style={{ width: qtyCol, textAlign: "center" }}>{qty(it.quantity)}</span>
               <span style={{ width: priceCol, textAlign: "center" }}>{money(it.sell_price)}</span>

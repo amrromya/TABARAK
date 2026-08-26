@@ -85,6 +85,7 @@ pub struct SaleItem {
     pub quantity: f64,
     pub sell_price: f64,
     pub total: f64,
+    pub item_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,6 +115,7 @@ pub struct SaleReturnItem {
     pub sell_price: f64,
     pub cost_price: f64,
     pub total: f64,
+    pub item_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,6 +142,7 @@ pub struct NewSaleReturnItem {
     pub product_id: i64,
     pub quantity: f64,
     pub sell_price: f64,
+    pub item_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -369,6 +372,7 @@ pub struct NewSaleItem {
     pub product_id: i64,
     pub quantity: f64,
     pub sell_price: f64,
+    pub item_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

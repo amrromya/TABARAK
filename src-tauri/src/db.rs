@@ -368,6 +368,8 @@ fn migrate(conn: &Connection) -> Result<(), String> {
     ensure_column(conn, "suppliers", "address", "TEXT")?;
     ensure_column(conn, "suppliers", "credit_limit", "REAL DEFAULT 0")?;
     ensure_column(conn, "products", "composite_category_id", "INTEGER REFERENCES categories(id) ON DELETE SET NULL")?;
+    ensure_column(conn, "sale_items", "item_name", "TEXT")?;
+    ensure_column(conn, "sale_return_items", "item_name", "TEXT")?;
 
     // إنشاء موظف افتراضي "المدير العام" إذا لم يكن موجودًا
     conn.execute(

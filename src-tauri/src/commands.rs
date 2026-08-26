@@ -1069,7 +1069,7 @@ pub fn list_sales(
             .map(|_| "?".to_string())
             .collect();
         let items_sql = format!(
-            "SELECT si.sale_id, si.product_id, p.name, si.quantity, si.sell_price, (si.quantity * si.sell_price)
+            "SELECT si.sale_id, si.product_id, p.name, si.quantity, si.sell_price, (si.quantity * si.sell_price), si.item_name
              FROM sale_items si
              JOIN products p ON p.id = si.product_id
              WHERE si.sale_id IN ({})",
@@ -1089,6 +1089,7 @@ pub fn list_sales(
                         quantity: r.get(3)?,
                         sell_price: r.get(4)?,
                         total: r.get(5)?,
+                        item_name: r.get(6)?,
                     },
                 ))
             })
@@ -1347,9 +1348,9 @@ pub fn create_sale(state: State<AppState>, input: NewSale) -> Result<Sale, Strin
             .map_err(|e| e.to_string())?
         };
         tx.execute(
-            "INSERT INTO sale_items (sale_id, product_id, quantity, sell_price, cost_price)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![sale_id, it.product_id, it.quantity, it.sell_price, cost_price],
+            "INSERT INTO sale_items (sale_id, product_id, quantity, sell_price, cost_price, item_name)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![sale_id, it.product_id, it.quantity, it.sell_price, cost_price, it.item_name],
         )
         .map_err(|e| e.to_string())?;
         if has_components > 0 {
@@ -1588,9 +1589,9 @@ pub fn update_sale(
             .map_err(|e| e.to_string())?
         };
         tx.execute(
-            "INSERT INTO sale_items (sale_id, product_id, quantity, sell_price, cost_price)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![id, it.product_id, it.quantity, it.sell_price, cost_price],
+            "INSERT INTO sale_items (sale_id, product_id, quantity, sell_price, cost_price, item_name)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, it.product_id, it.quantity, it.sell_price, cost_price, it.item_name],
         )
         .map_err(|e| e.to_string())?;
         if has_components > 0 {
@@ -1697,7 +1698,7 @@ fn get_sale_full(conn: &Connection, id: i64) -> Result<Sale, String> {
         .map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare(
-            "SELECT si.product_id, p.name, si.quantity, si.sell_price, (si.quantity * si.sell_price)
+            "SELECT si.product_id, p.name, si.quantity, si.sell_price, (si.quantity * si.sell_price), si.item_name
              FROM sale_items si
              JOIN products p ON p.id = si.product_id
              WHERE si.sale_id = ?1",
@@ -1711,6 +1712,7 @@ fn get_sale_full(conn: &Connection, id: i64) -> Result<Sale, String> {
                 quantity: r.get(2)?,
                 sell_price: r.get(3)?,
                 total: r.get(4)?,
+                item_name: r.get(5)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -2373,7 +2375,7 @@ pub fn list_sale_returns(
             .map(|_| "?".to_string())
             .collect();
         let items_sql = format!(
-            "SELECT sri.return_id, sri.product_id, p.name, sri.quantity, sri.sell_price, sri.cost_price, (sri.quantity * sri.sell_price)
+            "SELECT sri.return_id, sri.product_id, p.name, sri.quantity, sri.sell_price, sri.cost_price, (sri.quantity * sri.sell_price), sri.item_name
              FROM sale_return_items sri
              JOIN products p ON p.id = sri.product_id
              WHERE sri.return_id IN ({})",
@@ -2394,6 +2396,7 @@ pub fn list_sale_returns(
                         sell_price: r.get(4)?,
                         cost_price: r.get(5)?,
                         total: r.get(6)?,
+                        item_name: r.get(7)?,
                     },
                 ))
             })
@@ -2451,7 +2454,7 @@ pub fn get_sale_return(state: State<AppState>, id: i64) -> Result<SaleReturn, St
         .map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare(
-            "SELECT sri.product_id, p.name, sri.quantity, sri.sell_price, sri.cost_price, (sri.quantity * sri.sell_price)
+            "SELECT sri.product_id, p.name, sri.quantity, sri.sell_price, sri.cost_price, (sri.quantity * sri.sell_price), sri.item_name
              FROM sale_return_items sri
              JOIN products p ON p.id = sri.product_id
              WHERE sri.return_id = ?1",
@@ -2466,6 +2469,7 @@ pub fn get_sale_return(state: State<AppState>, id: i64) -> Result<SaleReturn, St
                 sell_price: r.get(3)?,
                 cost_price: r.get(4)?,
                 total: r.get(5)?,
+                item_name: r.get(6)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -2533,9 +2537,9 @@ pub fn create_sale_return(
             )
             .map_err(|e| e.to_string())?;
         tx.execute(
-            "INSERT INTO sale_return_items (return_id, product_id, quantity, sell_price, cost_price)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![return_id, it.product_id, it.quantity, it.sell_price, cost_price],
+            "INSERT INTO sale_return_items (return_id, product_id, quantity, sell_price, cost_price, item_name)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![return_id, it.product_id, it.quantity, it.sell_price, cost_price, it.item_name],
         )
         .map_err(|e| e.to_string())?;
         tx.execute(
@@ -2592,7 +2596,7 @@ fn get_sale_return_full(conn: &Connection, id: i64) -> Result<SaleReturn, String
         .map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare(
-            "SELECT sri.product_id, p.name, sri.quantity, sri.sell_price, sri.cost_price, (sri.quantity * sri.sell_price)
+            "SELECT sri.product_id, p.name, sri.quantity, sri.sell_price, sri.cost_price, (sri.quantity * sri.sell_price), sri.item_name
              FROM sale_return_items sri
              JOIN products p ON p.id = sri.product_id
              WHERE sri.return_id = ?1",
@@ -2607,6 +2611,7 @@ fn get_sale_return_full(conn: &Connection, id: i64) -> Result<SaleReturn, String
                 sell_price: r.get(3)?,
                 cost_price: r.get(4)?,
                 total: r.get(5)?,
+                item_name: r.get(6)?,
             })
         })
         .map_err(|e| e.to_string())?

@@ -376,14 +376,25 @@ export function Pos({ onBack }: { onBack: () => void }) {
       paymentMethod === "credit" ? null : (paymentMethod === "card" && cardSubType === "wallet" && walletPhone.trim() ? walletPhone.trim() : (cashCustomer.trim() || null)),
     payment_method: paymentMethod === "card" ? (cardSubType === "wallet" ? "card_wallet" : "card_visa") : paymentMethod,
     employee_id: employeeId ? Number(employeeId) : null,
-    items: lines.flatMap((l) => [
-      { product_id: l.product_id, quantity: l.quantity, sell_price: l.sell_price },
-      ...l.addons.map((a) => ({
-        product_id: a.product_id,
-        quantity: a.quantity,
-        sell_price: a.sell_price,
-      })),
-    ]),
+    items: lines.flatMap((l) => {
+      if (l.addons.length > 0) {
+        const addonTotal = l.addons.reduce((s, a) => s + a.sell_price * a.quantity, 0);
+        const addonNames = l.addons.map((a) => a.name).join(" + ");
+        const mergedName = `${l.name} + ${addonNames}`;
+        return [
+          { product_id: l.product_id, quantity: l.quantity, sell_price: l.sell_price + addonTotal, item_name: mergedName },
+          ...l.addons.map((a) => ({
+            product_id: a.product_id,
+            quantity: a.quantity,
+            sell_price: 0,
+            item_name: null as string | null,
+          })),
+        ];
+      }
+      return [
+        { product_id: l.product_id, quantity: l.quantity, sell_price: l.sell_price, item_name: null as string | null },
+      ];
+    }),
   });
 
   const afterSave = async () => {
@@ -1071,9 +1082,9 @@ export function Pos({ onBack }: { onBack: () => void }) {
             <table className="table">
               <thead><tr><th>{t("item")}</th><th>{t("quantity")}</th><th>{t("price")}</th><th>{t("total")}</th></tr></thead>
               <tbody>
-                {viewingSale.items.map((it, i) => (
+                {viewingSale.items.filter((it) => !(it.sell_price === 0 && !it.item_name)).map((it, i) => (
                   <tr key={i}>
-                    <td>{it.product_name}</td>
+                    <td>{it.item_name || it.product_name}</td>
                     <td>{qty(it.quantity)}</td>
                     <td>{money(it.sell_price)}</td>
                     <td>{money(it.quantity * it.sell_price)}</td>
@@ -1104,9 +1115,9 @@ export function Pos({ onBack }: { onBack: () => void }) {
             <table className="table">
               <thead><tr><th>{t("item")}</th><th>{t("quantity")}</th><th>{t("price")}</th><th>{t("total")}</th></tr></thead>
               <tbody>
-                {viewingReturn.items.map((it, i) => (
+                {viewingReturn.items.filter((it) => !(it.sell_price === 0 && !it.item_name)).map((it, i) => (
                   <tr key={i}>
-                    <td>{it.product_name}</td>
+                    <td>{it.item_name || it.product_name}</td>
                     <td>{qty(it.quantity)}</td>
                     <td>{money(it.sell_price)}</td>
                     <td>{money(it.total)}</td>

@@ -1235,11 +1235,11 @@ export function Customers({
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {expandedSaleItems.map((it, i) => (
+                                    {expandedSaleItems.filter((it) => !(it.sell_price === 0 && !it.item_name)).map((it, i) => (
                                       <tr key={i}>
                                         <td>{i + 1}</td>
                                         <td className="strong">
-                                          {it.product_name}
+                                          {it.item_name || it.product_name}
                                         </td>
                                         <td>{qty(it.quantity)}</td>
                                         <td>{money(it.sell_price)}</td>
