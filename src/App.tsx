@@ -144,10 +144,15 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
   // Close behavior: popup windows close immediately, main window shows backup dialog
   useEffect(() => {
     const w = getCurrentWindow();
-    const isPopup = window.location.hash.includes("popup=1");
-    const unlisten = w.onCloseRequested(async () => {
+    const winLabel = w.label;
+    const isPopup = winLabel !== "main";
+    const unlisten = w.onCloseRequested(async (e) => {
+      e.preventDefault();
       if (isPopup) {
-        try { await w.destroy(); } catch {}
+        try {
+          const win = await WebviewWindow.getByLabel(winLabel);
+          if (win) await win.destroy();
+        } catch {}
         return;
       }
       setShowCloseDialog(true);
