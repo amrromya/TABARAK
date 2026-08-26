@@ -533,6 +533,21 @@ export interface ProductMovement {
   payment_method?: string | null;
 }
 
+export interface ProductComponent {
+  id: number;
+  composite_product_id: number;
+  component_product_id: number;
+  component_name: string;
+  component_unit: string | null;
+  component_quantity: number;
+  quantity_per_unit: number;
+}
+
+export interface NewProductComponent {
+  component_product_id: number;
+  quantity_per_unit: number;
+}
+
 export interface ProductMovementsQuery {
   product_id: number;
 }

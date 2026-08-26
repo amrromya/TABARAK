@@ -28,6 +28,8 @@ interface Line {
   sell_price: number;
   available: number;
   cost_price: number;
+  is_composite: boolean;
+  components?: { name: string; qty_per_unit: number; available: number; unit: string | null }[];
 }
 
 const PAYMENT_METHODS = [
@@ -60,6 +62,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
   const [walletPhone, setWalletPhone] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [cashCustomer, setCashCustomer] = useState("");
+  const [cashPhone, setCashPhone] = useState("");
   const [date, setDate] = useState(today());
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState<DiscountType>("amount");
@@ -174,6 +177,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
             sell_price: it.sell_price,
             available: prod ? prod.quantity : it.quantity,
             cost_price: prod ? prod.cost_price : 0,
+            is_composite: false,
           };
         }),
       );
@@ -234,7 +238,29 @@ export function Pos({ onBack }: { onBack: () => void }) {
     )
     .slice(0, 20);
 
-  const addProduct = (p: Product) => {
+  const addProduct = async (p: Product) => {
+    let isComposite = false;
+    let components: Line["components"] = undefined;
+    let available = p.quantity;
+    try {
+      const comps = await api.getProductComponents(p.id);
+      if (comps.length > 0) {
+        isComposite = true;
+        components = comps.map((c) => ({
+          name: c.component_name,
+          qty_per_unit: c.quantity_per_unit,
+          available: c.component_quantity,
+          unit: c.component_unit,
+        }));
+        available = Math.min(
+          ...comps.map((c) =>
+            c.quantity_per_unit > 0
+              ? Math.floor(c.component_quantity / c.quantity_per_unit)
+              : 0,
+          ),
+        );
+      }
+    } catch {}
     setLines((ls) => {
       const existing = ls.find((l) => l.product_id === p.id);
       if (existing) {
@@ -251,8 +277,10 @@ export function Pos({ onBack }: { onBack: () => void }) {
           name: p.name,
           quantity: 1,
           sell_price: p.sell_price,
-          available: p.quantity,
+          available,
           cost_price: p.cost_price,
+          is_composite: isComposite,
+          components,
         },
       ];
     });
@@ -343,10 +371,32 @@ export function Pos({ onBack }: { onBack: () => void }) {
       return;
     }
     try {
+      let effectiveCustomerId = customerId ? Number(customerId) : null;
+      if (
+        paymentMethod !== "credit" &&
+        !effectiveCustomerId &&
+        cashCustomer.trim() &&
+        cashPhone.trim()
+      ) {
+        try {
+          const newCust = await api.createCustomer({
+            name: cashCustomer.trim(),
+            phone: cashPhone.trim(),
+          });
+          effectiveCustomerId = newCust.id;
+          setCustomers((prev) => [...prev, newCust]);
+        } catch {}
+      }
       const isNew = currentId == null;
       const saved = isNew
-        ? await api.createSale(buildInput())
-        : await api.updateSale(currentId, buildInput());
+        ? await api.createSale({
+            ...buildInput(),
+            customer_id: effectiveCustomerId,
+          })
+        : await api.updateSale(currentId, {
+            ...buildInput(),
+            customer_id: effectiveCustomerId,
+          });
       setCurrentId(saved.id);
       setLines(
         saved.items.map((it) => ({
@@ -356,6 +406,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
           sell_price: it.sell_price,
           available: it.quantity,
           cost_price: 0,
+          is_composite: false,
         })),
       );
       setPaymentMethod(saved.payment_method);
@@ -363,6 +414,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
       setCashCustomer(
         saved.customer_id == null ? (saved.customer_name ?? "") : "",
       );
+      setCashPhone("");
       setDate(saved.date);
       setDiscount(saved.discount || 0);
       setDiscountType("amount");
@@ -663,10 +715,26 @@ export function Pos({ onBack }: { onBack: () => void }) {
                       }}
                     >
                       <td>
-                        <div className="pos-line-name">{l.name}</div>
+                        <div className="pos-line-name">
+                          {l.name}
+                          {l.is_composite && (
+                            <span style={{ fontSize: 11, color: "#8b5cf6", marginRight: 6 }}>
+                              🔗 {t("compositeProduct")}
+                            </span>
+                          )}
+                        </div>
                         <div className="hint">
                           {t("availableLabel")}: {qty(l.available)} · {t("costPriceShort")}: {money(l.cost_price)}
                         </div>
+                        {l.is_composite && l.components && l.components.length > 0 && (
+                          <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
+                            {l.components.map((c, i) => (
+                              <span key={i} style={{ marginRight: 8 }}>
+                                {c.name}: {c.qty_per_unit} {c.unit ?? ""} ({t("componentStock")}: {qty(c.available)})
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         {l.quantity > l.available && (
                           <div className="pos-qty-warn">⚠️ {t("qtyExceedsAvailable")}</div>
                         )}
@@ -834,6 +902,12 @@ export function Pos({ onBack }: { onBack: () => void }) {
                 placeholder={t("cashCustomerPlaceholder")}
                 value={cashCustomer}
                 onChange={(e) => setCashCustomer(e.target.value)}
+              />
+              <label style={{ marginTop: 8 }}>{t("customerPhone")} ({t("optionalLabel")})</label>
+              <input
+                placeholder={t("cashPhonePlaceholder")}
+                value={cashPhone}
+                onChange={(e) => setCashPhone(e.target.value)}
               />
               <div className="pos-panel-ok" style={{ marginTop: 10 }}>
                 {paid

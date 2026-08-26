@@ -168,6 +168,21 @@ const translations: Record<string, Record<Lang, string>> = {
   stockCount: { ar: "جرد مخزون", en: "Stock Count" },
   printBarcode: { ar: "طباعة باركود", en: "Print Barcode" },
 
+  // المنتجات المركبة
+  compositeProduct: { ar: "صنف مركب", en: "Composite Product" },
+  compositeProductDesc: { ar: "المنتج مكون من عدة عناصر (برفان + زجاجة + علبة)", en: "Product consists of multiple components" },
+  components: { ar: "المكونات", en: "Components" },
+  addComponent: { ar: "إضافة مكون", en: "Add Component" },
+  componentName: { ar: "اسم المكون", en: "Component Name" },
+  quantityPerUnit: { ar: "الكمية لكل وحدة", en: "Qty per Unit" },
+  noComponents: { ar: "لا توجد مكونات بعد", en: "No components yet" },
+  selectComponent: { ar: "اختر مكون", en: "Select component" },
+  componentStock: { ar: "متوفر", en: "Available" },
+  componentsInfo: { ar: "المكونات تنقص تلقائياً عند البيع", en: "Components are deducted automatically on sale" },
+  saveComponents: { ar: "حفظ المكونات", en: "Save Components" },
+  componentsSaved: { ar: "تم حفظ المكونات", en: "Components saved" },
+  requiredComponents: { ar: "يجب إضافة مكون واحد على الأقل", en: "Add at least one component" },
+
   // ===== POS =====
   invoiceItems: { ar: "عناصر الفاتورة", en: "Invoice Items" },
   subtotal: { ar: "المجموع", en: "Subtotal" },
@@ -229,6 +244,8 @@ const translations: Record<string, Record<Lang, string>> = {
   chooseEmployee: { ar: "اختر الموظف", en: "Choose Employee" },
   newCustomer: { ar: "عميل جديد", en: "New Customer" },
   customerNameLabel: { ar: "اسم العميل", en: "Customer Name" },
+  customerPhone: { ar: "رقم الجوال", en: "Phone Number" },
+  cashPhonePlaceholder: { ar: "رقم الجوال (يتم حفظ العميل تلقائياً)", en: "Phone (customer saved automatically)" },
   saveCustomer: { ar: "حفظ العميل", en: "Save Customer" },
   saleInvoiceTitle: { ar: "فاتورة بيع", en: "Sale Invoice" },
   returnInvoiceTitle: { ar: "فاتورة مردود مبيعات", en: "Sales Return Invoice" },

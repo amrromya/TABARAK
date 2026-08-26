@@ -19,6 +19,7 @@ import type {
   NewEmployeeShift,
   NewExpense,
   NewProduct,
+  NewProductComponent,
   NewPurchase,
   NewPurchaseReturn,
   NewSale,
@@ -29,6 +30,7 @@ import type {
   NewSupplier,
   NewVacation,
   Product,
+  ProductComponent,
   ProductMovement,
   ProfitLoss,
   Purchase,
@@ -89,6 +91,12 @@ export const api = {
     invoke<[number, number, number]>("get_opening_balance_summary"),
   getWarehouseCashBalances: () =>
     invoke<{ warehouse_id: number; warehouse_name: string; cash_in: number; cash_out: number; balance: number }[]>("get_warehouse_cash_balances"),
+
+  // المنتجات المركبة
+  getProductComponents: (productId: number) =>
+    invoke<ProductComponent[]>("get_product_components", { productId }),
+  saveProductComponents: (productId: number, components: NewProductComponent[]) =>
+    invoke<void>("save_product_components", { productId, components }),
 
   // الموردون
   listSuppliers: () => invoke<Supplier[]>("list_suppliers"),

@@ -1102,6 +1102,60 @@ pub fn get_sale(state: State<AppState>, id: i64) -> Result<Sale, String> {
 }
 
 #[tauri::command]
+pub fn get_product_components(state: State<AppState>, product_id: i64) -> Result<Vec<ProductComponent>, String> {
+    let conn = get_db(&state)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT pc.id, pc.composite_product_id, pc.component_product_id,
+                    p.name, p.unit, p.quantity, pc.quantity_per_unit
+             FROM product_components pc
+             JOIN products p ON p.id = pc.component_product_id
+             WHERE pc.composite_product_id = ?1
+             ORDER BY p.name",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![product_id], |r| {
+            Ok(ProductComponent {
+                id: r.get(0)?,
+                composite_product_id: r.get(1)?,
+                component_product_id: r.get(2)?,
+                component_name: r.get(3)?,
+                component_unit: r.get(4)?,
+                component_quantity: r.get(5)?,
+                quantity_per_unit: r.get(6)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn save_product_components(
+    state: State<AppState>,
+    product_id: i64,
+    components: Vec<NewProductComponent>,
+) -> Result<(), String> {
+    let conn = get_db(&state)?;
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM product_components WHERE composite_product_id = ?1", params![product_id])
+        .map_err(|e| e.to_string())?;
+    for c in &components {
+        if c.quantity_per_unit <= 0.0 {
+            return Err("كمية المكون يجب أن تكون أكبر من صفر".into());
+        }
+        tx.execute(
+            "INSERT INTO product_components (composite_product_id, component_product_id, quantity_per_unit)
+             VALUES (?1, ?2, ?3)",
+            params![product_id, c.component_product_id, c.quantity_per_unit],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn create_sale(state: State<AppState>, input: NewSale) -> Result<Sale, String> {
     let conn = get_db(&state)?;
     if input.items.is_empty() {
@@ -1123,22 +1177,56 @@ pub fn create_sale(state: State<AppState>, input: NewSale) -> Result<Sale, Strin
         if it.quantity <= 0.0 {
             return Err("الكمية يجب أن تكون أكبر من صفر".into());
         }
-        let available: f64 = tx
+        let has_components: i64 = tx
             .query_row(
-                "SELECT quantity FROM products WHERE id = ?1",
+                "SELECT COUNT(*) FROM product_components WHERE composite_product_id = ?1",
                 params![it.product_id],
                 |r| r.get(0),
             )
-            .map_err(|_| "منتج غير موجود".to_string())?;
-        if available < it.quantity {
-            let name: String = tx
+            .unwrap_or(0);
+        if has_components > 0 {
+            let mut stmt = tx
+                .prepare(
+                    "SELECT pc.quantity_per_unit, p.quantity, p.name
+                     FROM product_components pc
+                     JOIN products p ON p.id = pc.component_product_id
+                     WHERE pc.composite_product_id = ?1",
+                )
+                .map_err(|e| e.to_string())?;
+            let components: Vec<(f64, f64, String)> = stmt
+                .query_map(params![it.product_id], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+                })
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            drop(stmt);
+            for (qty_per_unit, comp_available, comp_name) in &components {
+                let needed = it.quantity * qty_per_unit;
+                if comp_available < &needed {
+                    return Err(format!(
+                        "الكمية غير كافية للمنتج «{comp_name}» (المتوفر: {comp_available})"
+                    ));
+                }
+            }
+        } else {
+            let available: f64 = tx
                 .query_row(
-                    "SELECT name FROM products WHERE id = ?1",
+                    "SELECT quantity FROM products WHERE id = ?1",
                     params![it.product_id],
                     |r| r.get(0),
                 )
                 .map_err(|_| "منتج غير موجود".to_string())?;
-            return Err(format!("الكمية غير كافية للمنتج «{name}» (المتوفر: {available})"));
+            if available < it.quantity {
+                let name: String = tx
+                    .query_row(
+                        "SELECT name FROM products WHERE id = ?1",
+                        params![it.product_id],
+                        |r| r.get(0),
+                    )
+                    .map_err(|_| "منتج غير موجود".to_string())?;
+                return Err(format!("الكمية غير كافية للمنتج «{name}» (المتوفر: {available})"));
+            }
         }
     }
 
@@ -1176,24 +1264,70 @@ pub fn create_sale(state: State<AppState>, input: NewSale) -> Result<Sale, Strin
     let mut total = 0.0;
     for it in &input.items {
         let subtotal = crate::utils::money(it.quantity * it.sell_price);
-        let cost_price: f64 = tx
+        let has_components: i64 = tx
             .query_row(
+                "SELECT COUNT(*) FROM product_components WHERE composite_product_id = ?1",
+                params![it.product_id],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        let cost_price: f64 = if has_components > 0 {
+            let mut stmt = tx
+                .prepare(
+                    "SELECT pc.quantity_per_unit, p.cost_price
+                     FROM product_components pc
+                     JOIN products p ON p.id = pc.component_product_id
+                     WHERE pc.composite_product_id = ?1",
+                )
+                .map_err(|e| e.to_string())?;
+            let comp_costs: Vec<(f64, f64)> = stmt
+                .query_map(params![it.product_id], |r| Ok((r.get(0)?, r.get(1)?)))
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            drop(stmt);
+            comp_costs.iter().map(|(q, c)| q * c).sum::<f64>()
+        } else {
+            tx.query_row(
                 "SELECT cost_price FROM products WHERE id = ?1",
                 params![it.product_id],
                 |r| r.get(0),
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())?
+        };
         tx.execute(
             "INSERT INTO sale_items (sale_id, product_id, quantity, sell_price, cost_price)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![sale_id, it.product_id, it.quantity, it.sell_price, cost_price],
         )
         .map_err(|e| e.to_string())?;
-        tx.execute(
-            "UPDATE products SET quantity = quantity - ?1 WHERE id = ?2",
-            params![it.quantity, it.product_id],
-        )
-        .map_err(|e| e.to_string())?;
+        if has_components > 0 {
+            let mut stmt = tx
+                .prepare(
+                    "SELECT component_product_id, quantity_per_unit
+                     FROM product_components WHERE composite_product_id = ?1",
+                )
+                .map_err(|e| e.to_string())?;
+            let comps: Vec<(i64, f64)> = stmt
+                .query_map(params![it.product_id], |r| Ok((r.get(0)?, r.get(1)?)))
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            drop(stmt);
+            for (comp_id, qty_per) in comps {
+                tx.execute(
+                    "UPDATE products SET quantity = quantity - ?1 WHERE id = ?2",
+                    params![it.quantity * qty_per, comp_id],
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        } else {
+            tx.execute(
+                "UPDATE products SET quantity = quantity - ?1 WHERE id = ?2",
+                params![it.quantity, it.product_id],
+            )
+            .map_err(|e| e.to_string())?;
+        }
         total += subtotal;
     }
 
@@ -1243,11 +1377,37 @@ pub fn update_sale(
     drop(stmt);
 
     for (pid, qty) in old {
-        tx.execute(
-            "UPDATE products SET quantity = quantity + ?1 WHERE id = ?2",
-            params![qty, pid],
-        )
-        .map_err(|e| e.to_string())?;
+        let has_comp: i64 = tx
+            .query_row(
+                "SELECT COUNT(*) FROM product_components WHERE composite_product_id = ?1",
+                params![pid],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        if has_comp > 0 {
+            let mut s = tx
+                .prepare("SELECT component_product_id, quantity_per_unit FROM product_components WHERE composite_product_id = ?1")
+                .map_err(|e| e.to_string())?;
+            let comps: Vec<(i64, f64)> = s
+                .query_map(params![pid], |r| Ok((r.get(0)?, r.get(1)?)))
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            drop(s);
+            for (cid, qpu) in comps {
+                tx.execute(
+                    "UPDATE products SET quantity = quantity + ?1 WHERE id = ?2",
+                    params![qty * qpu, cid],
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        } else {
+            tx.execute(
+                "UPDATE products SET quantity = quantity + ?1 WHERE id = ?2",
+                params![qty, pid],
+            )
+            .map_err(|e| e.to_string())?;
+        }
     }
     tx.execute("DELETE FROM sale_items WHERE sale_id = ?1", params![id])
         .map_err(|e| e.to_string())?;
@@ -1256,24 +1416,58 @@ pub fn update_sale(
         if it.quantity <= 0.0 {
             return Err("الكمية يجب أن تكون أكبر من صفر".into());
         }
-        let available: f64 = tx
+        let has_components: i64 = tx
             .query_row(
-                "SELECT quantity FROM products WHERE id = ?1",
+                "SELECT COUNT(*) FROM product_components WHERE composite_product_id = ?1",
                 params![it.product_id],
                 |r| r.get(0),
             )
-            .map_err(|_| "منتج غير موجود".to_string())?;
-        if available < it.quantity {
-            let name: String = tx
+            .unwrap_or(0);
+        if has_components > 0 {
+            let mut stmt = tx
+                .prepare(
+                    "SELECT pc.quantity_per_unit, p.quantity, p.name
+                     FROM product_components pc
+                     JOIN products p ON p.id = pc.component_product_id
+                     WHERE pc.composite_product_id = ?1",
+                )
+                .map_err(|e| e.to_string())?;
+            let components: Vec<(f64, f64, String)> = stmt
+                .query_map(params![it.product_id], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+                })
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            drop(stmt);
+            for (qty_per_unit, comp_available, comp_name) in &components {
+                let needed = it.quantity * qty_per_unit;
+                if comp_available < &needed {
+                    return Err(format!(
+                        "الكمية غير كافية للمنتج «{comp_name}» (المتوفر: {comp_available})"
+                    ));
+                }
+            }
+        } else {
+            let available: f64 = tx
                 .query_row(
-                    "SELECT name FROM products WHERE id = ?1",
+                    "SELECT quantity FROM products WHERE id = ?1",
                     params![it.product_id],
                     |r| r.get(0),
                 )
                 .map_err(|_| "منتج غير موجود".to_string())?;
-            return Err(format!(
-                "الكمية غير كافية للمنتج «{name}» (المتوفر: {available})"
-            ));
+            if available < it.quantity {
+                let name: String = tx
+                    .query_row(
+                        "SELECT name FROM products WHERE id = ?1",
+                        params![it.product_id],
+                        |r| r.get(0),
+                    )
+                    .map_err(|_| "منتج غير موجود".to_string())?;
+                return Err(format!(
+                    "الكمية غير كافية للمنتج «{name}» (المتوفر: {available})"
+                ));
+            }
         }
     }
 
@@ -1311,24 +1505,70 @@ pub fn update_sale(
     let mut total = 0.0;
     for it in &input.items {
         let subtotal = crate::utils::money(it.quantity * it.sell_price);
-        let cost_price: f64 = tx
+        let has_components: i64 = tx
             .query_row(
+                "SELECT COUNT(*) FROM product_components WHERE composite_product_id = ?1",
+                params![it.product_id],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        let cost_price: f64 = if has_components > 0 {
+            let mut stmt = tx
+                .prepare(
+                    "SELECT pc.quantity_per_unit, p.cost_price
+                     FROM product_components pc
+                     JOIN products p ON p.id = pc.component_product_id
+                     WHERE pc.composite_product_id = ?1",
+                )
+                .map_err(|e| e.to_string())?;
+            let comp_costs: Vec<(f64, f64)> = stmt
+                .query_map(params![it.product_id], |r| Ok((r.get(0)?, r.get(1)?)))
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            drop(stmt);
+            comp_costs.iter().map(|(q, c)| q * c).sum::<f64>()
+        } else {
+            tx.query_row(
                 "SELECT cost_price FROM products WHERE id = ?1",
                 params![it.product_id],
                 |r| r.get(0),
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())?
+        };
         tx.execute(
             "INSERT INTO sale_items (sale_id, product_id, quantity, sell_price, cost_price)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![id, it.product_id, it.quantity, it.sell_price, cost_price],
         )
         .map_err(|e| e.to_string())?;
-        tx.execute(
-            "UPDATE products SET quantity = quantity - ?1 WHERE id = ?2",
-            params![it.quantity, it.product_id],
-        )
-        .map_err(|e| e.to_string())?;
+        if has_components > 0 {
+            let mut stmt = tx
+                .prepare(
+                    "SELECT component_product_id, quantity_per_unit
+                     FROM product_components WHERE composite_product_id = ?1",
+                )
+                .map_err(|e| e.to_string())?;
+            let comps: Vec<(i64, f64)> = stmt
+                .query_map(params![it.product_id], |r| Ok((r.get(0)?, r.get(1)?)))
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            drop(stmt);
+            for (comp_id, qty_per) in comps {
+                tx.execute(
+                    "UPDATE products SET quantity = quantity - ?1 WHERE id = ?2",
+                    params![it.quantity * qty_per, comp_id],
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        } else {
+            tx.execute(
+                "UPDATE products SET quantity = quantity - ?1 WHERE id = ?2",
+                params![it.quantity, it.product_id],
+            )
+            .map_err(|e| e.to_string())?;
+        }
         total += subtotal;
     }
 

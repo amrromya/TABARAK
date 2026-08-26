@@ -598,6 +598,16 @@ fn migrate(conn: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_warehouse_transfers_date ON warehouse_transfers(date);
         CREATE INDEX IF NOT EXISTS idx_warehouse_transfer_items_transfer ON warehouse_transfer_items(transfer_id);
         CREATE INDEX IF NOT EXISTS idx_warehouse_transfer_items_product ON warehouse_transfer_items(product_id);
+
+        CREATE TABLE IF NOT EXISTS product_components (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            composite_product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            component_product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            quantity_per_unit REAL NOT NULL DEFAULT 1
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pc_composite ON product_components(composite_product_id);
+        CREATE INDEX IF NOT EXISTS idx_pc_component ON product_components(component_product_id);
         ",
     )
     .map_err(|e| format!("فشل إنشاء جداول الصيانة: {e}"))?;

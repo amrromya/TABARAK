@@ -596,3 +596,20 @@ pub struct ProductMovement {
     pub warehouse_name: Option<String>,
     pub payment_method: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProductComponent {
+    pub id: i64,
+    pub composite_product_id: i64,
+    pub component_product_id: i64,
+    pub component_name: String,
+    pub component_unit: Option<String>,
+    pub component_quantity: f64,
+    pub quantity_per_unit: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct NewProductComponent {
+    pub component_product_id: i64,
+    pub quantity_per_unit: f64,
+}
