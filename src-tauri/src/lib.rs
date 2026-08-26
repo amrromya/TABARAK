@@ -126,6 +126,7 @@ pub fn run() {
             commands::export_backup,
             commands::import_backup,
             commands::force_exit,
+            commands::close_window,
             commands::get_product_components,
             commands::save_product_components,
             commands::list_products_by_category,

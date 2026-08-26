@@ -242,6 +242,7 @@ export const api = {
   exportBackup: (path: string) => invoke<void>("export_backup", { path }),
   importBackup: (path: string) => invoke<void>("import_backup", { path }),
   forceExit: () => invoke<void>("force_exit"),
+  closeWindow: (label: string) => invoke<void>("close_window", { label }),
 
   // التقارير
   getDashboard: () => invoke<Dashboard>("get_dashboard"),

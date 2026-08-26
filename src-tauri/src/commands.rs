@@ -3,6 +3,7 @@ use crate::AppState;
 use rusqlite::backup::Backup;
 use rusqlite::{params, Connection, OpenFlags};
 use std::collections::HashMap;
+use tauri::Manager;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -5133,4 +5134,12 @@ pub fn search_service_orders(
 #[tauri::command]
 pub fn force_exit() {
     std::process::exit(0);
+}
+
+#[tauri::command]
+pub fn close_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window(&label) {
+        win.destroy().map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }

@@ -149,10 +149,7 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
     const unlisten = w.onCloseRequested(async (e) => {
       e.preventDefault();
       if (isPopup) {
-        try {
-          const win = await WebviewWindow.getByLabel(winLabel);
-          if (win) await win.destroy();
-        } catch {}
+        try { await api.closeWindow(winLabel); } catch {}
         return;
       }
       setShowCloseDialog(true);
