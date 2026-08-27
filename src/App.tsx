@@ -497,9 +497,14 @@ function App() {
         } else {
           setLicenseState("active");
         }
-      } catch {
+      } catch (err: any) {
         expiryDateRef.current = null;
-        setLicenseState("none");
+        const msg = String(err || "");
+        if (msg.includes("تاريخ الجهاز") || msg.includes(".clock")) {
+          setLicenseState("expired");
+        } else {
+          setLicenseState("none");
+        }
       }
       setLoading(false);
     };

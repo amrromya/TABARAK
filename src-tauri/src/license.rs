@@ -7,6 +7,8 @@ use crate::AppState;
 use winreg::enums::*;
 use winreg::RegKey;
 
+const TIME_FILE: &str = ".tabarak_last_time";
+
 // Ø§Ù„Ù…ÙØªØ§Ø­ Ø§Ù„Ø¹Ø§Ù… Ø§Ù„Ù…Ø¯Ù…Ø¬ â€” Ù„Ø§ ÙŠÙ…ÙƒÙ† Ø§Ù„ØªØ­Ù‚Ù‚ Ø¨Ø¯ÙˆÙ† Ø¥Ø¹Ø§Ø¯Ø© Ø¨Ù†Ø§Ø¡ Ø§Ù„Ø¨Ø±Ù†Ø§Ù…Ø¬
 const PUBLIC_KEY_PEM: &str = "-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu0tMFFI2aityna/Tsje/
@@ -128,6 +130,58 @@ fn parse_expiry(date_str: &str) -> Result<chrono::NaiveDateTime, String> {
     Err("".to_string())
 }
 
+fn load_last_known_time(app_dir: &PathBuf) -> Option<chrono::NaiveDateTime> {
+    // محاولة 1: ملف
+    let path = app_dir.join(TIME_FILE);
+    if let Ok(content) = fs::read_to_string(&path) {
+        if let Ok(stored) = content.trim().parse::<i64>() {
+            if let Some(dt) = chrono::DateTime::from_timestamp(stored, 0) {
+                return Some(dt.naive_utc());
+            }
+        }
+    }
+    // محاولة 2: Registry
+    #[cfg(target_os = "windows")]
+    {
+        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+        if let Ok(key) = hklm.open_subkey("SOFTWARE\\Tabarak\\License") {
+            if let Ok(val) = key.get_value::<String, _>("LastKnownTime") {
+                if let Ok(stored) = val.parse::<i64>() {
+                    if let Some(dt) = chrono::DateTime::from_timestamp(stored, 0) {
+                        return Some(dt.naive_utc());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn save_last_known_time(app_dir: &PathBuf) {
+    let now_ts = chrono::Utc::now().timestamp();
+    // حفظ في ملف
+    let path = app_dir.join(TIME_FILE);
+    let _ = fs::write(&path, now_ts.to_string());
+    // حفظ في Registry
+    #[cfg(target_os = "windows")]
+    {
+        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+        if let Ok((key, _)) = hklm.create_subkey("SOFTWARE\\Tabarak\\License") {
+            let _ = key.set_value("LastKnownTime", &now_ts.to_string());
+        }
+    }
+}
+
+fn check_clock_rollback(app_dir: &PathBuf) -> Result<(), String> {
+    if let Some(stored_time) = load_last_known_time(app_dir) {
+        let now = chrono::Local::now().naive_local();
+        if now < stored_time {
+            return Err("تم كشف تغيير تاريخ الجهاز. يُرجى إعادة التاريخ والوقت إلى الحالة الصحيحة".to_string());
+        }
+    }
+    Ok(())
+}
+
 pub fn verify_license_data(license: &LicenseData) -> Result<bool, String> {
     // 1. التحقق من التوقيع الرقمي RSA
     let payload = format!(
@@ -198,6 +252,10 @@ pub fn delete_license(app_dir: &PathBuf) -> Result<(), String> {
     if license_path.exists() {
         fs::remove_file(&license_path).map_err(|e| e.to_string())?;
     }
+    let time_path = app_dir.join(TIME_FILE);
+    if time_path.exists() {
+        let _ = fs::remove_file(&time_path);
+    }
     #[cfg(target_os = "windows")]
     {
         let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
@@ -248,9 +306,13 @@ pub fn activate_license(
     // Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† ØµÙ„Ø§Ø­ÙŠØ© Ø§Ù„ØªÙØ¹ÙŠÙ„
     verify_license_data(&license)?;
 
-    // Ø­ÙØ¸ Ø§Ù„ØªÙØ¹ÙŠÙ„
+    // حفظ الوقت الحالي بعد التفعيل الناجح
     let dir = state.db_path.parent().unwrap_or_else(|| std::path::Path::new("."));
-    save_license(&license, &dir.to_path_buf())?;
+    let app_dir = dir.to_path_buf();
+    save_last_known_time(&app_dir);
+
+    // حفظ التفعيل
+    save_license(&license, &app_dir)?;
 
     Ok(license)
 }
@@ -260,10 +322,18 @@ pub fn check_license(
     state: State<AppState>,
 ) -> Result<LicenseData, String> {
     let dir = state.db_path.parent().unwrap_or_else(|| std::path::Path::new("."));
-    let license = load_license(&dir.to_path_buf())
-        .ok_or("Ù„Ø§ ÙŠÙˆØ¬Ø¯ ØªÙØ¹ÙŠÙ„ - ÙŠØ±Ø¬Ù‰ Ø¥Ø¯Ø®Ø§Ù„ ÙƒÙˆØ¯ Ø§Ù„ØªÙØ¹ÙŠÙ„".to_string())?;
+    let app_dir = dir.to_path_buf();
+
+    // فحص تغيير التاريخ للوراء
+    check_clock_rollback(&app_dir)?;
+
+    let license = load_license(&app_dir)
+        .ok_or("لا يوجد تفعيل - يرجى إدخال كود التفعيل".to_string())?;
 
     verify_license_data(&license)?;
+
+    // حفظ الوقت الحالي بعد التحقق الناجح
+    save_last_known_time(&app_dir);
 
     Ok(license)
 }
@@ -273,7 +343,16 @@ pub fn get_license_info(
     state: State<AppState>,
 ) -> Result<Option<LicenseData>, String> {
     let dir = state.db_path.parent().unwrap_or_else(|| std::path::Path::new("."));
-    Ok(load_license(&dir.to_path_buf()))
+    let app_dir = dir.to_path_buf();
+
+    // فحص تغيير التاريخ للوراء
+    check_clock_rollback(&app_dir)?;
+
+    let license = load_license(&app_dir);
+    if let Some(ref _lic) = license {
+        save_last_known_time(&app_dir);
+    }
+    Ok(license)
 }
 
 #[tauri::command]
