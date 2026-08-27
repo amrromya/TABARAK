@@ -4,6 +4,7 @@ use rusqlite::backup::Backup;
 use rusqlite::{params, Connection, OpenFlags};
 use std::collections::HashMap;
 use tauri::Manager;
+use tauri::Emitter;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -4636,7 +4637,9 @@ pub async fn check_online_update() -> Result<OnlineUpdateInfo, String> {
 }
 
 #[tauri::command]
-pub async fn download_online_update(url: String, file_name: String) -> Result<String, String> {
+pub async fn download_online_update(app: tauri::AppHandle, url: String, file_name: String) -> Result<String, String> {
+    use futures_util::StreamExt;
+
     let dirs = dirs::download_dir().ok_or("لا يمكن الوصول لمجلد التنزيلات")?;
     let dest = dirs.join(&file_name);
 
@@ -4652,12 +4655,26 @@ pub async fn download_online_update(url: String, file_name: String) -> Result<St
         return Err(format!("فشل التحميل - حالة: {}", resp.status()));
     }
 
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| format!("فشل تحميل الملف: {e}"))?;
+    let total_size = resp.content_length().unwrap_or(0);
+    let mut stream = resp.bytes_stream();
+    let mut downloaded: u64 = 0;
+    let mut file = std::fs::File::create(&dest).map_err(|e| format!("فشل إنشاء الملف: {e}"))?;
 
-    std::fs::write(&dest, &bytes).map_err(|e| format!("فشل حفظ الملف: {e}"))?;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("فشل تحميل الملف: {e}"))?;
+        std::io::Write::write_all(&mut file, &chunk).map_err(|e| format!("فشل حفظ الملف: {e}"))?;
+        downloaded += chunk.len() as u64;
+        let percent = if total_size > 0 {
+            (downloaded as f64 / total_size as f64 * 100.0) as u32
+        } else {
+            0
+        };
+        let _ = app.emit("update-download-progress", serde_json::json!({
+            "downloaded": downloaded,
+            "total": total_size,
+            "percent": percent,
+        }));
+    }
 
     Ok(dest.to_string_lossy().to_string())
 }

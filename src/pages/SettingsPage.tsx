@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { listen } from "@tauri-apps/api/event";
 import { api } from "../api";
 import { Field, useToast } from "../components/ui";
 import { isNotifEnabled, setNotifEnabled as saveNotifEnabled, getNotifSoundPath, setNotifSoundPath as saveNotifSoundPath, playNotifSound } from "../utils/notifications";
@@ -168,6 +169,7 @@ export function SettingsPage() {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [downloadingUpdate, setDownloadingUpdate] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState("");
+  const [downloadPercent, setDownloadPercent] = useState(0);
   const [updateError, setUpdateError] = useState<string | null>(null);
 
   const [licenseInfo, setLicenseInfo] = useState<{ expiry_date: string; customer_name: string } | null>(null);
@@ -628,12 +630,19 @@ export function SettingsPage() {
     if (!onlineUpdate || !onlineUpdate.download_url) return;
     setDownloadingUpdate(true);
     setDownloadProgress(t("downloadingFile"));
+    setDownloadPercent(0);
+    const unlisten = await listen<{ downloaded: number; total: number; percent: number }>("update-download-progress", (e) => {
+      setDownloadPercent(e.payload.percent);
+      setDownloadProgress(`${t("downloadingFile")} ${e.payload.percent}%`);
+    });
     try {
       const filePath = await api.downloadOnlineUpdate(onlineUpdate.download_url, onlineUpdate.file_name);
+      unlisten();
       setDownloadProgress(t("installing"));
       if (!window.confirm(t("confirmInstall"))) {
         setDownloadingUpdate(false);
         setDownloadProgress("");
+        setDownloadPercent(0);
         return;
       }
       const msg = await api.applyOnlineUpdate(filePath);
@@ -642,6 +651,7 @@ export function SettingsPage() {
       setUpdateError(String(err));
       setDownloadingUpdate(false);
       setDownloadProgress("");
+      setDownloadPercent(0);
     }
   };
 
@@ -865,7 +875,21 @@ export function SettingsPage() {
 
               {downloadProgress && (
                 <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 10, background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e", fontSize: 13 }}>
-                  ⏳ {downloadProgress}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: downloadingUpdate && downloadPercent > 0 ? 8 : 0 }}>
+                    {downloadingUpdate && downloadPercent > 0 ? (
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                          <span>⏳ {t("downloadingFile")}</span>
+                          <span style={{ fontWeight: 700 }}>{downloadPercent}%</span>
+                        </div>
+                        <div style={{ width: "100%", height: 8, background: "#e5e7eb", borderRadius: 4, overflow: "hidden" }}>
+                          <div style={{ width: `${downloadPercent}%`, height: "100%", background: "linear-gradient(90deg, #f59e0b, #d97706)", borderRadius: 4, transition: "width 0.3s ease" }} />
+                        </div>
+                      </div>
+                    ) : (
+                      <span>⏳ {downloadProgress}</span>
+                    )}
+                  </div>
                 </div>
               )}
 
