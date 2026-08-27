@@ -26,6 +26,11 @@ const emptyForm: NewProduct = {
   composite_category_id: null,
 };
 
+function priceDisplay(v: number | string): string {
+  if (v === 0 || v === "0") return "";
+  return String(v);
+}
+
 export function Inventory({
   onOpenCount,
   onOpenCounts,
@@ -461,9 +466,10 @@ export function Inventory({
                 type="number"
                 min={0}
                 step="0.01"
-                value={form.cost_price}
+                placeholder="0"
+                value={priceDisplay(form.cost_price)}
                 onChange={(e) =>
-                  setForm({ ...form, cost_price: Number(e.target.value) })
+                  setForm({ ...form, cost_price: e.target.value === "" ? 0 : Number(e.target.value) })
                 }
               />
             </Field>
@@ -473,9 +479,10 @@ export function Inventory({
                 type="number"
                 min={0}
                 step="0.01"
-                value={form.sell_price}
+                placeholder="0"
+                value={priceDisplay(form.sell_price)}
                 onChange={(e) =>
-                  setForm({ ...form, sell_price: Number(e.target.value) })
+                  setForm({ ...form, sell_price: e.target.value === "" ? 0 : Number(e.target.value) })
                 }
               />
             </Field>

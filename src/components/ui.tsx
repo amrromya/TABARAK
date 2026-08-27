@@ -78,15 +78,17 @@ export function Modal({
   children,
   width,
   className,
+  closeOnOverlay = true,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   width?: string;
   className?: string;
+  closeOnOverlay?: boolean;
 }) {
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={closeOnOverlay ? onClose : undefined}>
       <div
         className={"modal" + (className ? " " + className : "")}
         style={width ? { width } : undefined}

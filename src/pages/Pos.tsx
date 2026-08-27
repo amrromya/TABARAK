@@ -1211,6 +1211,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
           title={t("addOns")}
           onClose={() => setActiveAddonLine(null)}
           width="420px"
+          closeOnOverlay={false}
         >
           {categoryProducts.length === 0 ? (
             <div style={{ padding: 16, textAlign: "center", color: "#999" }}>
