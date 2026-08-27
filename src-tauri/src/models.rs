@@ -39,6 +39,25 @@ pub struct Product {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProductUnit {
+    pub id: i64,
+    pub product_id: i64,
+    pub unit_name: String,
+    pub conversion_factor: f64,
+    pub sell_price: f64,
+    pub barcode: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct NewProductUnit {
+    pub product_id: i64,
+    pub unit_name: String,
+    pub conversion_factor: f64,
+    pub sell_price: f64,
+    pub barcode: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Supplier {
     pub id: i64,
     pub name: String,

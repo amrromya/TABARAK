@@ -20,6 +20,7 @@ import type {
   NewExpense,
   NewProduct,
   NewProductComponent,
+  NewProductUnit,
   NewPurchase,
   NewPurchaseReturn,
   NewSale,
@@ -30,6 +31,7 @@ import type {
   NewSupplier,
   NewVacation,
   Product,
+  ProductUnit,
   ProductComponent,
   ProductMovement,
   ProfitLoss,
@@ -243,6 +245,8 @@ export const api = {
   importBackup: (path: string) => invoke<void>("import_backup", { path }),
   forceExit: () => invoke<void>("force_exit"),
   closeWindow: (label: string) => invoke<void>("close_window", { label }),
+  listProductUnits: (productId: number) => invoke<ProductUnit[]>("list_product_units", { productId }),
+  saveProductUnits: (productId: number, units: NewProductUnit[]) => invoke<ProductUnit[]>("save_product_units", { productId, units }),
 
   // التقارير
   getDashboard: () => invoke<Dashboard>("get_dashboard"),

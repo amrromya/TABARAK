@@ -11,7 +11,7 @@ import {
 } from "../components/ui";
 import { t } from "../i18n";
 import { ProductMovements } from "../components/ProductMovements";
-import type { Category, NewProduct, Product, Warehouse } from "../types";
+import type { Category, NewProduct, Product, ProductUnit, Warehouse } from "../types";
 
 const emptyForm: NewProduct = {
   name: "",
@@ -57,6 +57,7 @@ export function Inventory({
   const [newWarehouse, setNewWarehouse] = useState("");
   const [showUnit, setShowUnit] = useState(false);
   const [newUnit, setNewUnit] = useState("");
+  const [productUnits, setProductUnits] = useState<ProductUnit[]>([]);
   const [movementProduct, setMovementProduct] = useState<Product | null>(null);
   const notify = useToast();
 
@@ -94,7 +95,7 @@ export function Inventory({
     setShowForm(true);
   };
 
-  const openEdit = (p: Product) => {
+  const openEdit = async (p: Product) => {
     setEditing(p);
     setForm({
       name: p.name,
@@ -108,7 +109,36 @@ export function Inventory({
       min_quantity: p.min_quantity,
       composite_category_id: p.composite_category_id,
     });
+    try {
+      const units = await api.listProductUnits(p.id);
+      setProductUnits(units);
+    } catch { setProductUnits([]); }
     setShowForm(true);
+  };
+
+  const saveUnits = async () => {
+    if (!editing) return;
+    try {
+      const saved = await api.saveProductUnits(editing.id, productUnits.map((u) => ({
+        product_id: editing.id,
+        unit_name: u.unit_name,
+        conversion_factor: u.conversion_factor,
+        sell_price: u.sell_price,
+        barcode: u.barcode,
+      })));
+      setProductUnits(saved);
+      notify(t("productUpdated"));
+    } catch (err) { notify(String(err), "error"); }
+  };
+
+  const addProductUnit = () => {
+    setProductUnits([...productUnits, {
+      id: 0, product_id: editing?.id ?? 0, unit_name: "", conversion_factor: 1, sell_price: 0, barcode: null,
+    }]);
+  };
+
+  const removeProductUnit = (idx: number) => {
+    setProductUnits(productUnits.filter((_, i) => i !== idx));
   };
 
   const save = async (e: React.FormEvent) => {
@@ -240,6 +270,12 @@ export function Inventory({
   const addUnitFromProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUnit.trim()) return;
+    const saved = localStorage.getItem("tabarak_custom_units");
+    const units: string[] = saved ? JSON.parse(saved) : [];
+    if (!units.includes(newUnit.trim())) {
+      units.push(newUnit.trim());
+      localStorage.setItem("tabarak_custom_units", JSON.stringify(units));
+    }
     setForm((f) => ({ ...f, unit: newUnit.trim() }));
     setNewUnit("");
     setShowUnit(false);
@@ -532,6 +568,95 @@ export function Inventory({
                 </small>
               )}
             </Field>
+
+            {editing && (
+              <div style={{ gridColumn: "1 / -1", marginTop: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>📦 وحدات البيع المتعددة</span>
+                  <button type="button" className="btn sm" onClick={addProductUnit}>+ إضافة وحدة</button>
+                  {productUnits.length > 0 && (
+                    <button type="button" className="btn sm" onClick={saveUnits} style={{ background: "#22c55e", color: "#fff" }}>💾 حفظ الوحدات</button>
+                  )}
+                </div>
+                {productUnits.length > 0 && (
+                  <table className="table" style={{ fontSize: 12 }}>
+                    <thead>
+                      <tr>
+                        <th>اسم الوحدة</th>
+                        <th style={{ width: 100 }}>معامل التحويل</th>
+                        <th style={{ width: 100 }}>سعر البيع</th>
+                        <th style={{ width: 120 }}>الباركود</th>
+                        <th style={{ width: 50 }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {productUnits.map((u, idx) => (
+                        <tr key={idx}>
+                          <td>
+                            <input
+                              value={u.unit_name}
+                              placeholder="مثال: كرتونة"
+                              style={{ width: "100%", padding: "4px 6px", fontSize: 12 }}
+                              onChange={(e) => {
+                                const updated = [...productUnits];
+                                updated[idx] = { ...updated[idx], unit_name: e.target.value };
+                                setProductUnits(updated);
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              min={0.001}
+                              step="0.001"
+                              value={u.conversion_factor}
+                              style={{ width: "100%", padding: "4px 6px", fontSize: 12 }}
+                              onChange={(e) => {
+                                const updated = [...productUnits];
+                                updated[idx] = { ...updated[idx], conversion_factor: Number(e.target.value) };
+                                setProductUnits(updated);
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={u.sell_price}
+                              style={{ width: "100%", padding: "4px 6px", fontSize: 12 }}
+                              onChange={(e) => {
+                                const updated = [...productUnits];
+                                updated[idx] = { ...updated[idx], sell_price: Number(e.target.value) };
+                                setProductUnits(updated);
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              value={u.barcode ?? ""}
+                              placeholder="اختياري"
+                              style={{ width: "100%", padding: "4px 6px", fontSize: 12 }}
+                              onChange={(e) => {
+                                const updated = [...productUnits];
+                                updated[idx] = { ...updated[idx], barcode: e.target.value || null };
+                                setProductUnits(updated);
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <button type="button" className="btn sm" style={{ color: "#ef4444", padding: "2px 6px" }} onClick={() => removeProductUnit(idx)}>✕</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                <div style={{ fontSize: 11, color: "#888", marginTop: 4 }}>
+                  معامل التحويل = عدد الوحدة الأساسية في هذه الوحدة (مثلاً: 1 كرتونة = 12 قطعة)
+                </div>
+              </div>
+            )}
 
             <div className="form-actions">
               <button type="submit" className="btn primary">

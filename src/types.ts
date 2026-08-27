@@ -937,3 +937,20 @@ export interface MaintenanceSettings {
   receipt_footer: string;
   agreement_text: string;
 }
+
+export interface ProductUnit {
+  id: number;
+  product_id: number;
+  unit_name: string;
+  conversion_factor: number;
+  sell_price: number;
+  barcode?: string | null;
+}
+
+export interface NewProductUnit {
+  product_id: number;
+  unit_name: string;
+  conversion_factor: number;
+  sell_price: number;
+  barcode?: string | null;
+}

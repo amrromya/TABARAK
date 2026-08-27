@@ -371,6 +371,18 @@ fn migrate(conn: &Connection) -> Result<(), String> {
     ensure_column(conn, "sale_items", "item_name", "TEXT")?;
     ensure_column(conn, "sale_return_items", "item_name", "TEXT")?;
 
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS product_units (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            unit_name TEXT NOT NULL,
+            conversion_factor REAL NOT NULL DEFAULT 1,
+            sell_price REAL NOT NULL DEFAULT 0,
+            barcode TEXT
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
+
     // إنشاء موظف افتراضي "المدير العام" إذا لم يكن موجودًا
     conn.execute(
         "INSERT OR IGNORE INTO employees (id, name, position, salary) VALUES (1, 'المدير العام', 'المدير العام', 0)",

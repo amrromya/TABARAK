@@ -5165,3 +5165,62 @@ pub fn close_window(app: tauri::AppHandle, label: String) -> Result<(), String> 
     }
     Ok(())
 }
+
+// =============== وحدات الصنف ===============
+
+#[tauri::command]
+pub fn list_product_units(state: State<AppState>, product_id: i64) -> Result<Vec<ProductUnit>, String> {
+    let conn = get_db(&state)?;
+    let mut stmt = conn
+        .prepare("SELECT id, product_id, unit_name, conversion_factor, sell_price, barcode FROM product_units WHERE product_id = ?1 ORDER BY conversion_factor")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![product_id], |r| {
+            Ok(ProductUnit {
+                id: r.get(0)?,
+                product_id: r.get(1)?,
+                unit_name: r.get(2)?,
+                conversion_factor: r.get(3)?,
+                sell_price: r.get(4)?,
+                barcode: r.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+#[tauri::command]
+pub fn save_product_units(state: State<AppState>, product_id: i64, units: Vec<NewProductUnit>) -> Result<Vec<ProductUnit>, String> {
+    let conn = get_db(&state)?;
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM product_units WHERE product_id = ?1", params![product_id])
+        .map_err(|e| e.to_string())?;
+    for u in &units {
+        tx.execute(
+            "INSERT INTO product_units (product_id, unit_name, conversion_factor, sell_price, barcode) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![product_id, u.unit_name, u.conversion_factor, u.sell_price, u.barcode],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT id, product_id, unit_name, conversion_factor, sell_price, barcode FROM product_units WHERE product_id = ?1 ORDER BY conversion_factor")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![product_id], |r| {
+            Ok(ProductUnit {
+                id: r.get(0)?,
+                product_id: r.get(1)?,
+                unit_name: r.get(2)?,
+                conversion_factor: r.get(3)?,
+                sell_price: r.get(4)?,
+                barcode: r.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
