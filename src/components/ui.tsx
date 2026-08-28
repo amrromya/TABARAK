@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { playSuccessSound, playErrorSound } from "../utils/notifications";
 
 export const money = (n: number) =>
   new Intl.NumberFormat("ar-EG", {
@@ -56,6 +57,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     const id = Date.now() + Math.random();
     setToasts((t) => [...t, { id, message, type }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
+    if (type === "success") playSuccessSound();
+    else if (type === "error") playErrorSound();
   }, []);
 
   return (

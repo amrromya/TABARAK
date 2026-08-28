@@ -121,12 +121,12 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
   const [page, setPage] = useState("dashboard");
   const [appVersion, setAppVersion] = useState("");
   const [showCloseDialog, setShowCloseDialog] = useState(false);
-  const [features, setFeatures] = useState<{ dark_mode: boolean; language: boolean }>(() => {
+  const [features, setFeatures] = useState<{ dark_mode: boolean; language: boolean; cash_register: boolean }>(() => {
     try {
       const raw = localStorage.getItem("tabarak_features");
-      if (raw) return { dark_mode: false, language: false, ...JSON.parse(raw) };
+      if (raw) return { dark_mode: false, language: false, cash_register: false, ...JSON.parse(raw) };
     } catch {}
-    return { dark_mode: false, language: false };
+    return { dark_mode: false, language: false, cash_register: false };
   });
 
   // Listen for feature changes
@@ -135,7 +135,7 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
       if (e.key === "tabarak_features") {
         try {
           const raw = localStorage.getItem("tabarak_features");
-          if (raw) setFeatures({ dark_mode: false, language: false, ...JSON.parse(raw) });
+          if (raw) setFeatures({ dark_mode: false, language: false, cash_register: false, ...JSON.parse(raw) });
         } catch {}
       }
     };
@@ -264,6 +264,7 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
   };
 
   const visibleNav = NAV.filter((n) => {
+    if (n.key === "cash_register" && !features.cash_register) return false;
     return canAccess(n.key);
   });
 

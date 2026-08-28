@@ -3,7 +3,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { api } from "../api";
 import { Field, useToast } from "../components/ui";
-import { isNotifEnabled, setNotifEnabled as saveNotifEnabled, getNotifSoundPath, setNotifSoundPath as saveNotifSoundPath, playNotifSound } from "../utils/notifications";
+import { isNotifEnabled, setNotifEnabled as saveNotifEnabled, getNotifSoundPath, setNotifSoundPath as saveNotifSoundPath, playNotifSound, getSuccessSoundPath, setSuccessSoundPath as saveSuccessSoundPath, getErrorSoundPath, setErrorSoundPath as saveErrorSoundPath, playSuccessSound, playErrorSound } from "../utils/notifications";
 import type { Account, Branch, Permission, Settings, SyncConfig, SyncStatus, Warehouse } from "../types";
 import { t } from "../i18n";
 
@@ -89,15 +89,15 @@ type SectionKey = "store" | "warehouses" | "sync" | "branches" | "notifications"
 
 const FEATURES_KEY = "tabarak_features";
 
-function getFeatures(): { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean; sync: boolean; branches: boolean; attendance_url: boolean; notifications: boolean } {
+function getFeatures(): { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean; sync: boolean; branches: boolean; attendance_url: boolean; notifications: boolean; cash_register: boolean } {
   try {
     const raw = localStorage.getItem(FEATURES_KEY);
-    if (raw) return { maintenance: false, attendance: false, dark_mode: false, language: false, sync: false, branches: false, attendance_url: false, notifications: false, ...JSON.parse(raw) };
+    if (raw) return { maintenance: false, attendance: false, dark_mode: false, language: false, sync: false, branches: false, attendance_url: false, notifications: false, cash_register: false, ...JSON.parse(raw) };
   } catch {}
-  return { maintenance: false, attendance: false, dark_mode: false, language: false, sync: false, branches: false, attendance_url: false, notifications: false };
+  return { maintenance: false, attendance: false, dark_mode: false, language: false, sync: false, branches: false, attendance_url: false, notifications: false, cash_register: false };
 }
 
-function saveFeatures(f: { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean; sync: boolean; branches: boolean; attendance_url: boolean; notifications: boolean }) {
+function saveFeatures(f: { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean; sync: boolean; branches: boolean; attendance_url: boolean; notifications: boolean; cash_register: boolean }) {
   localStorage.setItem(FEATURES_KEY, JSON.stringify(f));
 }
 
@@ -163,6 +163,8 @@ export function SettingsPage() {
 
   const [notifOn, setNotifOn] = useState(isNotifEnabled());
   const [notifSoundName, setNotifSoundName] = useState<string | null>(getNotifSoundPath);
+  const [successSoundName, setSuccessSoundName] = useState<string | null>(getSuccessSoundPath);
+  const [errorSoundName, setErrorSoundName] = useState<string | null>(getErrorSoundPath);
 
   const [appVersion, setAppVersion] = useState("");
   const [updating, setUpdating] = useState(false);
@@ -265,7 +267,7 @@ export function SettingsPage() {
     }
   };
 
-  const toggleFeature = async (key: "maintenance" | "attendance" | "dark_mode" | "language" | "sync" | "branches" | "attendance_url" | "notifications") => {
+  const toggleFeature = async (key: "maintenance" | "attendance" | "dark_mode" | "language" | "sync" | "branches" | "attendance_url" | "notifications" | "cash_register") => {
     const next = { ...features, [key]: !features[key] };
     setFeatures(next);
     saveFeatures(next);
@@ -274,6 +276,7 @@ export function SettingsPage() {
       const accs = getAccounts();
       const updated = accs.map((a) => {
         let menus = [...(a.visibleMenus || [])];
+        let perms = [...(a.permissions || [])];
         if (key === "maintenance") {
           if (next.maintenance) {
             if (!menus.includes("maintenance")) menus.push("maintenance");
@@ -288,7 +291,16 @@ export function SettingsPage() {
             menus = menus.filter((m) => m !== "attendance");
           }
         }
-        return { ...a, visibleMenus: [...new Set(menus)] };
+        if (key === "cash_register") {
+          if (next.cash_register) {
+            if (!menus.includes("cash_register")) menus.push("cash_register");
+            if (!perms.includes("view_cash_register")) perms.push("view_cash_register");
+          } else {
+            menus = menus.filter((m) => m !== "cash_register");
+            perms = perms.filter((p) => p !== "view_cash_register");
+          }
+        }
+        return { ...a, visibleMenus: [...new Set(menus)], permissions: [...new Set(perms)] };
       });
       localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(updated));
       setAccounts(updated);
@@ -298,6 +310,7 @@ export function SettingsPage() {
         dark_mode: { enabled: t("darkModeEnabled"), disabled: t("darkModeDisabled") },
         language: { enabled: t("languageEnabled"), disabled: t("languageDisabled") },
         notifications: { enabled: t("notificationsEnabled"), disabled: t("notificationsDisabled") },
+        cash_register: { enabled: t("cashRegisterEnabled"), disabled: t("cashRegisterDisabled") },
       };
       notify(next[key] ? labelMap[key].enabled : labelMap[key].disabled);
     } catch (err) {
@@ -448,6 +461,58 @@ export function SettingsPage() {
 
   const testNotifSound = () => {
     playNotifSound();
+  };
+
+  const pickSuccessSound = async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [{ name: t("soundFilter"), extensions: ["mp3", "wav", "ogg"] }],
+      });
+      if (!selected) return;
+      const path = typeof selected === "string" ? selected : selected;
+      saveSuccessSoundPath(path as string);
+      setSuccessSoundName(path as string);
+      notify(t("soundSaved"));
+    } catch (err) {
+      notify(String(err), "error");
+    }
+  };
+
+  const clearSuccessSound = () => {
+    saveSuccessSoundPath("");
+    setSuccessSoundName(null);
+    notify(t("customSoundDeleted"));
+  };
+
+  const testSuccessSound = () => {
+    playSuccessSound();
+  };
+
+  const pickErrorSound = async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [{ name: t("soundFilter"), extensions: ["mp3", "wav", "ogg"] }],
+      });
+      if (!selected) return;
+      const path = typeof selected === "string" ? selected : selected;
+      saveErrorSoundPath(path as string);
+      setErrorSoundName(path as string);
+      notify(t("soundSaved"));
+    } catch (err) {
+      notify(String(err), "error");
+    }
+  };
+
+  const clearErrorSound = () => {
+    saveErrorSoundPath("");
+    setErrorSoundName(null);
+    notify(t("customSoundDeleted"));
+  };
+
+  const testErrorSound = () => {
+    playErrorSound();
   };
 
   const backup = async () => {
@@ -775,13 +840,42 @@ export function SettingsPage() {
                 <span style={{ fontWeight: 600, fontSize: 14 }}>{notifOn ? t("notifEnabledLabel") : t("notifDisabledLabel")}</span>
               </label>
             </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <button className="btn primary" onClick={pickNotifSound}>{t("uploadCustomSound")}</button>
-              <button className="btn" onClick={testNotifSound}>{t("testSoundBtn")}</button>
-              {notifSoundName && <button className="btn danger" onClick={clearNotifSound}>{t("deleteSoundBtn")}</button>}
+
+            {/* General notification sound */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>🔔 {t("notifSound")}</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <button className="btn primary" onClick={pickNotifSound}>{t("uploadCustomSound")}</button>
+                <button className="btn" onClick={testNotifSound}>{t("testSoundBtn")}</button>
+                {notifSoundName && <button className="btn danger" onClick={clearNotifSound}>{t("deleteSoundBtn")}</button>}
+              </div>
+              {notifSoundName && <p className="settings-note" style={{ marginTop: 4 }}>{t("customSoundSaved")}</p>}
+              {!notifSoundName && <p className="settings-note" style={{ marginTop: 4 }}>{t("defaultSoundNote")}</p>}
             </div>
-            {notifSoundName && <p className="settings-note" style={{ marginTop: 8 }}>{t("customSoundSaved")}</p>}
-            {!notifSoundName && <p className="settings-note" style={{ marginTop: 8 }}>{t("defaultSoundNote")}</p>}
+
+            {/* Success sound */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>✅ {t("successSound")}</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <button className="btn primary" onClick={pickSuccessSound}>{t("uploadCustomSound")}</button>
+                <button className="btn" onClick={testSuccessSound}>{t("testSoundBtn")}</button>
+                {successSoundName && <button className="btn danger" onClick={clearSuccessSound}>{t("deleteSoundBtn")}</button>}
+              </div>
+              {successSoundName && <p className="settings-note" style={{ marginTop: 4 }}>{t("customSoundSaved")}</p>}
+              {!successSoundName && <p className="settings-note" style={{ marginTop: 4 }}>{t("defaultSuccessSoundNote")}</p>}
+            </div>
+
+            {/* Error sound */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>❌ {t("errorSound")}</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <button className="btn primary" onClick={pickErrorSound}>{t("uploadCustomSound")}</button>
+                <button className="btn" onClick={testErrorSound}>{t("testSoundBtn")}</button>
+                {errorSoundName && <button className="btn danger" onClick={clearErrorSound}>{t("deleteSoundBtn")}</button>}
+              </div>
+              {errorSoundName && <p className="settings-note" style={{ marginTop: 4 }}>{t("customSoundSaved")}</p>}
+              {!errorSoundName && <p className="settings-note" style={{ marginTop: 4 }}>{t("defaultErrorSoundNote")}</p>}
+            </div>
           </>
         );
 
@@ -1768,6 +1862,52 @@ export function SettingsPage() {
                         position: "absolute",
                         top: 2,
                         left: features.notifications ? 24 : 2,
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        background: "#fff",
+                        transition: "left 0.2s",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                      }} />
+                    </button>
+                  </div>
+
+                  {/* Cash Register toggle */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "14px 16px",
+                      borderRadius: 12,
+                      background: features.cash_register ? "#ecfdf5" : "#f9fafb",
+                      border: `1px solid ${features.cash_register ? "#86efac" : "#e5e7eb"}`,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 22 }}>🏧</span>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>{t("cashRegisterItem")}</div>
+                        <div style={{ fontSize: 12, color: "#6b7280" }}>{t("cashRegisterItemDesc")}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => toggleFeature("cash_register")}
+                      style={{
+                        width: 50,
+                        height: 28,
+                        borderRadius: 14,
+                        border: "none",
+                        cursor: "pointer",
+                        position: "relative",
+                        background: features.cash_register ? "#10b981" : "#d1d5db",
+                        transition: "background 0.2s",
+                      }}
+                    >
+                      <span style={{
+                        position: "absolute",
+                        top: 2,
+                        left: features.cash_register ? 24 : 2,
                         width: 24,
                         height: 24,
                         borderRadius: 12,

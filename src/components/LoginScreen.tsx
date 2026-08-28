@@ -7,12 +7,12 @@ const ACCOUNTS_KEY = "tabarak_accounts";
 
 const FEATURES_KEY = "tabarak_features";
 
-function getFeatures(): { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean } {
+function getFeatures(): { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean; cash_register: boolean } {
   try {
     const raw = localStorage.getItem(FEATURES_KEY);
-    if (raw) return { maintenance: false, attendance: false, dark_mode: false, language: false, ...JSON.parse(raw) };
+    if (raw) return { maintenance: false, attendance: false, dark_mode: false, language: false, cash_register: false, ...JSON.parse(raw) };
   } catch {}
-  return { maintenance: false, attendance: false, dark_mode: false, language: false };
+  return { maintenance: false, attendance: false, dark_mode: false, language: false, cash_register: false };
 }
 
 function getAccounts(): Account[] {
@@ -34,11 +34,15 @@ function getAccounts(): Account[] {
           perms = [...perms, "view_receipt_vouchers", "view_payment_vouchers", "view_warehouse_transfers"];
         }
 
-        const hasCashRegister = menus.includes("cash_register");
-        if (!hasCashRegister) {
+        if (features.cash_register && !menus.includes("cash_register")) {
           localChanged = true;
           menus = [...menus, "cash_register"];
           perms = [...perms, "view_cash_register"];
+        }
+        if (!features.cash_register && menus.includes("cash_register")) {
+          localChanged = true;
+          menus = menus.filter((m) => m !== "cash_register");
+          perms = perms.filter((p) => p !== "view_cash_register");
         }
 
         if (features.maintenance && !menus.includes("maintenance")) {

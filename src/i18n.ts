@@ -1199,6 +1199,11 @@ const translations: Record<string, Record<Lang, string>> = {
   deleteSoundBtn: { ar: "🗑️ حذف الصوت", en: "🗑️ Delete Sound" },
   customSoundSaved: { ar: "تم حفظ الصوت المخصص", en: "Custom sound saved" },
   defaultSoundNote: { ar: "سيتم استخدام صوت النظام الافتراضي", en: "Default system sound will be used" },
+  notifSound: { ar: "صوت الإشعار العام", en: "General Notification Sound" },
+  successSound: { ar: "صوت نجاح العملية", en: "Success Sound" },
+  errorSound: { ar: "صوت فشل العملية", en: "Error Sound" },
+  defaultSuccessSoundNote: { ar: "سيتم استخدام نغمة نجاح افتراضية (نغمة صاعدة)", en: "Default ascending success tone will be used" },
+  defaultErrorSoundNote: { ar: "سيتم استخدام نغمة خطأ افتراضية (نغمة نازلة)", en: "Default descending error tone will be used" },
   attendanceUrlHint: { ar: "أدخل رابط صفحة الحضور للموظفين", en: "Enter attendance page URL for employees" },
   attendanceUrlFieldLabel: { ar: "رابط صفحة الحضور", en: "Attendance Page URL" },
   saved: { ar: "تم الحفظ", en: "Saved" },
@@ -1282,6 +1287,10 @@ const translations: Record<string, Record<Lang, string>> = {
   notificationsItemDesc: { ar: "تفعيل إعدادات إشعارات الحضور والصوت", en: "Enable attendance notification settings" },
   notificationsEnabled: { ar: "تم تفعيل إشعارات الحضور", en: "Attendance notifications enabled" },
   notificationsDisabled: { ar: "تم تعطيل إشعارات الحضور", en: "Attendance notifications disabled" },
+  cashRegisterItem: { ar: "الصندوق", en: "Cash Register" },
+  cashRegisterItemDesc: { ar: "إظهار قسم الصندوق في القائمة الجانبية", en: "Show cash register section in sidebar" },
+  cashRegisterEnabled: { ar: "تم تفعيل الصندوق", en: "Cash register enabled" },
+  cashRegisterDisabled: { ar: "تم إخفاء الصندوق", en: "Cash register disabled" },
 
   // --- Permission labels ---
   perm_view_dashboard: { ar: "عرض لوحة التحكم", en: "View Dashboard" },
