@@ -844,37 +844,67 @@ export function SettingsPage() {
             {/* General notification sound */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>🔔 {t("notifSound")}</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                <button className="btn primary" onClick={pickNotifSound}>{t("uploadCustomSound")}</button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+                <select
+                  value={notifSoundName || ""}
+                  onChange={(e) => { const v = e.target.value; if (v === "") { clearNotifSound(); } else { saveNotifSoundPath(v); setNotifSoundName(v); } }}
+                  style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 13, minWidth: 160 }}
+                >
+                  <option value="">{t("builtinDefaultSound")}</option>
+                  <option value="builtin:notif_default">🔔 إشعار سريع</option>
+                  <option value="builtin:notif_chime">🔔 نغمة رقيقة</option>
+                  <option value="builtin:notif_ping">🔔 بيب رقمي</option>
+                </select>
                 <button className="btn" onClick={testNotifSound}>{t("testSoundBtn")}</button>
-                {notifSoundName && <button className="btn danger" onClick={clearNotifSound}>{t("deleteSoundBtn")}</button>}
+                <button className="btn primary" onClick={pickNotifSound}>{t("uploadCustomSound")}</button>
+                {notifSoundName && !notifSoundName.startsWith("builtin:") && <button className="btn danger" onClick={clearNotifSound}>{t("deleteSoundBtn")}</button>}
               </div>
-              {notifSoundName && <p className="settings-note" style={{ marginTop: 4 }}>{t("customSoundSaved")}</p>}
-              {!notifSoundName && <p className="settings-note" style={{ marginTop: 4 }}>{t("defaultSoundNote")}</p>}
+              {notifSoundName && notifSoundName.startsWith("builtin:") && <p className="settings-note" style={{ marginTop: 2 }}>{t("builtinSoundInUse")}</p>}
+              {notifSoundName && !notifSoundName.startsWith("builtin:") && <p className="settings-note" style={{ marginTop: 2 }}>{t("customSoundSaved")}</p>}
             </div>
 
             {/* Success sound */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>✅ {t("successSound")}</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                <button className="btn primary" onClick={pickSuccessSound}>{t("uploadCustomSound")}</button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+                <select
+                  value={successSoundName || ""}
+                  onChange={(e) => { const v = e.target.value; if (v === "") { clearSuccessSound(); } else { saveSuccessSoundPath(v); setSuccessSoundName(v); } }}
+                  style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 13, minWidth: 160 }}
+                >
+                  <option value="">{t("builtinDefaultSound")}</option>
+                  <option value="builtin:success_default">✅ نغمة نجاح</option>
+                  <option value="builtin:success_bell">🔔 جرس صاعد</option>
+                  <option value="builtin:success_pop">🎯 نبضة مرحة</option>
+                </select>
                 <button className="btn" onClick={testSuccessSound}>{t("testSoundBtn")}</button>
-                {successSoundName && <button className="btn danger" onClick={clearSuccessSound}>{t("deleteSoundBtn")}</button>}
+                <button className="btn primary" onClick={pickSuccessSound}>{t("uploadCustomSound")}</button>
+                {successSoundName && !successSoundName.startsWith("builtin:") && <button className="btn danger" onClick={clearSuccessSound}>{t("deleteSoundBtn")}</button>}
               </div>
-              {successSoundName && <p className="settings-note" style={{ marginTop: 4 }}>{t("customSoundSaved")}</p>}
-              {!successSoundName && <p className="settings-note" style={{ marginTop: 4 }}>{t("defaultSuccessSoundNote")}</p>}
+              {successSoundName && successSoundName.startsWith("builtin:") && <p className="settings-note" style={{ marginTop: 2 }}>{t("builtinSoundInUse")}</p>}
+              {successSoundName && !successSoundName.startsWith("builtin:") && <p className="settings-note" style={{ marginTop: 2 }}>{t("customSoundSaved")}</p>}
             </div>
 
             {/* Error sound */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>❌ {t("errorSound")}</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                <button className="btn primary" onClick={pickErrorSound}>{t("uploadCustomSound")}</button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+                <select
+                  value={errorSoundName || ""}
+                  onChange={(e) => { const v = e.target.value; if (v === "") { clearErrorSound(); } else { saveErrorSoundPath(v); setErrorSoundName(v); } }}
+                  style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 13, minWidth: 160 }}
+                >
+                  <option value="">{t("builtinDefaultSound")}</option>
+                  <option value="builtin:error_default">❌ نغمة خطأ</option>
+                  <option value="builtin:error_buzz">⚠️ طنين منخفض</option>
+                  <option value="builtin:error_thud">💀 صوت ثقيل</option>
+                </select>
                 <button className="btn" onClick={testErrorSound}>{t("testSoundBtn")}</button>
-                {errorSoundName && <button className="btn danger" onClick={clearErrorSound}>{t("deleteSoundBtn")}</button>}
+                <button className="btn primary" onClick={pickErrorSound}>{t("uploadCustomSound")}</button>
+                {errorSoundName && !errorSoundName.startsWith("builtin:") && <button className="btn danger" onClick={clearErrorSound}>{t("deleteSoundBtn")}</button>}
               </div>
-              {errorSoundName && <p className="settings-note" style={{ marginTop: 4 }}>{t("customSoundSaved")}</p>}
-              {!errorSoundName && <p className="settings-note" style={{ marginTop: 4 }}>{t("defaultErrorSoundNote")}</p>}
+              {errorSoundName && errorSoundName.startsWith("builtin:") && <p className="settings-note" style={{ marginTop: 2 }}>{t("builtinSoundInUse")}</p>}
+              {errorSoundName && !errorSoundName.startsWith("builtin:") && <p className="settings-note" style={{ marginTop: 2 }}>{t("customSoundSaved")}</p>}
             </div>
           </>
         );
@@ -1402,7 +1432,6 @@ export function SettingsPage() {
           if (s.key === "sync" && !features.sync) return false;
           if (s.key === "branches" && !features.branches) return false;
           if (s.key === "attendance_url" && !features.attendance_url) return false;
-          if (s.key === "notifications" && !features.notifications) return false;
           return true;
         }).map((s) => (
           <div key={s.key} className="settings-tile" style={{ background: s.gradient }} onClick={() => openSection(s.key)}>

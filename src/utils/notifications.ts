@@ -1,9 +1,37 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { resolveResource } from "@tauri-apps/api/path";
 
 const NOTIF_SOUND_KEY = "tabarak_notif_sound";
 const NOTIF_ENABLED_KEY = "tabarak_notif_enabled";
 const SUCCESS_SOUND_KEY = "tabarak_success_sound";
 const ERROR_SOUND_KEY = "tabarak_error_sound";
+
+export type BuiltInSoundId =
+  | "success_default" | "success_bell" | "success_pop"
+  | "error_default" | "error_buzz" | "error_thud"
+  | "notif_default" | "notif_chime" | "notif_ping";
+
+const BUILT_IN_SOUNDS: Record<BuiltInSoundId, string> = {
+  success_default: "sounds/success.wav",
+  success_bell: "sounds/success_bell.wav",
+  success_pop: "sounds/success_pop.wav",
+  error_default: "sounds/error.wav",
+  error_buzz: "sounds/error_buzz.wav",
+  error_thud: "sounds/error_thud.wav",
+  notif_default: "sounds/notif.wav",
+  notif_chime: "sounds/notif_chime.wav",
+  notif_ping: "sounds/notif_ping.wav",
+};
+
+async function getBuiltInUrl(id: BuiltInSoundId): Promise<string> {
+  const resourcePath = BUILT_IN_SOUNDS[id];
+  const resolved = await resolveResource(resourcePath);
+  return convertFileSrc(resolved);
+}
+
+function getCustomUrl(path: string): string {
+  return convertFileSrc(path);
+}
 
 export function isNotifEnabled(): boolean {
   const v = localStorage.getItem(NOTIF_ENABLED_KEY);
@@ -47,92 +75,61 @@ function stopCurrentAudio() {
   if (audioEl) { audioEl.pause(); audioEl = null; }
 }
 
-export function playNotifSound() {
+function playUrl(url: string, volume = 0.7) {
+  stopCurrentAudio();
+  audioEl = new Audio(url);
+  audioEl.volume = volume;
+  audioEl.play().catch(() => {});
+}
+
+async function playNotifSoundAsync() {
   if (!isNotifEnabled()) return;
   const saved = getNotifSoundPath();
   try {
-    stopCurrentAudio();
-    if (saved) {
-      const src = convertFileSrc(saved);
-      audioEl = new Audio(src);
-      audioEl.volume = 0.7;
-      audioEl.play().catch(() => {});
+    if (saved && saved.startsWith("builtin:")) {
+      playUrl(await getBuiltInUrl(saved.replace("builtin:", "") as BuiltInSoundId));
+    } else if (saved) {
+      playUrl(getCustomUrl(saved));
     } else {
-      playTone(880, 0.5, 0.3, "sine");
+      playUrl(await getBuiltInUrl("notif_default"));
     }
   } catch {}
 }
 
-export function playSuccessSound() {
+async function playSuccessSoundAsync() {
   if (!isNotifEnabled()) return;
   const saved = getSuccessSoundPath();
   try {
-    stopCurrentAudio();
-    if (saved) {
-      const src = convertFileSrc(saved);
-      audioEl = new Audio(src);
-      audioEl.volume = 0.7;
-      audioEl.play().catch(() => {});
+    if (saved && saved.startsWith("builtin:")) {
+      playUrl(await getBuiltInUrl(saved.replace("builtin:", "") as BuiltInSoundId));
+    } else if (saved) {
+      playUrl(getCustomUrl(saved));
     } else {
-      // م柞د نجاح: نغمة صاعدة
-      const ctx = new AudioContext();
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.type = "sine";
-      osc1.frequency.value = 523;
-      gain1.gain.value = 0.3;
-      osc1.start();
-      osc1.frequency.exponentialRampToValueAtTime(784, ctx.currentTime + 0.15);
-      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-      osc1.stop(ctx.currentTime + 0.4);
+      playUrl(await getBuiltInUrl("success_default"));
     }
   } catch {}
 }
 
-export function playErrorSound() {
+async function playErrorSoundAsync() {
   if (!isNotifEnabled()) return;
   const saved = getErrorSoundPath();
   try {
-    stopCurrentAudio();
-    if (saved) {
-      const src = convertFileSrc(saved);
-      audioEl = new Audio(src);
-      audioEl.volume = 0.7;
-      audioEl.play().catch(() => {});
+    if (saved && saved.startsWith("builtin:")) {
+      playUrl(await getBuiltInUrl(saved.replace("builtin:", "") as BuiltInSoundId));
+    } else if (saved) {
+      playUrl(getCustomUrl(saved));
     } else {
-      // صوت خطأ: نغمة نازلة
-      const ctx = new AudioContext();
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.type = "square";
-      osc1.frequency.value = 400;
-      gain1.gain.value = 0.2;
-      osc1.start();
-      osc1.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.3);
-      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-      osc1.stop(ctx.currentTime + 0.5);
+      playUrl(await getBuiltInUrl("error_default"));
     }
   } catch {}
 }
 
-function playTone(freq: number, duration: number, vol: number, type: OscillatorType = "sine") {
-  try {
-    const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = type;
-    osc.frequency.value = freq;
-    gain.gain.value = vol;
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-    osc.stop(ctx.currentTime + duration);
-  } catch {}
+export function playNotifSound() { playNotifSoundAsync(); }
+export function playSuccessSound() { playSuccessSoundAsync(); }
+export function playErrorSound() { playErrorSoundAsync(); }
+
+export async function playBuiltInSound(id: BuiltInSoundId) {
+  playUrl(await getBuiltInUrl(id));
 }
 
 export interface NotifRecord {
