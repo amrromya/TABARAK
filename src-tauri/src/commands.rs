@@ -4002,6 +4002,20 @@ pub fn get_dashboard(state: State<AppState>) -> Result<Dashboard, String> {
     let expenses_total: f64 = conn
         .query_row("SELECT COALESCE(SUM(amount),0) FROM expenses", [], |r| r.get(0))
         .map_err(|e| e.to_string())?;
+    let payment_vouchers_total: f64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(amount),0) FROM payment_vouchers WHERE payment_method = 'cash'",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let receipt_vouchers_total: f64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(amount),0) FROM receipt_vouchers WHERE payment_method = 'cash'",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
     let opening: f64 = conn
         .query_row(
             "SELECT COALESCE((SELECT CAST(value AS REAL) FROM settings WHERE key = 'opening_balance'), 0)",
@@ -4022,7 +4036,7 @@ pub fn get_dashboard(state: State<AppState>) -> Result<Dashboard, String> {
         total_customers,
         total_debts: crate::utils::money(total_debts),
         cash_in_hand: crate::utils::money(
-            opening + cash_collected + payments - purchases_total - expenses_total,
+            opening + cash_collected + payments + receipt_vouchers_total - purchases_total - expenses_total - payment_vouchers_total,
         ),
     })
 }
@@ -4568,6 +4582,17 @@ pub fn create_receipt_voucher(state: State<AppState>, input: serde_json::Value) 
         params![voucher_no, date, amount, source_type, source_id, source_name, payment_method, warehouse_id, notes],
     ).map_err(|e| e.to_string())?;
     let id = conn.last_insert_rowid();
+    if payment_method == "cash" {
+        let has_session: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM cash_register_sessions WHERE status = 'open')", [], |r| r.get(0)
+        ).unwrap_or(false);
+        if has_session {
+            conn.execute(
+                "INSERT INTO cash_register_movements (session_id, type, amount, description, reference_id, reference_type) SELECT id, 'receipt_voucher', ?1, ?2, ?3, 'receipt_voucher' FROM cash_register_sessions WHERE status = 'open' ORDER BY id DESC LIMIT 1",
+                params![amount, format!("سند قبض {} — {}", voucher_no, source_name.unwrap_or("")), id],
+            ).map_err(|e| e.to_string())?;
+        }
+    }
     let row = conn.query_row("SELECT id, voucher_no, date, amount, source_type, source_id, source_name, payment_method, warehouse_id, notes, created_at FROM receipt_vouchers WHERE id=?1", params![id], |r| {
         Ok(serde_json::json!({
             "id": r.get::<_, i64>(0)?, "voucher_no": r.get::<_, String>(1)?, "date": r.get::<_, String>(2)?,
@@ -4582,6 +4607,7 @@ pub fn create_receipt_voucher(state: State<AppState>, input: serde_json::Value) 
 #[tauri::command]
 pub fn delete_receipt_voucher(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = get_db(&state)?;
+    conn.execute("DELETE FROM cash_register_movements WHERE reference_id = ?1 AND reference_type = 'receipt_voucher'", params![id]).map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM receipt_vouchers WHERE id=?1", params![id]).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -4632,6 +4658,17 @@ pub fn create_payment_voucher(state: State<AppState>, input: serde_json::Value) 
         params![voucher_no, date, amount, dest_type, dest_id, dest_name, payment_method, warehouse_id, notes],
     ).map_err(|e| e.to_string())?;
     let id = conn.last_insert_rowid();
+    if payment_method == "cash" {
+        let has_session: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM cash_register_sessions WHERE status = 'open')", [], |r| r.get(0)
+        ).unwrap_or(false);
+        if has_session {
+            conn.execute(
+                "INSERT INTO cash_register_movements (session_id, type, amount, description, reference_id, reference_type) SELECT id, 'payment_voucher', ?1, ?2, ?3, 'payment_voucher' FROM cash_register_sessions WHERE status = 'open' ORDER BY id DESC LIMIT 1",
+                params![-amount, format!("سند صرف {} — {}", voucher_no, dest_name.unwrap_or("")), id],
+            ).map_err(|e| e.to_string())?;
+        }
+    }
     let row = conn.query_row("SELECT id, voucher_no, date, amount, dest_type, dest_id, dest_name, payment_method, warehouse_id, notes, created_at FROM payment_vouchers WHERE id=?1", params![id], |r| {
         Ok(serde_json::json!({
             "id": r.get::<_, i64>(0)?, "voucher_no": r.get::<_, String>(1)?, "date": r.get::<_, String>(2)?,
@@ -4646,6 +4683,7 @@ pub fn create_payment_voucher(state: State<AppState>, input: serde_json::Value) 
 #[tauri::command]
 pub fn delete_payment_voucher(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = get_db(&state)?;
+    conn.execute("DELETE FROM cash_register_movements WHERE reference_id = ?1 AND reference_type = 'payment_voucher'", params![id]).map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM payment_vouchers WHERE id=?1", params![id]).map_err(|e| e.to_string())?;
     Ok(())
 }

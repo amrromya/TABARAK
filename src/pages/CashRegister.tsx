@@ -13,6 +13,8 @@ const MOVEMENT_LABELS: Record<string, string> = {
   withdrawal: "سحب",
   opening: "رصيد افتتاحي",
   adjustment: "تسوية",
+  payment_voucher: "سند صرف نقدي",
+  receipt_voucher: "سند قبض نقدي",
 };
 
 export function CashRegister() {
