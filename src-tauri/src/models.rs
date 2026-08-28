@@ -639,3 +639,49 @@ pub struct NewProductComponent {
     pub component_product_id: i64,
     pub quantity_per_unit: f64,
 }
+
+// ---------- Cash Register ----------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashRegisterSession {
+    pub id: i64,
+    pub opened_at: String,
+    pub closed_at: Option<String>,
+    pub opened_by: Option<String>,
+    pub closed_by: Option<String>,
+    pub opening_balance: f64,
+    pub closing_balance: Option<f64>,
+    pub actual_cash: Option<f64>,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashRegisterMovement {
+    pub id: i64,
+    pub session_id: i64,
+    pub r#type: String,
+    pub amount: f64,
+    pub description: Option<String>,
+    pub reference_id: Option<i64>,
+    pub reference_type: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct NewCashMovement {
+    pub r#type: String,
+    pub amount: f64,
+    pub description: Option<String>,
+    pub reference_id: Option<i64>,
+    pub reference_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CashSessionSummary {
+    pub session: CashRegisterSession,
+    pub movements: Vec<CashRegisterMovement>,
+    pub total_in: f64,
+    pub total_out: f64,
+    pub expected_cash: f64,
+    pub difference: Option<f64>,
+}

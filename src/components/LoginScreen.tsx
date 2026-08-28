@@ -34,6 +34,13 @@ function getAccounts(): Account[] {
           perms = [...perms, "view_receipt_vouchers", "view_payment_vouchers", "view_warehouse_transfers"];
         }
 
+        const hasCashRegister = menus.includes("cash_register");
+        if (!hasCashRegister) {
+          localChanged = true;
+          menus = [...menus, "cash_register"];
+          perms = [...perms, "view_cash_register"];
+        }
+
         if (features.maintenance && !menus.includes("maintenance")) {
           localChanged = true;
           menus.push("maintenance");
@@ -97,6 +104,7 @@ function getAccounts(): Account[] {
         "view_receipt_vouchers",
         "view_payment_vouchers",
         "view_warehouse_transfers",
+        "view_cash_register",
       ],
       visibleMenus: [
         "dashboard",
@@ -111,6 +119,7 @@ function getAccounts(): Account[] {
         "receipt_vouchers",
         "payment_vouchers",
         "warehouse_transfers",
+        "cash_register",
         "reports",
         "settings",
         "pos",

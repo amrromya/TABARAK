@@ -703,6 +703,34 @@ fn migrate(conn: &Connection) -> Result<(), String> {
         let _ = conn.execute("DELETE FROM settings WHERE key = 'section_password'", []);
     }
 
+    // ==================== نظام الصندوق ====================
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS cash_register_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            opened_at TEXT NOT NULL,
+            closed_at TEXT,
+            opened_by TEXT,
+            closed_by TEXT,
+            opening_balance REAL NOT NULL DEFAULT 0,
+            closing_balance REAL,
+            actual_cash REAL,
+            status TEXT NOT NULL DEFAULT 'open'
+        );
+
+        CREATE TABLE IF NOT EXISTS cash_register_movements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER REFERENCES cash_register_sessions(id),
+            type TEXT NOT NULL,
+            amount REAL NOT NULL,
+            description TEXT,
+            reference_id INTEGER,
+            reference_type TEXT,
+            created_at TEXT DEFAULT (datetime('now','localtime'))
+        );
+        "
+    ).map_err(|e| e.to_string())?;
+
     // إضافة أعمدة المزامنة
     crate::sync::schema::add_sync_columns(conn)?;
 

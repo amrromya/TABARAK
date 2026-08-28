@@ -217,6 +217,13 @@ pub fn run() {
             commands::export_purchases_csv,
             commands::start_auto_backup,
             commands::search_service_orders,
+            commands::get_cash_session,
+            commands::open_cash_register,
+            commands::close_cash_register,
+            commands::add_cash_movement,
+            commands::list_cash_movements,
+            commands::get_cash_session_summary,
+            commands::list_cash_sessions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

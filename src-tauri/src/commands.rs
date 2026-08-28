@@ -1719,8 +1719,231 @@ fn get_sale_full(conn: &Connection, id: i64) -> Result<Sale, String> {
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
-    Ok(Sale { items, ..sale })
+    let mut sale = sale;
+    sale.items = items;
+    Ok(sale)
 }
+
+// ==================== Cash Register ====================
+
+fn get_current_session(conn: &Connection) -> Result<Option<CashRegisterSession>, String> {
+    let result = conn.query_row(
+        "SELECT id, opened_at, closed_at, opened_by, closed_by, opening_balance, closing_balance, actual_cash, status FROM cash_register_sessions WHERE status = 'open' ORDER BY id DESC LIMIT 1",
+        [],
+        |r| {
+            Ok(CashRegisterSession {
+                id: r.get(0)?,
+                opened_at: r.get(1)?,
+                closed_at: r.get(2)?,
+                opened_by: r.get(3)?,
+                closed_by: r.get(4)?,
+                opening_balance: r.get(5)?,
+                closing_balance: r.get(6)?,
+                actual_cash: r.get(7)?,
+                status: r.get(8)?,
+            })
+        },
+    );
+    match result {
+        Ok(s) => Ok(Some(s)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn get_cash_session(state: State<AppState>) -> Result<Option<CashRegisterSession>, String> {
+    let conn = get_db(&state)?;
+    get_current_session(&conn)
+}
+
+#[tauri::command]
+pub fn open_cash_register(state: State<AppState>, opening_balance: f64, opened_by: Option<String>) -> Result<CashRegisterSession, String> {
+    let conn = get_db(&state)?;
+    if get_current_session(&conn)?.is_some() {
+        return Err("يوجد جلسة صندوق مفتوحة بالفعل".into());
+    }
+    conn.execute(
+        "INSERT INTO cash_register_sessions (opened_at, opened_by, opening_balance, status) VALUES (datetime('now','localtime'), ?1, ?2, 'open')",
+        params![opened_by, opening_balance],
+    )
+    .map_err(|e| e.to_string())?;
+    let id = conn.last_insert_rowid();
+    let session = conn.query_row(
+        "SELECT id, opened_at, closed_at, opened_by, closed_by, opening_balance, closing_balance, actual_cash, status FROM cash_register_sessions WHERE id = ?1",
+        params![id],
+        |r| {
+            Ok(CashRegisterSession {
+                id: r.get(0)?,
+                opened_at: r.get(1)?,
+                closed_at: r.get(2)?,
+                opened_by: r.get(3)?,
+                closed_by: r.get(4)?,
+                opening_balance: r.get(5)?,
+                closing_balance: r.get(6)?,
+                actual_cash: r.get(7)?,
+                status: r.get(8)?,
+            })
+        },
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(session)
+}
+
+#[tauri::command]
+pub fn close_cash_register(state: State<AppState>, closing_balance: f64, actual_cash: f64, closed_by: Option<String>) -> Result<CashRegisterSession, String> {
+    let conn = get_db(&state)?;
+    let session = get_current_session(&conn)?.ok_or("لا توجد جلسة صندوق مفتوحة")?;
+    conn.execute(
+        "UPDATE cash_register_sessions SET closed_at = datetime('now','localtime'), closed_by = ?1, closing_balance = ?2, actual_cash = ?3, status = 'closed' WHERE id = ?4",
+        params![closed_by, closing_balance, actual_cash, session.id],
+    )
+    .map_err(|e| e.to_string())?;
+    let updated = conn.query_row(
+        "SELECT id, opened_at, closed_at, opened_by, closed_by, opening_balance, closing_balance, actual_cash, status FROM cash_register_sessions WHERE id = ?1",
+        params![session.id],
+        |r| {
+            Ok(CashRegisterSession {
+                id: r.get(0)?,
+                opened_at: r.get(1)?,
+                closed_at: r.get(2)?,
+                opened_by: r.get(3)?,
+                closed_by: r.get(4)?,
+                opening_balance: r.get(5)?,
+                closing_balance: r.get(6)?,
+                actual_cash: r.get(7)?,
+                status: r.get(8)?,
+            })
+        },
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(updated)
+}
+
+#[tauri::command]
+pub fn add_cash_movement(state: State<AppState>, input: NewCashMovement) -> Result<CashRegisterMovement, String> {
+    let conn = get_db(&state)?;
+    let session = get_current_session(&conn)?.ok_or("لا توجد جلسة صندوق مفتوحة")?;
+    conn.execute(
+        "INSERT INTO cash_register_movements (session_id, type, amount, description, reference_id, reference_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![session.id, input.r#type, input.amount, input.description, input.reference_id, input.reference_type],
+    )
+    .map_err(|e| e.to_string())?;
+    let id = conn.last_insert_rowid();
+    let mov = conn.query_row(
+        "SELECT id, session_id, type, amount, description, reference_id, reference_type, created_at FROM cash_register_movements WHERE id = ?1",
+        params![id],
+        |r| {
+            Ok(CashRegisterMovement {
+                id: r.get(0)?,
+                session_id: r.get(1)?,
+                r#type: r.get(2)?,
+                amount: r.get(3)?,
+                description: r.get(4)?,
+                reference_id: r.get(5)?,
+                reference_type: r.get(6)?,
+                created_at: r.get(7)?,
+            })
+        },
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(mov)
+}
+
+#[tauri::command]
+pub fn list_cash_movements(state: State<AppState>) -> Result<Vec<CashRegisterMovement>, String> {
+    let conn = get_db(&state)?;
+    let session = get_current_session(&conn)?.ok_or("لا توجد جلسة صندوق مفتوحة")?;
+    let mut stmt = conn
+        .prepare("SELECT id, session_id, type, amount, description, reference_id, reference_type, created_at FROM cash_register_movements WHERE session_id = ?1 ORDER BY id")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![session.id], |r| {
+            Ok(CashRegisterMovement {
+                id: r.get(0)?,
+                session_id: r.get(1)?,
+                r#type: r.get(2)?,
+                amount: r.get(3)?,
+                description: r.get(4)?,
+                reference_id: r.get(5)?,
+                reference_type: r.get(6)?,
+                created_at: r.get(7)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+#[tauri::command]
+pub fn get_cash_session_summary(state: State<AppState>) -> Result<Option<CashSessionSummary>, String> {
+    let conn = get_db(&state)?;
+    let session = match get_current_session(&conn)? {
+        Some(s) => s,
+        None => return Ok(None),
+    };
+    let movements = {
+        let mut stmt = conn
+            .prepare("SELECT id, session_id, type, amount, description, reference_id, reference_type, created_at FROM cash_register_movements WHERE session_id = ?1 ORDER BY id")
+            .map_err(|e| e.to_string())?;
+        let result: Vec<CashRegisterMovement> = stmt
+            .query_map(params![session.id], |r| {
+                Ok(CashRegisterMovement {
+                    id: r.get(0)?,
+                    session_id: r.get(1)?,
+                    r#type: r.get(2)?,
+                    amount: r.get(3)?,
+                    description: r.get(4)?,
+                    reference_id: r.get(5)?,
+                    reference_type: r.get(6)?,
+                    created_at: r.get(7)?,
+                })
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        result
+    };
+    let total_in: f64 = movements.iter().filter(|m| m.amount > 0.0).map(|m| m.amount).sum();
+    let total_out: f64 = movements.iter().filter(|m| m.amount < 0.0).map(|m| m.amount.abs()).sum();
+    let expected_cash = session.opening_balance + total_in - total_out;
+    Ok(Some(CashSessionSummary {
+        session,
+        movements,
+        total_in,
+        total_out,
+        expected_cash,
+        difference: None,
+    }))
+}
+
+#[tauri::command]
+pub fn list_cash_sessions(state: State<AppState>) -> Result<Vec<CashRegisterSession>, String> {
+    let conn = get_db(&state)?;
+    let mut stmt = conn
+        .prepare("SELECT id, opened_at, closed_at, opened_by, closed_by, opening_balance, closing_balance, actual_cash, status FROM cash_register_sessions ORDER BY id DESC LIMIT 100")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(CashRegisterSession {
+                id: r.get(0)?,
+                opened_at: r.get(1)?,
+                closed_at: r.get(2)?,
+                opened_by: r.get(3)?,
+                closed_by: r.get(4)?,
+                opening_balance: r.get(5)?,
+                closing_balance: r.get(6)?,
+                actual_cash: r.get(7)?,
+                status: r.get(8)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
 
 // =============== المشتريات ===============
 

@@ -38,6 +38,7 @@ import { ReceiptVouchers } from "./pages/ReceiptVouchers";
 import { PaymentVouchers } from "./pages/PaymentVouchers";
 import { WarehouseTransfers } from "./pages/WarehouseTransfers";
 import { SuppliersPage } from "./pages/SuppliersPage";
+import { CashRegister } from "./pages/CashRegister";
 import { Activation } from "./pages/Activation";
 import type { Account } from "./types";
 import { api } from "./api";
@@ -53,6 +54,7 @@ const NAV = [
   { key: "attendance", labelKey: "attendance", icon: "🕐" },
   { key: "expenses", labelKey: "expenses", icon: "🧾" },
   { key: "sales", labelKey: "sales", icon: "🧾" },
+  { key: "cash_register", labelKey: "cashRegister", icon: "🏧" },
   { key: "reports", labelKey: "reports", icon: "📈" },
   { key: "settings", labelKey: "settings", icon: "⚙️" },
 ];
@@ -362,6 +364,7 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
         {safePage === "payment_vouchers" && <PaymentVouchers />}
         {safePage === "warehouse_transfers" && <WarehouseTransfers />}
         {safePage === "reports" && <Reports />}
+        {safePage === "cash_register" && <CashRegister />}
         {safePage === "settings" && <SettingsPage />}
         {safePage === "maint_home" && <MaintenanceHome onNavigate={setPage} onBack={() => setPage("dashboard")} />}
         {safePage === "maint_dashboard" && <MaintenanceDashboard />}

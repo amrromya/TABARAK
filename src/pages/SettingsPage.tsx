@@ -24,6 +24,7 @@ const ALL_PERMISSIONS: { key: Permission; label: string; group: string }[] = [
   { key: "view_receipt_vouchers", label: "perm_view_receipt_vouchers", group: "groupMenus" },
   { key: "view_payment_vouchers", label: "perm_view_payment_vouchers", group: "groupMenus" },
   { key: "view_warehouse_transfers", label: "perm_view_warehouse_transfers", group: "groupMenus" },
+  { key: "view_cash_register", label: "perm_view_cash_register", group: "groupMenus" },
   { key: "create_sale", label: "perm_create_sale", group: "groupSales" },
   { key: "edit_sale", label: "perm_edit_sale", group: "groupSales" },
   { key: "delete_sale", label: "perm_delete_sale", group: "groupSales" },
@@ -67,6 +68,7 @@ const ALL_MENUS: { key: string; label: string; icon: string }[] = [
   { key: "payment_vouchers", label: "paymentVouchers", icon: "💳" },
   { key: "warehouse_transfers", label: "warehouseTransfers", icon: "🔄" },
   { key: "reports", label: "reports", icon: "📈" },
+  { key: "cash_register", label: "cashRegister", icon: "🏧" },
   { key: "maintenance", label: "maintenance", icon: "🔧" },
   { key: "settings", label: "settings", icon: "⚙️" },
 ];

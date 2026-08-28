@@ -4,6 +4,9 @@ import type {
   BestSeller,
   Branch,
   Category,
+  CashRegisterMovement,
+  CashRegisterSession,
+  CashSessionSummary,
   Customer,
   CustomerPayment,
   DailySalesRow,
@@ -13,6 +16,7 @@ import type {
   EmployeeShift,
   Expense,
   NewAttendance,
+  NewCashMovement,
   NewCustomer,
   NewCustomerPayment,
   NewEmployee,
@@ -423,4 +427,16 @@ export const api = {
 
   // النسخ الاحتياطي التلقائي
   startAutoBackup: () => invoke<void>("start_auto_backup"),
+
+  // ==================== Cash Register ====================
+  getCashSession: () => invoke<CashRegisterSession | null>("get_cash_session"),
+  openCashRegister: (openingBalance: number, openedBy?: string) =>
+    invoke<CashRegisterSession>("open_cash_register", { openingBalance, openedBy: openedBy ?? null }),
+  closeCashRegister: (closingBalance: number, actualCash: number, closedBy?: string) =>
+    invoke<CashRegisterSession>("close_cash_register", { closingBalance, actualCash, closedBy: closedBy ?? null }),
+  addCashMovement: (input: NewCashMovement) =>
+    invoke<CashRegisterMovement>("add_cash_movement", { input }),
+  listCashMovements: () => invoke<CashRegisterMovement[]>("list_cash_movements"),
+  getCashSessionSummary: () => invoke<CashSessionSummary | null>("get_cash_session_summary"),
+  listCashSessions: () => invoke<CashRegisterSession[]>("list_cash_sessions"),
 };

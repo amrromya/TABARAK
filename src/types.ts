@@ -587,6 +587,7 @@ export type Permission =
   | "view_receipt_vouchers"
   | "view_payment_vouchers"
   | "view_warehouse_transfers"
+  | "view_cash_register"
   | "maintenance.view"
   | "maintenance.create"
   | "maintenance.edit"
@@ -953,4 +954,46 @@ export interface NewProductUnit {
   conversion_factor: number;
   sell_price: number;
   barcode?: string | null;
+}
+
+// ---------- Cash Register ----------
+
+export interface CashRegisterSession {
+  id: number;
+  opened_at: string;
+  closed_at: string | null;
+  opened_by: string | null;
+  closed_by: string | null;
+  opening_balance: number;
+  closing_balance: number | null;
+  actual_cash: number | null;
+  status: string;
+}
+
+export interface CashRegisterMovement {
+  id: number;
+  session_id: number;
+  type: string;
+  amount: number;
+  description: string | null;
+  reference_id: number | null;
+  reference_type: string | null;
+  created_at: string;
+}
+
+export interface NewCashMovement {
+  type: string;
+  amount: number;
+  description?: string | null;
+  reference_id?: number | null;
+  reference_type?: string | null;
+}
+
+export interface CashSessionSummary {
+  session: CashRegisterSession;
+  movements: CashRegisterMovement[];
+  total_in: number;
+  total_out: number;
+  expected_cash: number;
+  difference: number | null;
 }
