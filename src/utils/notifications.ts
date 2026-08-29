@@ -1,6 +1,3 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { resolveResource } from "@tauri-apps/api/path";
-
 const NOTIF_SOUND_KEY = "tabarak_notif_sound";
 const NOTIF_ENABLED_KEY = "tabarak_notif_enabled";
 const SUCCESS_SOUND_KEY = "tabarak_success_sound";
@@ -12,25 +9,19 @@ export type BuiltInSoundId =
   | "notif_default" | "notif_chime" | "notif_ping";
 
 const BUILT_IN_SOUNDS: Record<BuiltInSoundId, string> = {
-  success_default: "sounds/success.wav",
-  success_bell: "sounds/success_bell.wav",
-  success_pop: "sounds/success_pop.wav",
-  error_default: "sounds/error.wav",
-  error_buzz: "sounds/error_buzz.wav",
-  error_thud: "sounds/error_thud.wav",
-  notif_default: "sounds/notif.wav",
-  notif_chime: "sounds/notif_chime.wav",
-  notif_ping: "sounds/notif_ping.wav",
+  success_default: "/sounds/success.wav",
+  success_bell: "/sounds/success_bell.wav",
+  success_pop: "/sounds/success_pop.wav",
+  error_default: "/sounds/error.wav",
+  error_buzz: "/sounds/error_buzz.wav",
+  error_thud: "/sounds/error_thud.wav",
+  notif_default: "/sounds/notif.wav",
+  notif_chime: "/sounds/notif_chime.wav",
+  notif_ping: "/sounds/notif_ping.wav",
 };
 
-async function getBuiltInUrl(id: BuiltInSoundId): Promise<string> {
-  const resourcePath = BUILT_IN_SOUNDS[id];
-  const resolved = await resolveResource(resourcePath);
-  return convertFileSrc(resolved);
-}
-
-function getCustomUrl(path: string): string {
-  return convertFileSrc(path);
+function isBuiltIn(id: string): id is BuiltInSoundId {
+  return id in BUILT_IN_SOUNDS;
 }
 
 export function isNotifEnabled(): boolean {
@@ -75,61 +66,40 @@ function stopCurrentAudio() {
   if (audioEl) { audioEl.pause(); audioEl = null; }
 }
 
-function playUrl(url: string, volume = 0.7) {
+function playSound(url: string, volume = 0.7) {
   stopCurrentAudio();
   audioEl = new Audio(url);
   audioEl.volume = volume;
   audioEl.play().catch(() => {});
 }
 
-async function playNotifSoundAsync() {
-  if (!isNotifEnabled()) return;
-  const saved = getNotifSoundPath();
-  try {
-    if (saved && saved.startsWith("builtin:")) {
-      playUrl(await getBuiltInUrl(saved.replace("builtin:", "") as BuiltInSoundId));
-    } else if (saved) {
-      playUrl(getCustomUrl(saved));
-    } else {
-      playUrl(await getBuiltInUrl("notif_default"));
-    }
-  } catch {}
+function resolveUrl(saved: string | null, defaultId: BuiltInSoundId): string {
+  if (saved && isBuiltIn(saved)) {
+    return BUILT_IN_SOUNDS[saved];
+  }
+  if (saved) {
+    return saved;
+  }
+  return BUILT_IN_SOUNDS[defaultId];
 }
 
-async function playSuccessSoundAsync() {
+export function playNotifSound() {
   if (!isNotifEnabled()) return;
-  const saved = getSuccessSoundPath();
-  try {
-    if (saved && saved.startsWith("builtin:")) {
-      playUrl(await getBuiltInUrl(saved.replace("builtin:", "") as BuiltInSoundId));
-    } else if (saved) {
-      playUrl(getCustomUrl(saved));
-    } else {
-      playUrl(await getBuiltInUrl("success_default"));
-    }
-  } catch {}
+  try { playSound(resolveUrl(getNotifSoundPath(), "notif_default")); } catch {}
 }
 
-async function playErrorSoundAsync() {
+export function playSuccessSound() {
   if (!isNotifEnabled()) return;
-  const saved = getErrorSoundPath();
-  try {
-    if (saved && saved.startsWith("builtin:")) {
-      playUrl(await getBuiltInUrl(saved.replace("builtin:", "") as BuiltInSoundId));
-    } else if (saved) {
-      playUrl(getCustomUrl(saved));
-    } else {
-      playUrl(await getBuiltInUrl("error_default"));
-    }
-  } catch {}
+  try { playSound(resolveUrl(getSuccessSoundPath(), "success_default")); } catch {}
 }
 
-export function playNotifSound() { playNotifSoundAsync(); }
-export function playSuccessSound() { playSuccessSoundAsync(); }
-export function playErrorSound() { playErrorSoundAsync(); }
+export function playErrorSound() {
+  if (!isNotifEnabled()) return;
+  try { playSound(resolveUrl(getErrorSoundPath(), "error_default")); } catch {}
+}
 
-export async function playBuiltInSound(id: BuiltInSoundId) {
-  playUrl(await getBuiltInUrl(id));
+export function playBuiltInSound(id: BuiltInSoundId) {
+  playSound(BUILT_IN_SOUNDS[id]);
 }
 
 export interface NotifRecord {

@@ -1265,7 +1265,7 @@ const translations: Record<string, Record<Lang, string>> = {
 
   // --- Missing settings card titles ---
   branches: { ar: "الفروع", en: "Branches" },
-  attendanceNotifications: { ar: "إشعارات الحضور", en: "Attendance Notifications" },
+  attendanceNotifications: { ar: "الإشعارات", en: "Notifications" },
   attendanceUrlLabel: { ar: "رابط الحضور", en: "Attendance URL" },
   updateLicense: { ar: "تفعيل الترخيص", en: "License Activation" },
   updateProgram: { ar: "تحديث البرنامج", en: "Update Program" },
