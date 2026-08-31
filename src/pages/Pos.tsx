@@ -63,7 +63,6 @@ export function Pos({ onBack }: { onBack: () => void }) {
   const [walletPhone, setWalletPhone] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [cashCustomer, setCashCustomer] = useState("");
-  const [cashPhone, setCashPhone] = useState("");
   const [date, setDate] = useState(today());
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState<DiscountType>("amount");
@@ -89,7 +88,8 @@ export function Pos({ onBack }: { onBack: () => void }) {
   const [movementProduct, setMovementProduct] = useState<Product | null>(null);
 
   const [showCustomer, setShowCustomer] = useState(false);
-  const [custForm, setCustForm] = useState({ name: "", phone: "", notes: "" });
+  const [custForm, setCustForm] = useState({ name: "", phone: "", notes: "", customer_type: "regular" });
+  const [customerType, setCustomerType] = useState("regular");
 
   const searchRef = useRef<HTMLInputElement>(null);
   const notify = useToast();
@@ -188,9 +188,14 @@ export function Pos({ onBack }: { onBack: () => void }) {
       );
       setPaymentMethod(s.payment_method);
       setCustomerId(s.customer_id != null ? String(s.customer_id) : "");
-      setCashCustomer(
-        s.customer_id == null ? (s.customer_name ?? "") : "",
-      );
+      if (s.customer_id) {
+        const cust = customers.find((c) => c.id === s.customer_id);
+        setCustomerType(cust?.customer_type || "regular");
+        setCashCustomer(cust?.name ?? "");
+      } else {
+        setCustomerType("regular");
+        setCashCustomer(s.customer_name ?? "");
+      }
       setDate(s.date);
       setDiscount(s.discount || 0);
       setDiscountType("amount");
@@ -244,6 +249,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
     .slice(0, 20);
 
   const addProduct = (p: Product) => {
+    const price = customerType === "wholesale" && p.wholesale_price > 0 ? p.wholesale_price : p.sell_price;
     setLines((ls) => {
       const existing = ls.find((l) => l.product_id === p.id);
       if (existing) {
@@ -259,7 +265,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
           product_id: p.id,
           name: p.name,
           quantity: 1,
-          sell_price: p.sell_price,
+          sell_price: price,
           available: p.quantity,
           cost_price: p.cost_price,
           composite_category_id: p.composite_category_id,
@@ -373,7 +379,11 @@ export function Pos({ onBack }: { onBack: () => void }) {
     warehouse_id: warehouseId ? Number(warehouseId) : null,
     customer_id: customerId ? Number(customerId) : null,
     customer_name:
-      paymentMethod === "credit" ? null : (paymentMethod === "card" && cardSubType === "wallet" && walletPhone.trim() ? walletPhone.trim() : (cashCustomer.trim() || null)),
+      paymentMethod === "credit"
+        ? (customers.find((c) => c.id === Number(customerId))?.name ?? null)
+        : (paymentMethod === "card" && cardSubType === "wallet" && walletPhone.trim()
+          ? walletPhone.trim()
+          : ((customers.find((c) => c.id === Number(customerId))?.name) ?? (cashCustomer.trim() || null))),
     payment_method: paymentMethod === "card" ? (cardSubType === "wallet" ? "card_wallet" : "card_visa") : paymentMethod,
     employee_id: employeeId ? Number(employeeId) : null,
     items: lines.flatMap((l) => {
@@ -417,21 +427,6 @@ export function Pos({ onBack }: { onBack: () => void }) {
     }
     try {
       let effectiveCustomerId = customerId ? Number(customerId) : null;
-      if (
-        paymentMethod !== "credit" &&
-        !effectiveCustomerId &&
-        cashCustomer.trim() &&
-        cashPhone.trim()
-      ) {
-        try {
-          const newCust = await api.createCustomer({
-            name: cashCustomer.trim(),
-            phone: cashPhone.trim(),
-          });
-          effectiveCustomerId = newCust.id;
-          setCustomers((prev) => [...prev, newCust]);
-        } catch {}
-      }
       const isNew = currentId == null;
       const saved = isNew
         ? await api.createSale({
@@ -458,10 +453,14 @@ export function Pos({ onBack }: { onBack: () => void }) {
       );
       setPaymentMethod(saved.payment_method);
       setCustomerId(saved.customer_id != null ? String(saved.customer_id) : "");
-      setCashCustomer(
-        saved.customer_id == null ? (saved.customer_name ?? "") : "",
-      );
-      setCashPhone("");
+      if (saved.customer_id) {
+        const cust = customers.find((c) => c.id === saved.customer_id);
+        setCustomerType(cust?.customer_type || "regular");
+        setCashCustomer(cust?.name ?? "");
+      } else {
+        setCustomerType("regular");
+        setCashCustomer(saved.customer_name ?? "");
+      }
       setDate(saved.date);
       setDiscount(saved.discount || 0);
       setDiscountType("amount");
@@ -495,6 +494,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
       setPaymentMethod("cash");
       setCustomerId("");
       setCashCustomer("");
+      setCustomerType("regular");
       setDiscount(0);
       setAdditional(0);
       setEmployeeId("");
@@ -511,6 +511,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
     setPaymentMethod("cash");
     setCustomerId("");
     setCashCustomer("");
+    setCustomerType("regular");
     setDiscount(0);
     setDiscountType("amount");
     setAdditional(0);
@@ -588,11 +589,14 @@ export function Pos({ onBack }: { onBack: () => void }) {
         name: custForm.name.trim(),
         phone: custForm.phone.trim() || null,
         notes: custForm.notes.trim() || null,
+        customer_type: custForm.customer_type || "regular",
       });
       setCustomers((cs) => [...cs, c]);
       setCustomerId(String(c.id));
+      setCashCustomer(c.name);
+      setCustomerType(c.customer_type || "regular");
       setShowCustomer(false);
-      setCustForm({ name: "", phone: "", notes: "" });
+      setCustForm({ name: "", phone: "", notes: "", customer_type: "regular" });
       notify(`${t("customerAdded")} "${c.name}"`);
     } catch (err) {
       notify(String(err), "error");
@@ -957,18 +961,38 @@ export function Pos({ onBack }: { onBack: () => void }) {
             </div>
           ) : (
             <div className="pos-panel-field">
-              <label>{t("customerNameLabel")} ({t("optionalLabel")})</label>
-              <input
-                placeholder={t("cashCustomerPlaceholder")}
-                value={cashCustomer}
-                onChange={(e) => setCashCustomer(e.target.value)}
-              />
-              <label style={{ marginTop: 8 }}>{t("customerPhone")} ({t("optionalLabel")})</label>
-              <input
-                placeholder={t("cashPhonePlaceholder")}
-                value={cashPhone}
-                onChange={(e) => setCashPhone(e.target.value)}
-              />
+              <label>{t("customer")} ({t("optionalLabel")})</label>
+              <div className="pos-select-row">
+                <select
+                  value={customerId}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setCustomerId(v);
+                    const c = customers.find((x) => x.id === Number(v));
+                    if (c) {
+                      setCashCustomer(c.name);
+                      setCustomerType(c.customer_type || "regular");
+                    } else {
+                      setCashCustomer("");
+                      setCustomerType("regular");
+                    }
+                  }}
+                >
+                  <option value="">— {t("chooseCustomer")} —</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.customer_type === "wholesale" ? "(جملة)" : c.customer_type === "merchant" ? "(تاجر)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn sm"
+                  onClick={() => setShowCustomer(true)}
+                >
+                  + {t("new")}
+                </button>
+              </div>
               <div className="pos-panel-ok" style={{ marginTop: 10 }}>
                 {paid
                   ? `${t("amountDue")}: ${money(remaining)}`
@@ -1056,6 +1080,18 @@ export function Pos({ onBack }: { onBack: () => void }) {
                   setCustForm((s) => ({ ...s, notes: e.target.value }))
                 }
               />
+            </Field>
+            <Field label="نوع العميل">
+              <select
+                value={custForm.customer_type}
+                onChange={(e) =>
+                  setCustForm((s) => ({ ...s, customer_type: e.target.value }))
+                }
+              >
+                <option value="regular">عميل جاري</option>
+                <option value="wholesale">جملة</option>
+                <option value="merchant">تاجر</option>
+              </select>
             </Field>
           </div>
           <div className="modal-actions">

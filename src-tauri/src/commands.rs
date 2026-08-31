@@ -931,8 +931,8 @@ pub fn update_customer(
 ) -> Result<Customer, String> {
     let conn = get_db(&state)?;
     conn.execute(
-        "UPDATE customers SET name=?1, phone=?2, notes=?3 WHERE id=?4",
-        params![input.name.trim(), input.phone, input.notes, id],
+        "UPDATE customers SET name=?1, phone=?2, notes=?3, customer_type=?4 WHERE id=?5",
+        params![input.name.trim(), input.phone, input.notes, input.customer_type.as_deref().unwrap_or("regular"), id],
     )
     .map_err(|e| e.to_string())?;
     get_customer(&conn, id)

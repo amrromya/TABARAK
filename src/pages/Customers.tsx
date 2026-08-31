@@ -60,6 +60,7 @@ export function Customers({
     name: "",
     phone: "",
     notes: "",
+    customer_type: "regular",
   });
 
   const [paying, setPaying] = useState<Customer | null>(null);
@@ -365,7 +366,7 @@ export function Customers({
             className="btn primary"
             onClick={() => {
               setEditing(null);
-              setForm({ name: "", phone: "", notes: "" });
+              setForm({ name: "", phone: "", notes: "", customer_type: "regular" });
               setShowForm(true);
             }}
           >
@@ -413,6 +414,7 @@ export function Customers({
             <tr>
               <th>{t("name")}</th>
               <th>{t("phone")}</th>
+              <th>نوع العميل</th>
               <th>{t("debtLabel")}</th>
               <th>{t("notes")}</th>
               <th>{t("actions")}</th>
@@ -421,14 +423,14 @@ export function Customers({
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={5} className="empty">
+                <td colSpan={6} className="empty">
                   {t("loading")}
                 </td>
               </tr>
             )}
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={5} className="empty">
+                <td colSpan={6} className="empty">
                   {t("noCustomersYet")}
                 </td>
               </tr>
@@ -458,6 +460,11 @@ export function Customers({
                   ) : (
                     "—"
                   )}
+                </td>
+                <td>
+                  <span className={`pay-badge ${c.customer_type === "wholesale" ? "credit" : c.customer_type === "merchant" ? "card" : "cash"}`}>
+                    {c.customer_type === "wholesale" ? "جملة" : c.customer_type === "merchant" ? "تاجر" : "جاري"}
+                  </span>
                 </td>
                 <td>
                   <span
@@ -557,6 +564,7 @@ export function Customers({
                         name: c.name,
                         phone: c.phone ?? "",
                         notes: c.notes ?? "",
+                        customer_type: c.customer_type || "regular",
                       });
                       setShowForm(true);
                     }}
@@ -594,6 +602,16 @@ export function Customers({
                 value={form.phone ?? ""}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
+            </Field>
+            <Field label="نوع العميل">
+              <select
+                value={form.customer_type || "regular"}
+                onChange={(e) => setForm({ ...form, customer_type: e.target.value })}
+              >
+                <option value="regular">عميل جاري</option>
+                <option value="wholesale">جملة</option>
+                <option value="merchant">تاجر</option>
+              </select>
             </Field>
             <Field label={t("notes")}>
               <input
