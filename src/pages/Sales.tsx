@@ -73,6 +73,11 @@ export function Sales({
   const [selQty, setSelQty] = useState(1);
   const [selPrice, setSelPrice] = useState(0);
 
+  const [customerType, setCustomerType] = useState("regular");
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerPhone, setNewCustomerPhone] = useState("");
+
   const notify = useToast();
 
   const load = useCallback(async () => {
@@ -113,13 +118,17 @@ export function Sales({
     setSelProduct("");
     setSelQty(1);
     setSelPrice(0);
+    setCustomerType("regular");
+    setShowNewCustomer(false);
+    setNewCustomerName("");
+    setNewCustomerPhone("");
     setEmployeeId("1");
     setShowForm(true);
   };
 
   const onSelectProduct = (p: Product) => {
     setSelProduct(String(p.id));
-    setSelPrice(p.sell_price);
+    setSelPrice(customerType === "wholesale" && p.wholesale_price > 0 ? p.wholesale_price : p.sell_price);
     setSelQty(1);
   };
 
@@ -168,14 +177,34 @@ export function Sales({
       notify("أدخل رقم الجوال للتحويل", "error");
       return;
     }
+
+    let finalCustomerId = customerId ? Number(customerId) : null;
+    let finalCustomerName = customer || null;
+
+    if (showNewCustomer && newCustomerName.trim()) {
+      try {
+        const nc = await api.createCustomer({
+          name: newCustomerName.trim(),
+          phone: newCustomerPhone.trim() || null,
+          customer_type: customerType,
+        });
+        finalCustomerId = nc.id;
+        finalCustomerName = nc.name;
+        setCustomers(await api.listCustomers());
+      } catch (err) {
+        notify("فشل إنشاء العميل: " + String(err), "error");
+        return;
+      }
+    }
+
     const effectivePayment = paymentMethod === "card" ? (cardSubType === "wallet" ? "card_wallet" : "card_visa") : paymentMethod;
-    const effectiveCustomer = paymentMethod === "card" && cardSubType === "wallet" && walletPhone.trim() ? walletPhone.trim() : (customer || null);
+    const effectiveCustomer = paymentMethod === "card" && cardSubType === "wallet" && walletPhone.trim() ? walletPhone.trim() : finalCustomerName;
     try {
       const sale = await api.createSale({
         date,
         discount,
         customer_name: effectiveCustomer,
-        customer_id: customerId ? Number(customerId) : null,
+        customer_id: finalCustomerId,
         payment_method: effectivePayment,
         employee_id: employeeId ? Number(employeeId) : null,
         items: lines.map((l) => ({
@@ -492,13 +521,66 @@ export function Sales({
                   </select>
                 </Field>
               ) : (
-                <Field label="اسم العميل (اختياري)">
-                  <input
-                    value={customer}
-                    onChange={(e) => setCustomer(e.target.value)}
-                    placeholder="للبيع النقدي"
-                  />
-                </Field>
+                <>
+                  <Field label="اسم العميل (اختياري)">
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <select
+                        value={customerId}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "__new__") {
+                            setShowNewCustomer(true);
+                            setCustomerId("");
+                            setCustomer("");
+                          } else {
+                            setCustomerId(v);
+                            const c = customers.find((x) => x.id === Number(v));
+                            setCustomer(c ? c.name : "");
+                            if (c) setCustomerType(c.customer_type || "regular");
+                            setShowNewCustomer(false);
+                          }
+                        }}
+                        style={{ flex: 1 }}
+                      >
+                        <option value="">— اختر عميل —</option>
+                        {customers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} {c.customer_type === "wholesale" ? "(جملة)" : c.customer_type === "merchant" ? "(تاجر)" : ""}
+                          </option>
+                        ))}
+                        <option value="__new__">+ عميل جديد</option>
+                      </select>
+                    </div>
+                  </Field>
+                  {showNewCustomer && (
+                    <div style={{ background: "#f8fafc", borderRadius: 8, padding: "10px 12px", border: "1px solid #e2e8f0" }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>عميل جديد</div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <input
+                          placeholder="اسم العميل *"
+                          value={newCustomerName}
+                          onChange={(e) => setNewCustomerName(e.target.value)}
+                          style={{ flex: 1, minWidth: 140 }}
+                        />
+                        <input
+                          placeholder="الجوال (اختياري)"
+                          value={newCustomerPhone}
+                          onChange={(e) => setNewCustomerPhone(e.target.value)}
+                          style={{ flex: 1, minWidth: 120 }}
+                        />
+                        <select
+                          value={customerType}
+                          onChange={(e) => setCustomerType(e.target.value)}
+                          style={{ minWidth: 120 }}
+                        >
+                          <option value="regular">عميل جاري</option>
+                          <option value="wholesale">عميل جملة</option>
+                          <option value="merchant">تاجر</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
               <Field label="الموظف (اختياري)">
                 <select
@@ -524,7 +606,7 @@ export function Sales({
                   setShowMovements(true);
                 }}
                 placeholder="اختر المنتج..."
-                getPrice={(p) => p.sell_price}
+                getPrice={(p) => customerType === "wholesale" && p.wholesale_price > 0 ? p.wholesale_price : p.sell_price}
               />
               <input
                 type="number"
@@ -739,7 +821,7 @@ export function Sales({
                   setShowMovements(true);
                 }}
                 placeholder="اختر المنتج..."
-                getPrice={(p) => p.sell_price}
+                getPrice={(p) => customerType === "wholesale" && p.wholesale_price > 0 ? p.wholesale_price : p.sell_price}
               />
               <input
                 type="number"

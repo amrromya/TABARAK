@@ -25,6 +25,7 @@ export interface Product {
   unit: string | null;
   cost_price: number;
   sell_price: number;
+  wholesale_price: number;
   quantity: number;
   min_quantity: number;
   opening_balance: number;
@@ -47,6 +48,7 @@ export interface Customer {
   phone: string | null;
   notes: string | null;
   balance: number;
+  customer_type: string;
 }
 
 export interface CustomerPayment {
@@ -409,6 +411,7 @@ export interface NewProduct {
   unit?: string | null;
   cost_price: number;
   sell_price: number;
+  wholesale_price?: number;
   quantity: number;
   min_quantity: number;
   composite_category_id?: number | null;
@@ -510,6 +513,7 @@ export interface NewCustomer {
   name: string;
   phone?: string | null;
   notes?: string | null;
+  customer_type?: string | null;
 }
 
 export interface NewCustomerPayment {

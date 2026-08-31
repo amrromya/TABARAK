@@ -61,7 +61,7 @@ export function ProductPicker({
               <div className="product-picker-info">
                 <span className="strong">{p.name}</span>
                 <span className="hint">
-                  متوفر: {qty(p.quantity)} | سعر البيع: {money(getPrice(p))} | سعر الشراء: {money(p.cost_price)}
+                  متوفر: {qty(p.quantity)} | سعر البيع: {money(getPrice(p))}{p.wholesale_price > 0 ? ` | سعر الجملة: ${money(p.wholesale_price)}` : ""} | سعر الشراء: {money(p.cost_price)}
                 </span>
               </div>
               <button

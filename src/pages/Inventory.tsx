@@ -21,6 +21,7 @@ const emptyForm: NewProduct = {
   unit: "قطعة",
   cost_price: 0,
   sell_price: 0,
+  wholesale_price: 0,
   quantity: 0,
   min_quantity: 0,
   composite_category_id: null,
@@ -105,6 +106,7 @@ export function Inventory({
       unit: p.unit ?? "",
       cost_price: p.cost_price,
       sell_price: p.sell_price,
+      wholesale_price: p.wholesale_price ?? 0,
       quantity: p.quantity,
       min_quantity: p.min_quantity,
       composite_category_id: p.composite_category_id,
@@ -519,6 +521,18 @@ export function Inventory({
                 value={priceDisplay(form.sell_price)}
                 onChange={(e) =>
                   setForm({ ...form, sell_price: e.target.value === "" ? 0 : Number(e.target.value) })
+                }
+              />
+            </Field>
+            <Field label={t("wholesalePrice")}>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="0"
+                value={priceDisplay(form.wholesale_price ?? 0)}
+                onChange={(e) =>
+                  setForm({ ...form, wholesale_price: e.target.value === "" ? 0 : Number(e.target.value) })
                 }
               />
             </Field>

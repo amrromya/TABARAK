@@ -31,6 +31,7 @@ pub struct Product {
     pub unit: Option<String>,
     pub cost_price: f64,
     pub sell_price: f64,
+    pub wholesale_price: f64,
     pub quantity: f64,
     pub min_quantity: f64,
     pub opening_balance: f64,
@@ -74,6 +75,7 @@ pub struct Customer {
     pub phone: Option<String>,
     pub notes: Option<String>,
     pub balance: f64,
+    pub customer_type: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -352,6 +354,8 @@ pub struct NewProduct {
     pub unit: Option<String>,
     pub cost_price: f64,
     pub sell_price: f64,
+    #[serde(default)]
+    pub wholesale_price: f64,
     pub quantity: f64,
     pub min_quantity: f64,
     pub composite_category_id: Option<i64>,
@@ -469,6 +473,7 @@ pub struct NewCustomer {
     pub name: String,
     pub phone: Option<String>,
     pub notes: Option<String>,
+    pub customer_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

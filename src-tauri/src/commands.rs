@@ -299,7 +299,7 @@ pub fn list_products(
     let conn = get_db(&state)?;
     let sql = "
         SELECT p.id, p.name, p.barcode, p.category_id, c.name, p.warehouse_id, w.name, p.unit,
-               p.cost_price, p.sell_price, p.quantity, p.min_quantity, p.opening_balance,
+               p.cost_price, p.sell_price, p.wholesale_price, p.quantity, p.min_quantity, p.opening_balance,
                p.composite_category_id, cc.name
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
@@ -325,11 +325,12 @@ pub fn list_products(
                 unit: r.get(7)?,
                 cost_price: r.get(8)?,
                 sell_price: r.get(9)?,
-                quantity: r.get(10)?,
-                min_quantity: r.get(11)?,
-                opening_balance: r.get(12)?,
-                composite_category_id: r.get(13)?,
-                composite_category_name: r.get(14)?,
+                wholesale_price: r.get(10)?,
+                quantity: r.get(11)?,
+                min_quantity: r.get(12)?,
+                opening_balance: r.get(13)?,
+                composite_category_id: r.get(14)?,
+                composite_category_name: r.get(15)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -358,7 +359,7 @@ pub fn list_products_paged(
 
     let sql = "
         SELECT p.id, p.name, p.barcode, p.category_id, c.name, p.warehouse_id, w.name, p.unit,
-               p.cost_price, p.sell_price, p.quantity, p.min_quantity, p.opening_balance,
+               p.cost_price, p.sell_price, p.wholesale_price, p.quantity, p.min_quantity, p.opening_balance,
                p.composite_category_id, cc.name
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
@@ -381,11 +382,12 @@ pub fn list_products_paged(
                 unit: r.get(7)?,
                 cost_price: r.get(8)?,
                 sell_price: r.get(9)?,
-                quantity: r.get(10)?,
-                min_quantity: r.get(11)?,
-                opening_balance: r.get(12)?,
-                composite_category_id: r.get(13)?,
-                composite_category_name: r.get(14)?,
+                wholesale_price: r.get(10)?,
+                quantity: r.get(11)?,
+                min_quantity: r.get(12)?,
+                opening_balance: r.get(13)?,
+                composite_category_id: r.get(14)?,
+                composite_category_name: r.get(15)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -425,8 +427,8 @@ pub fn create_product(state: State<AppState>, input: NewProduct) -> Result<Produ
         _ => Some(next_barcode_value(&conn)?),
     };
     conn.execute(
-        "INSERT INTO products (name, barcode, category_id, warehouse_id, unit, cost_price, sell_price, quantity, min_quantity, composite_category_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        "INSERT INTO products (name, barcode, category_id, warehouse_id, unit, cost_price, sell_price, wholesale_price, quantity, min_quantity, composite_category_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             input.name.trim(),
             barcode,
@@ -435,6 +437,7 @@ pub fn create_product(state: State<AppState>, input: NewProduct) -> Result<Produ
             input.unit,
             input.cost_price,
             input.sell_price,
+            input.wholesale_price,
             input.quantity,
             input.min_quantity,
             input.composite_category_id,
@@ -458,7 +461,7 @@ pub fn update_product(
     };
     conn.execute(
         "UPDATE products SET name=?1, barcode=?2, category_id=?3, warehouse_id=?4, unit=?5,
-         cost_price=?6, sell_price=?7, quantity=?8, min_quantity=?9, composite_category_id=?10 WHERE id=?11",
+         cost_price=?6, sell_price=?7, wholesale_price=?8, quantity=?9, min_quantity=?10, composite_category_id=?11 WHERE id=?12",
         params![
             input.name.trim(),
             barcode,
@@ -467,6 +470,7 @@ pub fn update_product(
             input.unit,
             input.cost_price,
             input.sell_price,
+            input.wholesale_price,
             input.quantity,
             input.min_quantity,
             input.composite_category_id,
@@ -534,7 +538,7 @@ pub fn get_opening_balance_summary(
 fn get_product(conn: &Connection, id: i64) -> Result<Product, String> {
     conn.query_row(
         "SELECT p.id, p.name, p.barcode, p.category_id, c.name, p.warehouse_id, w.name, p.unit,
-                p.cost_price, p.sell_price, p.quantity, p.min_quantity, p.opening_balance,
+                p.cost_price, p.sell_price, p.wholesale_price, p.quantity, p.min_quantity, p.opening_balance,
                 p.composite_category_id, cc.name
          FROM products p
          LEFT JOIN categories c ON c.id = p.category_id
@@ -554,11 +558,12 @@ fn get_product(conn: &Connection, id: i64) -> Result<Product, String> {
                 unit: r.get(7)?,
                 cost_price: r.get(8)?,
                 sell_price: r.get(9)?,
-                quantity: r.get(10)?,
-                min_quantity: r.get(11)?,
-                opening_balance: r.get(12)?,
-                composite_category_id: r.get(13)?,
-                composite_category_name: r.get(14)?,
+                wholesale_price: r.get(10)?,
+                quantity: r.get(11)?,
+                min_quantity: r.get(12)?,
+                opening_balance: r.get(13)?,
+                composite_category_id: r.get(14)?,
+                composite_category_name: r.get(15)?,
             })
         },
     )
@@ -870,7 +875,8 @@ fn customer_balance_sql() -> &'static str {
         (SELECT COALESCE(SUM(net_total),0) FROM sales
          WHERE customer_id = c.id AND payment_method = 'credit')
         - (SELECT COALESCE(SUM(amount),0) FROM customer_payments
-           WHERE customer_id = c.id)
+           WHERE customer_id = c.id),
+        c.customer_type
      FROM customers c"
 }
 
@@ -887,6 +893,7 @@ pub fn list_customers(state: State<AppState>) -> Result<Vec<Customer>, String> {
                 phone: r.get(2)?,
                 notes: r.get(3)?,
                 balance: r.get(4)?,
+                customer_type: r.get(5)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -899,9 +906,10 @@ pub fn create_customer(state: State<AppState>, input: NewCustomer) -> Result<Cus
     if input.name.trim().is_empty() {
         return Err("اسم العميل مطلوب".into());
     }
+    let ctype = input.customer_type.as_deref().unwrap_or("regular");
     conn.execute(
-        "INSERT INTO customers (name, phone, notes) VALUES (?1, ?2, ?3)",
-        params![input.name.trim(), input.phone, input.notes],
+        "INSERT INTO customers (name, phone, notes, customer_type) VALUES (?1, ?2, ?3, ?4)",
+        params![input.name.trim(), input.phone, input.notes, ctype],
     )
     .map_err(|e| e.to_string())?;
     let id = conn.last_insert_rowid();
@@ -911,6 +919,7 @@ pub fn create_customer(state: State<AppState>, input: NewCustomer) -> Result<Cus
         phone: input.phone,
         notes: input.notes,
         balance: 0.0,
+        customer_type: ctype.to_string(),
     })
 }
 
@@ -946,6 +955,7 @@ fn get_customer(conn: &Connection, id: i64) -> Result<Customer, String> {
             phone: r.get(2)?,
             notes: r.get(3)?,
             balance: r.get(4)?,
+            customer_type: r.get(5)?,
         })
     })
     .map_err(|e| e.to_string())
@@ -1177,7 +1187,7 @@ pub fn list_products_by_category(state: State<AppState>, category_id: i64) -> Re
     let conn = get_db(&state)?;
     let mut stmt = conn.prepare(
         "SELECT p.id, p.name, p.barcode, p.category_id, c.name, p.warehouse_id, w.name, p.unit,
-                p.cost_price, p.sell_price, p.quantity, p.min_quantity, p.opening_balance,
+                p.cost_price, p.sell_price, p.wholesale_price, p.quantity, p.min_quantity, p.opening_balance,
                 p.composite_category_id, cc.name
          FROM products p
          LEFT JOIN categories c ON c.id = p.category_id
@@ -1198,11 +1208,12 @@ pub fn list_products_by_category(state: State<AppState>, category_id: i64) -> Re
             unit: r.get(7)?,
             cost_price: r.get(8)?,
             sell_price: r.get(9)?,
-            quantity: r.get(10)?,
-            min_quantity: r.get(11)?,
-            opening_balance: r.get(12)?,
-            composite_category_id: r.get(13)?,
-            composite_category_name: r.get(14)?,
+            wholesale_price: r.get(10)?,
+            quantity: r.get(11)?,
+            min_quantity: r.get(12)?,
+            opening_balance: r.get(13)?,
+            composite_category_id: r.get(14)?,
+            composite_category_name: r.get(15)?,
         })
     }).map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())

@@ -159,6 +159,7 @@ const translations: Record<string, Record<Lang, string>> = {
   unit: { ar: "الوحدة", en: "Unit" },
   costPrice: { ar: "سعر التكلفة", en: "Cost Price" },
   sellPrice: { ar: "سعر البيع", en: "Sell Price" },
+  wholesalePrice: { ar: "سعر الجملة", en: "Wholesale Price" },
   minQuantity: { ar: "حد الطلب", en: "Min Quantity" },
   inStock: { ar: "المخزون", en: "In Stock" },
   addProduct: { ar: "إضافة منتج", en: "Add Product" },
