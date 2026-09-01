@@ -147,9 +147,23 @@ export function Inventory({
     setProductUnits(productUnits.filter((_, i) => i !== idx));
   };
 
+  const STANDARD_UNITS = ["قطعة", "كرتونة", "كيلو", "لتر", "علبة", "شنطة"];
+
+  const saveUnitIfNeeded = (unit: string) => {
+    if (!unit || STANDARD_UNITS.includes(unit)) return;
+    const saved = localStorage.getItem("tabarak_custom_units");
+    const units: string[] = saved ? JSON.parse(saved) : [];
+    if (!units.includes(unit)) {
+      units.push(unit);
+      localStorage.setItem("tabarak_custom_units", JSON.stringify(units));
+      setCustomUnits([...units]);
+    }
+  };
+
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      saveUnitIfNeeded(form.unit?.trim() || "");
       if (editing) {
         await api.updateProduct(editing.id, form);
         notify(t("productUpdated"));
@@ -276,13 +290,7 @@ export function Inventory({
   const addUnitFromProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUnit.trim()) return;
-    const saved = localStorage.getItem("tabarak_custom_units");
-    const units: string[] = saved ? JSON.parse(saved) : [];
-    if (!units.includes(newUnit.trim())) {
-      units.push(newUnit.trim());
-      localStorage.setItem("tabarak_custom_units", JSON.stringify(units));
-      setCustomUnits(units);
-    }
+    saveUnitIfNeeded(newUnit.trim());
     setForm((f) => ({ ...f, unit: newUnit.trim() }));
     setNewUnit("");
     setShowUnit(false);
@@ -290,6 +298,7 @@ export function Inventory({
   };
 
   const existingUnits = [...new Set([
+    ...STANDARD_UNITS,
     ...customUnits,
     ...products.map((p) => p.unit).filter((u): u is string => !!u),
   ])];
@@ -501,15 +510,7 @@ export function Inventory({
                   placeholder={t("unit")}
                 />
                 <datalist id="inventory-units">
-                  {[...new Set([
-                    "قطعة",
-                    "كرتونة",
-                    "كيلو",
-                    "لتر",
-                    "علبة",
-                    "شنطة",
-                    ...existingUnits,
-                  ])].map((u) => (
+                  {existingUnits.map((u) => (
                     <option key={u} value={u}>{u}</option>
                   ))}
                 </datalist>
