@@ -59,6 +59,9 @@ export function Inventory({
   const [newWarehouse, setNewWarehouse] = useState("");
   const [showUnit, setShowUnit] = useState(false);
   const [newUnit, setNewUnit] = useState("");
+  const [customUnits, setCustomUnits] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("tabarak_custom_units") || "[]"); } catch { return []; }
+  });
   const [productUnits, setProductUnits] = useState<ProductUnit[]>([]);
   const [movementProduct, setMovementProduct] = useState<Product | null>(null);
   const notify = useToast();
@@ -278,6 +281,7 @@ export function Inventory({
     if (!units.includes(newUnit.trim())) {
       units.push(newUnit.trim());
       localStorage.setItem("tabarak_custom_units", JSON.stringify(units));
+      setCustomUnits(units);
     }
     setForm((f) => ({ ...f, unit: newUnit.trim() }));
     setNewUnit("");
@@ -286,7 +290,7 @@ export function Inventory({
   };
 
   const existingUnits = [...new Set([
-    ...(() => { try { return JSON.parse(localStorage.getItem("tabarak_custom_units") || "[]") as string[]; } catch { return []; } })(),
+    ...customUnits,
     ...products.map((p) => p.unit).filter((u): u is string => !!u),
   ])];
 
