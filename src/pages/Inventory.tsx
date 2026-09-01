@@ -353,7 +353,8 @@ export function Inventory({
               </tr>
             )}
             {products.map((p) => {
-              const low = p.quantity <= p.min_quantity;
+              const isService = p.product_type === "service";
+              const low = !isService && p.quantity <= p.min_quantity;
               return (
                 <tr
                   key={p.id}
@@ -554,13 +555,12 @@ export function Inventory({
                     }
                   />
                 </Field>
-            <Field label={t("sellPrice") + " *"}>
+            <Field label={t("sellPrice") + (form.product_type === "service" ? "" : " *")}>
               <input
-                required
                 type="number"
                 min={0}
                 step="0.01"
-                placeholder="0"
+                placeholder={form.product_type === "service" ? t("optionalLabelShort") : "0"}
                 value={priceDisplay(form.sell_price)}
                 onChange={(e) =>
                   setForm({ ...form, sell_price: e.target.value === "" ? 0 : Number(e.target.value) })
