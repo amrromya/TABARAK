@@ -30,6 +30,7 @@ interface Line {
   cost_price: number;
   composite_category_id: number | null;
   composite_category_name: string | null;
+  product_type?: string;
   addons: { product_id: number; name: string; sell_price: number; quantity: number }[];
 }
 
@@ -270,6 +271,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
           cost_price: p.cost_price,
           composite_category_id: p.composite_category_id,
           composite_category_name: p.composite_category_name,
+          product_type: p.product_type,
           addons: [],
         },
       ];
@@ -799,7 +801,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
                             + {t("addOn")}
                           </button>
                         )}
-                        {l.quantity > l.available && (
+                        {l.product_type !== "service" && l.quantity > l.available && (
                           <div className="pos-qty-warn">⚠️ {t("qtyExceedsAvailable")}</div>
                         )}
                       </td>
