@@ -31,6 +31,7 @@ export interface Product {
   opening_balance: number;
   composite_category_id: number | null;
   composite_category_name: string | null;
+  product_type: string;
 }
 
 export interface Supplier {
@@ -415,6 +416,7 @@ export interface NewProduct {
   quantity: number;
   min_quantity: number;
   composite_category_id?: number | null;
+  product_type?: string;
 }
 
 export interface OpeningBalanceItem {
@@ -868,6 +870,8 @@ export interface NewServiceOrder {
   tax_rate?: number | null;
   warranty_days?: number | null;
   original_order_id?: number | null;
+  deposit?: number | null;
+  deposit_method?: string | null;
 }
 
 export interface AssignTechnician {

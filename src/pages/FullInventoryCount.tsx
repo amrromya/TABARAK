@@ -47,7 +47,7 @@ export function FullInventoryCount({ onBack }: { onBack: () => void }) {
   const retrieveCount = useCallback(async (countId: number) => {
     try {
       const count = await api.getStockCount(countId);
-      const allLines: FullCountLine[] = products.map((p) => {
+      const allLines: FullCountLine[] = products.filter((p) => p.product_type !== "service").map((p) => {
         const item = count.items.find((i) => i.product_id === p.id);
         return {
           product_id: p.id,

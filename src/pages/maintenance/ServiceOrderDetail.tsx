@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../api";
 import { Field, Modal, confirmDialog, money, fmtDate, today, useToast } from "../../components/ui";
+import { printMaintenanceBarcode } from "../../utils/printBarcode";
 import { QRCodeCanvas } from "qrcode.react";
 import {
   STATUS_COLORS,
@@ -60,6 +61,7 @@ export function ServiceOrderDetail({
   const [order, setOrder] = useState<ServiceOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>("info");
+  const [storeName, setStoreName] = useState("");
 
   // Modals
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -138,6 +140,10 @@ export function ServiceOrderDetail({
   useEffect(() => {
     loadEmployees();
   }, [loadEmployees]);
+
+  useEffect(() => {
+    api.getSettings().then((s) => setStoreName(s.store_name || "")).catch(() => {});
+  }, []);
 
   const nextStatuses = STATUS_FLOW.filter(
     (s) => s !== order?.status && s !== "received"
@@ -316,45 +322,18 @@ export function ServiceOrderDetail({
   // ---- Print Barcode ----
   const handlePrintBarcode = () => {
     if (!order) return;
-    const frame = document.createElement("iframe");
-    frame.style.position = "fixed";
-    frame.style.right = "0";
-    frame.style.bottom = "0";
-    frame.style.width = "0";
-    frame.style.height = "0";
-    frame.style.border = "none";
-    document.body.appendChild(frame);
-    const doc = frame.contentDocument || frame.contentWindow?.document;
-    if (!doc) { document.body.removeChild(frame); return; }
-    doc.open();
-    doc.write(`
-      <!DOCTYPE html>
-      <html dir="rtl" lang="ar">
-      <head><meta charset="utf-8"><title>باركود - ${order.order_no}</title>
-      <style>
-        body{font-family:system-ui,sans-serif;padding:10px;margin:0;text-align:center;font-size:12px}
-        .barcode-box{border:2px solid #000;padding:10px;margin:0 auto;max-width:300px}
-        .barcode-num{font-size:14px;font-weight:700;letter-spacing:2px;margin:6px 0}
-        .info{font-size:11px;margin:3px 0;color:#333}
-        @media print{body{padding:5px}}
-      </style></head>
-      <body>
-        <div class="barcode-box">
-          <div style="font-weight:700;font-size:13px;margin-bottom:4px">تبارك — صيانة</div>
-          <div class="barcode-num">${order.order_no}</div>
-          <div class="info">${order.customer_name ?? ""}</div>
-          <div class="info">${order.customer_phone ?? ""}</div>
-          <div class="info">${order.device_type} ${order.device_brand ?? ""} ${order.device_model ?? ""}</div>
-          <div class="info" style="margin-top:4px;font-size:10px;color:#666">${order.customer_complaint ? (order.customer_complaint.length > 40 ? order.customer_complaint.slice(0, 40) + "..." : order.customer_complaint) : ""}</div>
-          <div class="info" style="color:#666">${fmtDate(order.created_at)}</div>
-          <div style="margin-top:6px;font-size:10px;border-top:1px dashed #ccc;padding-top:4px;color:#999">رقم الباركود: ${order.order_no}</div>
-        </div>
-      </body></html>
-    `);
-    doc.close();
-    frame.contentWindow?.focus();
-    frame.contentWindow?.print();
-    setTimeout(() => document.body.removeChild(frame), 1000);
+    printMaintenanceBarcode({
+      barcodeValue: order.order_no,
+      orderNo: order.order_no,
+      customerName: order.customer_name ?? "",
+      customerPhone: order.customer_phone,
+      deviceType: order.device_type,
+      deviceModel: order.device_model,
+      complaint: order.customer_complaint,
+      total: order.parts_cost + order.labor_cost + order.service_cost,
+      date: fmtDate(order.created_at),
+      storeName,
+    });
   };
 
   // ---- Print Delivery Receipt ----

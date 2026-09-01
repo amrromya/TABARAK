@@ -372,6 +372,7 @@ fn migrate(conn: &Connection) -> Result<(), String> {
     ensure_column(conn, "sale_return_items", "item_name", "TEXT")?;
     ensure_column(conn, "products", "wholesale_price", "REAL NOT NULL DEFAULT 0")?;
     ensure_column(conn, "customers", "customer_type", "TEXT NOT NULL DEFAULT 'regular'")?;
+    ensure_column(conn, "products", "product_type", "TEXT NOT NULL DEFAULT 'inventory'")?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS product_units (

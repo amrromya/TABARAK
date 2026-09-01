@@ -37,6 +37,7 @@ pub struct Product {
     pub opening_balance: f64,
     pub composite_category_id: Option<i64>,
     pub composite_category_name: Option<String>,
+    pub product_type: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -359,6 +360,8 @@ pub struct NewProduct {
     pub quantity: f64,
     pub min_quantity: f64,
     pub composite_category_id: Option<i64>,
+    #[serde(default)]
+    pub product_type: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

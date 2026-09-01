@@ -463,6 +463,8 @@ pub fn create_service_order(
     let discount = input.discount.unwrap_or(0.0);
     let tax_rate = input.tax_rate.unwrap_or(0.0);
     let warranty_days = input.warranty_days.unwrap_or(0);
+    let deposit = input.deposit.unwrap_or(0.0);
+    let deposit_method = input.deposit_method.unwrap_or_else(|| "cash".to_string());
 
     tx.execute(
         "INSERT INTO service_orders (
@@ -473,7 +475,7 @@ pub fn create_service_order(
             original_order_id, received_by
         ) VALUES (
             ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'received',
-            ?16, ?17, ?18, ?19, ?20, 0, 0, ?21, ?22, NULL
+            ?16, ?17, ?18, ?19, ?20, 0, ?21, ?22, ?23, NULL
         )",
         params![
             order_no,
@@ -496,12 +498,46 @@ pub fn create_service_order(
             service_cost,
             discount,
             tax_rate,
+            deposit,
             warranty_days,
             input.original_order_id,
         ],
     )
     .map_err(|e| e.to_string())?;
     let order_id = tx.last_insert_rowid();
+
+    // If deposit > 0, record it as a payment and add cash register movement
+    if deposit > 0.0 {
+        tx.execute(
+            "INSERT INTO service_order_payments (order_id, amount, payment_method, date, notes) VALUES (?1, ?2, ?3, datetime('now','localtime'), 'عربون عند الاستلام')",
+            params![order_id, deposit, deposit_method],
+        )
+        .map_err(|e| e.to_string())?;
+
+        // Add cash register movement if open session exists and method is cash
+        if deposit_method == "cash" {
+            let has_session: bool = tx
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM cash_register_sessions WHERE status = 'open')",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap_or(false);
+            if has_session {
+                tx.execute(
+                    "INSERT INTO cash_register_movements (session_id, type, amount, description, reference_id, reference_type) \
+                     SELECT id, 'service_deposit', ?1, ?2, ?3, 'service_order' \
+                     FROM cash_register_sessions WHERE status = 'open' ORDER BY id DESC LIMIT 1",
+                    params![
+                        deposit,
+                        format!("عربون صيانة — {} — {}", order_no, input.customer_name.as_deref().unwrap_or("")),
+                        order_id,
+                    ],
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        }
+    }
 
     tx.execute(
         "INSERT INTO service_order_status_history (order_id, new_status, notes) VALUES (?1, 'received', 'تم استلام الجهاز')",
@@ -674,6 +710,45 @@ pub fn change_service_status(
     tx.commit().map_err(|e| e.to_string())?;
 
     get_full_order(&conn, id)
+}
+
+// =============== 5b. delete_service_order ===============
+
+#[tauri::command]
+pub fn delete_service_order(state: State<AppState>, id: i64) -> Result<(), String> {
+    let conn = get_db(&state)?;
+
+    let exists: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM service_orders WHERE id = ?1)",
+            params![id],
+            |r| r.get(0),
+        )
+        .unwrap_or(false);
+    if !exists {
+        return Err("أمر الصيانة غير موجود".into());
+    }
+
+    conn.execute("DELETE FROM service_order_parts WHERE order_id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM service_order_payments WHERE order_id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM service_order_status_history WHERE order_id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM service_order_images WHERE order_id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM service_order_technicians WHERE order_id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM service_order_checklists WHERE order_id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM service_order_notes WHERE order_id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM service_order_audit_log WHERE order_id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM service_orders WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 // =============== 6. assign_technician ===============
@@ -972,6 +1047,37 @@ pub fn add_service_payment(
     )
     .map_err(|e| e.to_string())?;
 
+    // Record cash register movement for cash payments
+    if payment.payment_method == "cash" {
+        let has_session: bool = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM cash_register_sessions WHERE status = 'open')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(false);
+        if has_session {
+            let order_no: String = tx
+                .query_row(
+                    "SELECT order_no FROM service_orders WHERE id = ?1",
+                    params![order_id],
+                    |r| r.get(0),
+                )
+                .unwrap_or_default();
+            tx.execute(
+                "INSERT INTO cash_register_movements (session_id, type, amount, description, reference_id, reference_type) \
+                 SELECT id, 'service_payment', ?1, ?2, ?3, 'service_order' \
+                 FROM cash_register_sessions WHERE status = 'open' ORDER BY id DESC LIMIT 1",
+                params![
+                    payment.amount,
+                    format!("دفعة صيانة — {}", order_no),
+                    order_id,
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+
     add_audit_log(
         &tx,
         order_id,
@@ -1186,7 +1292,7 @@ pub fn get_maintenance_dashboard(state: State<AppState>) -> Result<MaintenanceDa
 
     let revenue_today: f64 = conn
         .query_row(
-            "SELECT COALESCE(SUM(amount), 0) FROM service_order_payments WHERE date = DATE('now','localtime')",
+            "SELECT COALESCE(SUM(amount), 0) FROM service_order_payments WHERE DATE(date) = DATE('now','localtime')",
             [],
             |r| r.get(0),
         )

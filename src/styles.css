@@ -8280,6 +8280,58 @@ nav::-webkit-scrollbar-thumb:hover {
   gap: 10px;
 }
 
+/* Colored section heads */
+.nso2-head-customer { background: linear-gradient(135deg, #f0fdf4, #dcfce7); border-bottom-color: #bbf7d0; }
+.nso2-head-device { background: linear-gradient(135deg, #eff6ff, #dbeafe); border-bottom-color: #bfdbfe; }
+.nso2-head-problem { background: linear-gradient(135deg, #fffbeb, #fef3c7); border-bottom-color: #fde68a; }
+.nso2-head-parts { background: linear-gradient(135deg, #fdf2f8, #fce7f3); border-bottom-color: #fbcfe8; }
+.nso2-head-tech { background: linear-gradient(135deg, #faf5ff, #f3e8ff); border-bottom-color: #e9d5ff; }
+
+/* Customer select with + button */
+.nso2-customer-select {
+  display: flex;
+  gap: 0;
+}
+.nso2-customer-select select { flex: 1; border-radius: 6px 0 0 6px; }
+.nso2-add-btn {
+  width: 34px;
+  min-width: 34px;
+  border-radius: 0 6px 6px 0;
+  background: #3b82f6;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  border: 1.5px solid #3b82f6;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.nso2-add-btn:hover { background: #2563eb; }
+
+/* Inline form (new customer, new device type) */
+.nso2-inline-form {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Parts count badge */
+.nso2-parts-count {
+  background: #ec4899;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 10px;
+  margin-right: 4px;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .nso2-layout {
@@ -8821,6 +8873,43 @@ nav::-webkit-scrollbar-thumb:hover {
   background: var(--bg);
   border-color: #374151;
   color: var(--text);
+}
+[data-theme="dark"] .nso2-head-customer { background: linear-gradient(135deg, #052e16, #14532d); border-bottom-color: #166534; }
+[data-theme="dark"] .nso2-head-device { background: linear-gradient(135deg, #172554, #1e3a5f); border-bottom-color: #1e40af; }
+[data-theme="dark"] .nso2-head-problem { background: linear-gradient(135deg, #451a03, #78350f); border-bottom-color: #92400e; }
+[data-theme="dark"] .nso2-head-parts { background: linear-gradient(135deg, #4a1942, #831843); border-bottom-color: #9d174d; }
+[data-theme="dark"] .nso2-head-tech { background: linear-gradient(135deg, #3b0764, #581c87); border-bottom-color: #6b21a8; }
+[data-theme="dark"] .nso2-head-deposit { background: linear-gradient(135deg, #431407, #7c2d12); border-bottom-color: #9a3412; }
+[data-theme="dark"] .nso2-customer-select select {
+  background: var(--bg);
+  border-color: #374151;
+  color: var(--text);
+}
+[data-theme="dark"] .nso2-inline-form {
+  background: #052e16;
+  border-color: #166534;
+}
+[data-theme="dark"] .nso2-add-btn {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+[data-theme="dark"] .nso2-add-btn:hover {
+  background: #1d4ed8;
+}
+[data-theme="dark"] .nso2-part-search input {
+  background: var(--bg);
+  border-color: #374151;
+  color: var(--text);
+}
+[data-theme="dark"] .nso2-part-results {
+  background: var(--surface);
+  border-color: #374151;
+}
+[data-theme="dark"] .nso2-part-result-item {
+  border-bottom-color: #374151;
+}
+[data-theme="dark"] .nso2-part-result-item:hover {
+  background: #253042;
 }
 
 /* ---- Print settings ---- */

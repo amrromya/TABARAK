@@ -103,6 +103,8 @@ pub struct NewServiceOrder {
     pub tax_rate: Option<f64>,
     pub warranty_days: Option<i64>,
     pub original_order_id: Option<i64>,
+    pub deposit: Option<f64>,
+    pub deposit_method: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -317,6 +317,8 @@ export const api = {
     invoke<any>("update_service_order", { id, input }),
   changeServiceStatus: (id: number, newStatus: string, notes?: string) =>
     invoke<any>("change_service_status", { id, newStatus, notes: notes ?? null }),
+  deleteServiceOrder: (id: number) =>
+    invoke<void>("delete_service_order", { id }),
   assignTechnician: (orderId: number, tech: any) =>
     invoke<void>("assign_technician", { orderId, tech }),
   removeTechnician: (id: number) =>

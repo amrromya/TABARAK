@@ -300,7 +300,7 @@ pub fn list_products(
     let sql = "
         SELECT p.id, p.name, p.barcode, p.category_id, c.name, p.warehouse_id, w.name, p.unit,
                p.cost_price, p.sell_price, p.wholesale_price, p.quantity, p.min_quantity, p.opening_balance,
-               p.composite_category_id, cc.name
+               p.composite_category_id, cc.name, p.product_type
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
         LEFT JOIN warehouses w ON w.id = p.warehouse_id
@@ -331,6 +331,7 @@ pub fn list_products(
                 opening_balance: r.get(13)?,
                 composite_category_id: r.get(14)?,
                 composite_category_name: r.get(15)?,
+                product_type: r.get::<_, String>(16).unwrap_or_else(|_| "inventory".to_string()),
             })
         })
         .map_err(|e| e.to_string())?;
@@ -360,7 +361,7 @@ pub fn list_products_paged(
     let sql = "
         SELECT p.id, p.name, p.barcode, p.category_id, c.name, p.warehouse_id, w.name, p.unit,
                p.cost_price, p.sell_price, p.wholesale_price, p.quantity, p.min_quantity, p.opening_balance,
-               p.composite_category_id, cc.name
+               p.composite_category_id, cc.name, p.product_type
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
         LEFT JOIN warehouses w ON w.id = p.warehouse_id
@@ -388,6 +389,7 @@ pub fn list_products_paged(
                 opening_balance: r.get(13)?,
                 composite_category_id: r.get(14)?,
                 composite_category_name: r.get(15)?,
+                product_type: r.get::<_, String>(16).unwrap_or_else(|_| "inventory".to_string()),
             })
         })
         .map_err(|e| e.to_string())?;
@@ -426,9 +428,10 @@ pub fn create_product(state: State<AppState>, input: NewProduct) -> Result<Produ
         Some(b) if !b.trim().is_empty() => input.barcode.clone(),
         _ => Some(next_barcode_value(&conn)?),
     };
+    let product_type = if input.product_type.is_empty() { "inventory".to_string() } else { input.product_type };
     conn.execute(
-        "INSERT INTO products (name, barcode, category_id, warehouse_id, unit, cost_price, sell_price, wholesale_price, quantity, min_quantity, composite_category_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        "INSERT INTO products (name, barcode, category_id, warehouse_id, unit, cost_price, sell_price, wholesale_price, quantity, min_quantity, composite_category_id, product_type)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             input.name.trim(),
             barcode,
@@ -441,6 +444,7 @@ pub fn create_product(state: State<AppState>, input: NewProduct) -> Result<Produ
             input.quantity,
             input.min_quantity,
             input.composite_category_id,
+            product_type,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -459,9 +463,10 @@ pub fn update_product(
         Some(b) if !b.trim().is_empty() => input.barcode.clone(),
         _ => Some(next_barcode_value(&conn)?),
     };
+    let product_type = if input.product_type.is_empty() { "inventory".to_string() } else { input.product_type };
     conn.execute(
         "UPDATE products SET name=?1, barcode=?2, category_id=?3, warehouse_id=?4, unit=?5,
-         cost_price=?6, sell_price=?7, wholesale_price=?8, quantity=?9, min_quantity=?10, composite_category_id=?11 WHERE id=?12",
+         cost_price=?6, sell_price=?7, wholesale_price=?8, quantity=?9, min_quantity=?10, composite_category_id=?11, product_type=?12 WHERE id=?13",
         params![
             input.name.trim(),
             barcode,
@@ -474,6 +479,7 @@ pub fn update_product(
             input.quantity,
             input.min_quantity,
             input.composite_category_id,
+            product_type,
             id
         ],
     )
@@ -539,7 +545,7 @@ fn get_product(conn: &Connection, id: i64) -> Result<Product, String> {
     conn.query_row(
         "SELECT p.id, p.name, p.barcode, p.category_id, c.name, p.warehouse_id, w.name, p.unit,
                 p.cost_price, p.sell_price, p.wholesale_price, p.quantity, p.min_quantity, p.opening_balance,
-                p.composite_category_id, cc.name
+                p.composite_category_id, cc.name, p.product_type
          FROM products p
          LEFT JOIN categories c ON c.id = p.category_id
          LEFT JOIN warehouses w ON w.id = p.warehouse_id
@@ -564,6 +570,7 @@ fn get_product(conn: &Connection, id: i64) -> Result<Product, String> {
                 opening_balance: r.get(13)?,
                 composite_category_id: r.get(14)?,
                 composite_category_name: r.get(15)?,
+                product_type: r.get::<_, String>(16).unwrap_or_else(|_| "inventory".to_string()),
             })
         },
     )
@@ -1188,7 +1195,7 @@ pub fn list_products_by_category(state: State<AppState>, category_id: i64) -> Re
     let mut stmt = conn.prepare(
         "SELECT p.id, p.name, p.barcode, p.category_id, c.name, p.warehouse_id, w.name, p.unit,
                 p.cost_price, p.sell_price, p.wholesale_price, p.quantity, p.min_quantity, p.opening_balance,
-                p.composite_category_id, cc.name
+                p.composite_category_id, cc.name, p.product_type
          FROM products p
          LEFT JOIN categories c ON c.id = p.category_id
          LEFT JOIN warehouses w ON w.id = p.warehouse_id
@@ -1214,6 +1221,7 @@ pub fn list_products_by_category(state: State<AppState>, category_id: i64) -> Re
             opening_balance: r.get(13)?,
             composite_category_id: r.get(14)?,
             composite_category_name: r.get(15)?,
+            product_type: r.get::<_, String>(16).unwrap_or_else(|_| "inventory".to_string()),
         })
     }).map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
@@ -4117,18 +4125,18 @@ pub fn get_profit_loss(state: State<AppState>, range: DateRange) -> Result<Profi
 pub fn get_stock_value(state: State<AppState>) -> Result<StockValue, String> {
     let conn = get_db(&state)?;
     let product_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM products", [], |r| r.get(0))
+        .query_row("SELECT COUNT(*) FROM products WHERE product_type != 'service'", [], |r| r.get(0))
         .map_err(|e| e.to_string())?;
     let total_value: f64 = conn
         .query_row(
-            "SELECT COALESCE(SUM(quantity * cost_price),0) FROM products",
+            "SELECT COALESCE(SUM(quantity * cost_price),0) FROM products WHERE product_type != 'service'",
             [],
             |r| r.get(0),
         )
         .map_err(|e| e.to_string())?;
     let low_stock_count: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM products WHERE quantity <= min_quantity",
+            "SELECT COUNT(*) FROM products WHERE quantity <= min_quantity AND product_type != 'service'",
             [],
             |r| r.get(0),
         )

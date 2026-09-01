@@ -163,6 +163,7 @@ pub fn run() {
             maintenance_commands::create_service_order,
             maintenance_commands::update_service_order,
             maintenance_commands::change_service_status,
+            maintenance_commands::delete_service_order,
             maintenance_commands::assign_technician,
             maintenance_commands::remove_technician,
             maintenance_commands::add_service_part,

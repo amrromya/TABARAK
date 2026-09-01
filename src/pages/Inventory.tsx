@@ -25,6 +25,7 @@ const emptyForm: NewProduct = {
   quantity: 0,
   min_quantity: 0,
   composite_category_id: null,
+  product_type: "inventory",
 };
 
 function priceDisplay(v: number | string): string {
@@ -360,17 +361,22 @@ export function Inventory({
                   title={t("doubleClickHint")}
                   onDoubleClick={() => openEdit(p)}
                 >
-                  <td className="strong">{p.name}</td>
+                  <td className="strong">
+                    {p.name}
+                    {p.product_type === "service" && (
+                      <span style={{ marginRight: 6, fontSize: 10, background: "#f5f3ff", color: "#7c3aed", padding: "1px 6px", borderRadius: 8, border: "1px solid #e9d5ff" }}>🔧 خدمي</span>
+                    )}
+                  </td>
                   <td>{p.category_name ?? "—"}</td>
                   <td>{p.warehouse_name ?? "—"}</td>
                   <td>{p.barcode ?? "—"}</td>
                   <td>{p.unit ?? "—"}</td>
-                  <td>{money(p.cost_price)}</td>
+                  <td>{p.product_type === "service" ? "—" : money(p.cost_price)}</td>
                   <td className="strong">{money(p.sell_price)}</td>
                   <td className={low ? "text-warn strong" : "strong"}>
-                    {qty(p.quantity)} {low && "⚠️"}
+                    {p.product_type === "service" ? "—" : qty(p.quantity)} {low && "⚠️"}
                   </td>
-                  <td>{qty(p.min_quantity)}</td>
+                  <td>{p.product_type === "service" ? "—" : qty(p.min_quantity)}</td>
                   <td className="actions">
                     <button className="btn sm" onClick={() => openEdit(p)}>
                       {t("edit")}
@@ -407,6 +413,41 @@ export function Inventory({
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
+            </Field>
+            <Field label="نوع الصنف *">
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, product_type: "inventory" })}
+                  style={{
+                    flex: 1, padding: "8px 12px", borderRadius: 8, border: "2px solid",
+                    borderColor: form.product_type !== "service" ? "#3b82f6" : "#e5e7eb",
+                    background: form.product_type !== "service" ? "#eff6ff" : "#fff",
+                    color: form.product_type !== "service" ? "#1e40af" : "#6b7280",
+                    fontWeight: 700, fontSize: 13, cursor: "pointer", transition: "all 0.15s",
+                  }}
+                >
+                  📦 مخزني
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, product_type: "service", cost_price: 0, quantity: 0, min_quantity: 0 })}
+                  style={{
+                    flex: 1, padding: "8px 12px", borderRadius: 8, border: "2px solid",
+                    borderColor: form.product_type === "service" ? "#8b5cf6" : "#e5e7eb",
+                    background: form.product_type === "service" ? "#f5f3ff" : "#fff",
+                    color: form.product_type === "service" ? "#6d28d9" : "#6b7280",
+                    fontWeight: 700, fontSize: 13, cursor: "pointer", transition: "all 0.15s",
+                  }}
+                >
+                  🔧 خدمي
+                </button>
+              </div>
+              {form.product_type === "service" && (
+                <small style={{ color: "#8b5cf6", fontSize: 11, display: "block", marginTop: 4 }}>
+                  ℹ️ الصنف الخدمي لا يحتاج رصيد ولا سعر تكلفة ولا يظهر في الجرد
+                </small>
+              )}
             </Field>
             <Field label={t("barcodeAuto")}>
               <input
@@ -498,19 +539,21 @@ export function Inventory({
                 </button>
               </div>
             </Field>
-            <Field label={t("costPrice") + " *"}>
-              <input
-                required
-                type="number"
-                min={0}
-                step="0.01"
-                placeholder="0"
-                value={priceDisplay(form.cost_price)}
-                onChange={(e) =>
-                  setForm({ ...form, cost_price: e.target.value === "" ? 0 : Number(e.target.value) })
-                }
-              />
-            </Field>
+            {form.product_type !== "service" && (
+              <>
+                <Field label={t("costPrice") + " *"}>
+                  <input
+                    required={form.product_type !== "service"}
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="0"
+                    value={priceDisplay(form.cost_price)}
+                    onChange={(e) =>
+                      setForm({ ...form, cost_price: e.target.value === "" ? 0 : Number(e.target.value) })
+                    }
+                  />
+                </Field>
             <Field label={t("sellPrice") + " *"}>
               <input
                 required
@@ -558,6 +601,8 @@ export function Inventory({
                 }
               />
             </Field>
+            </>
+            )}
 
             <Field label={t("compositeCategory") + " (" + t("optionalLabel") + ")"}>
               <select

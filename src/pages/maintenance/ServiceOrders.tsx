@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../api";
-import { Modal, money, useToast } from "../../components/ui";
+import { Modal, confirmDialog, money, useToast } from "../../components/ui";
 import {
   STATUS_COLORS,
   STATUS_LABELS,
@@ -10,16 +10,29 @@ import {
 } from "../../types";
 
 const STATUS_FLOW_NEXT: Record<string, MaintenanceStatus[]> = {
-  received: ["inspection", "cancelled"],
-  inspection: ["pending_approval", "repairing", "cancelled"],
-  pending_approval: ["repairing", "cancelled"],
-  repairing: ["repaired", "pending_parts", "cancelled"],
-  pending_parts: ["repairing", "cancelled"],
-  repaired: ["ready", "cancelled"],
-  ready: ["delivered", "cancelled"],
+  received: ["delivered", "cancelled"],
+  inspection: ["received", "delivered", "cancelled"],
+  pending_approval: ["received", "delivered", "cancelled"],
+  repairing: ["received", "delivered", "cancelled"],
+  pending_parts: ["received", "delivered", "cancelled"],
+  repaired: ["received", "delivered", "cancelled"],
+  ready: ["received", "delivered", "cancelled"],
   delivered: [],
   cancelled: [],
   rejected: [],
+};
+
+const STATUS_ICONS: Record<string, string> = {
+  received: "📥",
+  inspection: "🔍",
+  pending_approval: "⏳",
+  repairing: "🔧",
+  pending_parts: "📦",
+  repaired: "✅",
+  ready: "🟢",
+  delivered: "🚚",
+  cancelled: "❌",
+  rejected: "🚫",
 };
 
 export function ServiceOrders({
@@ -39,6 +52,7 @@ export function ServiceOrders({
   const [statusModalOrder, setStatusModalOrder] = useState<ServiceOrderSummary | null>(null);
   const [newStatus, setNewStatus] = useState<MaintenanceStatus>("received");
   const [statusNotes, setStatusNotes] = useState("");
+  const [deliveryAmount, setDeliveryAmount] = useState(0);
 
   // Invoice modal (on delivery)
   const [invoiceOrder, setInvoiceOrder] = useState<ServiceOrder | null>(null);
@@ -71,6 +85,8 @@ export function ServiceOrders({
   });
 
   const totalValue = filtered.reduce((s, o) => s + (o.total_cost ?? 0), 0);
+  const totalPaid = filtered.reduce((s, o) => s + (o.amount_paid ?? 0), 0);
+  const totalRemaining = filtered.reduce((s, o) => s + (o.remaining ?? 0), 0);
 
   const openStatusModal = (o: ServiceOrderSummary, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -78,17 +94,25 @@ export function ServiceOrders({
     const nexts = STATUS_FLOW_NEXT[o.status] || [];
     setNewStatus(nexts[0] || o.status);
     setStatusNotes("");
+    setDeliveryAmount(o.remaining);
   };
 
   const handleChangeStatus = async () => {
     if (!statusModalOrder) return;
     try {
+      if (newStatus === "delivered" && deliveryAmount > 0 && statusModalOrder.remaining > 0) {
+        const amount = Math.min(deliveryAmount, statusModalOrder.remaining);
+        await api.addServicePayment(statusModalOrder.id, {
+          amount,
+          payment_method: "cash",
+          notes: "المبلغ المدفوع عند التسليم",
+        });
+      }
       await api.changeServiceStatus(statusModalOrder.id, newStatus, statusNotes.trim() || undefined);
       notify("تم تغيير الحالة بنجاح");
       setStatusModalOrder(null);
       load();
 
-      // If delivered, open invoice
       if (newStatus === "delivered") {
         try {
           const fullOrder = await api.getServiceOrder(statusModalOrder.id);
@@ -99,6 +123,76 @@ export function ServiceOrders({
       }
     } catch (e) {
       notify(String(e), "error");
+    }
+  };
+
+  const handleDelete = async (o: ServiceOrderSummary, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirmDialog(`هل أنت متأكد من حذف أمر الصيانة ${o.order_no}؟`)) return;
+    try {
+      await api.deleteServiceOrder(o.id);
+      notify("تم حذف أمر الصيانة");
+      load();
+    } catch (err) {
+      notify(String(err), "error");
+    }
+  };
+
+  const printReceipt = async (o: ServiceOrderSummary, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const fullOrder = await api.getServiceOrder(o.id) as ServiceOrder;
+      const frame = document.createElement("iframe");
+      frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:none";
+      document.body.appendChild(frame);
+      const doc = frame.contentDocument || frame.contentWindow?.document;
+      if (!doc) { document.body.removeChild(frame); return; }
+      const partsHtml = fullOrder.parts.map((p, i) =>
+        `<tr><td>${i + 1}</td><td>${p.part_name}</td><td>${p.quantity}</td><td>${money(p.sell_price)}</td><td>${money(p.sell_price * p.quantity)}</td></tr>`
+      ).join("");
+      const totalCost = fullOrder.parts_cost + fullOrder.labor_cost + fullOrder.service_cost;
+      const taxAmt = totalCost * (fullOrder.tax_rate / 100);
+      const finalTotal = totalCost + taxAmt - fullOrder.discount;
+      doc.open();
+      doc.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+        <style>body{font-family:system-ui,sans-serif;padding:15px;margin:0;font-size:12px;color:#1f2937}
+        h2{text-align:center;color:#0f8a5f;border-bottom:2px solid #0f8a5f;padding-bottom:6px}
+        .row{display:flex;justify-content:space-between;margin:4px 0}
+        .lbl{color:#6b7280}
+        table{width:100%;border-collapse:collapse;margin:8px 0}
+        th,td{border:1px solid #d1d5db;padding:5px 8px;text-align:right;font-size:11px}
+        th{background:#f3f4f6;font-weight:700}
+        .total{font-weight:700;border-top:2px solid #333}
+        .footer{margin-top:16px;border-top:1px dashed #ccc;padding-top:8px;color:#6b7280;font-size:10px;text-align:center}
+        @media print{body{padding:10px}}</style></head><body>
+        <h2>إيصال صيانة — ${fullOrder.order_no}</h2>
+        <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:12px">
+          <div class="row"><span class="lbl">العميل:</span><strong>${fullOrder.customer_name ?? "—"}</strong></div>
+          <div class="row"><span class="lbl">الهاتف:</span><strong>${fullOrder.customer_phone ?? "—"}</strong></div>
+          <div class="row"><span class="lbl">الجهاز:</span><strong>${fullOrder.device_type} ${fullOrder.device_brand ?? ""} ${fullOrder.device_model ?? ""}</strong></div>
+          <div class="row"><span class="lbl">الحالة:</span><strong>${STATUS_LABELS[fullOrder.status]}</strong></div>
+        </div>
+        ${fullOrder.parts.length > 0 ? `
+        <h3 style="font-size:13px;margin:8px 0 4px">قطع الغيار</h3>
+        <table><thead><tr><th>#</th><th>القطعة</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+        <tbody>${partsHtml}</tbody></table>` : ""}
+        <table>
+          <tr><td>قطع الغيار</td><td style="text-align:left">${money(fullOrder.parts_cost)}</td></tr>
+          <tr><td>أجرة العمل</td><td style="text-align:left">${money(fullOrder.labor_cost)}</td></tr>
+          <tr><td>رسوم الخدمة</td><td style="text-align:left">${money(fullOrder.service_cost)}</td></tr>
+          ${fullOrder.discount > 0 ? `<tr><td>الخصم</td><td style="text-align:left;color:#dc2626">-${money(fullOrder.discount)}</td></tr>` : ""}
+          ${fullOrder.tax_rate > 0 ? `<tr><td>الضريبة (${fullOrder.tax_rate}%)</td><td style="text-align:left">${money(taxAmt)}</td></tr>` : ""}
+          <tr class="total"><td>الإجمالي</td><td style="text-align:left">${money(finalTotal)}</td></tr>
+          <tr><td>المدفوع</td><td style="text-align:left;color:#10b981;font-weight:700">${money(fullOrder.amount_paid)}</td></tr>
+          <tr class="total"><td>المتبقي</td><td style="text-align:left;color:${fullOrder.remaining > 0 ? "#dc2626" : "#10b981"}">${money(fullOrder.remaining)}</td></tr>
+        </table>
+        <div class="footer">شكراً لثقتكم بنا — صيانة تبارك</div></body></html>`);
+      doc.close();
+      frame.contentWindow?.focus();
+      frame.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(frame), 1000);
+    } catch (err) {
+      notify(String(err), "error");
     }
   };
 
@@ -134,25 +228,23 @@ export function ServiceOrders({
         <div class="row"><span class="lbl">العميل:</span><strong>${invoiceOrder.customer_name ?? "—"}</strong></div>
         <div class="row"><span class="lbl">الهاتف:</span><strong>${invoiceOrder.customer_phone ?? "—"}</strong></div>
         <div class="row"><span class="lbl">الجهاز:</span><strong>${invoiceOrder.device_type} ${invoiceOrder.device_brand ?? ""} ${invoiceOrder.device_model ?? ""}</strong></div>
-        <div class="row"><span class="lbl">اللون:</span><strong>${invoiceOrder.device_color ?? "—"}</strong></div>
       </div>
       ${invoiceOrder.parts.length > 0 ? `
       <h3 style="font-size:13px;margin:8px 0 4px">قطع الغيار المستخدمة</h3>
-      <table><thead><tr><th>#</th><th>القطعة</th><th>الكمية</th><th>سعر التكلفة</th><th>سعر البيع</th><th>الإجمالي</th></tr></thead>
+      <table><thead><tr><th>#</th><th>القطعة</th><th>الكمية</th><th>سعر البيع</th><th>الإجمالي</th></tr></thead>
       <tbody>${partsHtml}</tbody></table>` : ""}
-      <h3 style="font-size:13px;margin:8px 0 4px">تفاصيل التكاليف</h3>
       <table>
-        <tr><td>تكلفة قطع الغيار</td><td style="text-align:left">${money(invoiceOrder.parts_cost)}</td></tr>
+        <tr><td>قطع الغيار</td><td style="text-align:left">${money(invoiceOrder.parts_cost)}</td></tr>
         <tr><td>أجرة العمل</td><td style="text-align:left">${money(invoiceOrder.labor_cost)}</td></tr>
         <tr><td>رسوم الخدمة</td><td style="text-align:left">${money(invoiceOrder.service_cost)}</td></tr>
         ${invoiceOrder.discount > 0 ? `<tr><td>الخصم</td><td style="text-align:left;color:#dc2626">-${money(invoiceOrder.discount)}</td></tr>` : ""}
         ${invoiceOrder.tax_rate > 0 ? `<tr><td>الضريبة (${invoiceOrder.tax_rate}%)</td><td style="text-align:left">${money(taxAmt)}</td></tr>` : ""}
         <tr class="total"><td>الإجمالي</td><td style="text-align:left">${money(finalTotal)}</td></tr>
-        <tr><td>المبلغ المدفوع من العميل</td><td style="text-align:left;color:#10b981;font-weight:700">${money(invoiceOrder.amount_paid)}</td></tr>
-        <tr class="total"><td>المتبقي</td><td style="text-align:left;color:${(finalTotal - invoiceOrder.amount_paid) > 0 ? "#dc2626" : "#10b981"}">${money(finalTotal - invoiceOrder.amount_paid)}</td></tr>
+        <tr><td>المدفوع</td><td style="text-align:left;color:#10b981;font-weight:700">${money(invoiceOrder.amount_paid)}</td></tr>
+        <tr class="total"><td>المتبقي</td><td style="text-align:left;color:${invoiceOrder.remaining > 0 ? "#dc2626" : "#10b981"}">${money(invoiceOrder.remaining)}</td></tr>
       </table>
       <div style="margin-top:12px;padding:10px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;text-align:center">
-        <div style="font-size:13px;color:#6b7280">المكسب الصافي</div>
+        <div style="font-size:12px;color:#6b7280">المكسب الصافي</div>
         <div style="font-size:20px;font-weight:700;color:#0f8a5f">${money(profit)}</div>
       </div>
       <div class="footer">شكراً لثقتكم بنا — صيانة تبارك</div></body></html>`);
@@ -167,11 +259,11 @@ export function ServiceOrders({
   return (
     <div className="page">
       <div className="page-head">
-        <h1>أوامر الصيانة</h1>
+        <h1>🔧 أوامر الصيانة</h1>
         <div className="head-actions">
           <input
             className="search"
-            placeholder="بحث برقم الصيانة أو اسم العميل أو الجهاز..."
+            placeholder="🔍 بحث برقم الصيانة أو اسم العميل..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -185,9 +277,24 @@ export function ServiceOrders({
         </div>
       </div>
 
-      <div className="toolbar-info">
-        <span>عدد الأوامر: <b>{filtered.length}</b></span>
-        <span>الإجمالي: <b>{money(totalValue)}</b></span>
+      {/* Summary Cards */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 160, background: "linear-gradient(135deg,#eff6ff,#dbeafe)", border: "1px solid #bfdbfe", borderRadius: 10, padding: "12px 16px" }}>
+          <div style={{ fontSize: 11, color: "#1e40af", fontWeight: 600 }}>عدد الأوامر</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#1e3a5f" }}>{filtered.length}</div>
+        </div>
+        <div style={{ flex: 1, minWidth: 160, background: "linear-gradient(135deg,#f0fdf4,#dcfce7)", border: "1px solid #bbf7d0", borderRadius: 10, padding: "12px 16px" }}>
+          <div style={{ fontSize: 11, color: "#166534", fontWeight: 600 }}>الإجمالي</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#14532d" }}>{money(totalValue)}</div>
+        </div>
+        <div style={{ flex: 1, minWidth: 160, background: "linear-gradient(135deg,#f0fdf4,#dcfce7)", border: "1px solid #bbf7d0", borderRadius: 10, padding: "12px 16px" }}>
+          <div style={{ fontSize: 11, color: "#166534", fontWeight: 600 }}>المدفوع</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#0f8a5f" }}>{money(totalPaid)}</div>
+        </div>
+        <div style={{ flex: 1, minWidth: 160, background: "linear-gradient(135deg,#fef2f2,#fecaca)", border: "1px solid #fca5a5", borderRadius: 10, padding: "12px 16px" }}>
+          <div style={{ fontSize: 11, color: "#991b1b", fontWeight: 600 }}>المتبقي</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#b91c1c" }}>{money(totalRemaining)}</div>
+        </div>
       </div>
 
       <div className="table-wrap">
@@ -221,34 +328,57 @@ export function ServiceOrders({
                   <td>{o.id}</td>
                   <td className="strong">{o.order_no}</td>
                   <td>{o.customer_name ?? "—"}</td>
-                  <td>{o.device_type}</td>
+                  <td>{STATUS_ICONS[o.status] ?? "📱"} {o.device_type}</td>
                   <td>{[o.device_brand, o.device_model].filter(Boolean).join(" — ") || "—"}</td>
                   <td>
                     <span style={{
                       background: STATUS_COLORS[o.status],
                       color: "#fff",
-                      padding: "2px 10px",
-                      borderRadius: 12,
-                      fontSize: 12,
+                      padding: "3px 12px",
+                      borderRadius: 14,
+                      fontSize: 11,
+                      fontWeight: 700,
                       whiteSpace: "nowrap",
                     }}>
                       {STATUS_LABELS[o.status]}
                     </span>
                   </td>
-                  <td>{money(o.total_cost)}</td>
-                  <td>{money(o.amount_paid)}</td>
-                  <td style={{ color: o.remaining > 0 ? "#dc2626" : undefined }}>{money(o.remaining)}</td>
+                  <td className="strong">{money(o.total_cost)}</td>
+                  <td style={{ color: "#0f8a5f", fontWeight: 600 }}>{money(o.amount_paid)}</td>
+                  <td style={{ color: o.remaining > 0 ? "#dc2626" : undefined, fontWeight: o.remaining > 0 ? 700 : 400 }}>{money(o.remaining)}</td>
                   <td>{o.created_at ? new Date(o.created_at).toLocaleDateString("ar-EG") : "—"}</td>
                   <td onClick={(e) => e.stopPropagation()}>
-                    {nexts.length > 0 && (
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      {nexts.length > 0 && (
+                        <button
+                          className="btn sm"
+                          style={{
+                            fontSize: 11,
+                            padding: "3px 10px",
+                            background: "#3b82f6",
+                            color: "#fff",
+                            border: "none",
+                          }}
+                          onClick={(e) => openStatusModal(o, e)}
+                        >
+                          تغيير الحالة
+                        </button>
+                      )}
                       <button
                         className="btn sm"
-                        style={{ fontSize: 11, padding: "3px 10px" }}
-                        onClick={(e) => openStatusModal(o, e)}
+                        style={{ fontSize: 11, padding: "3px 10px", background: "#f59e0b", color: "#fff", border: "none" }}
+                        onClick={(e) => printReceipt(o, e)}
                       >
-                        تغيير الحالة
+                        🖨️
                       </button>
-                    )}
+                      <button
+                        className="btn sm"
+                        style={{ fontSize: 11, padding: "3px 10px", background: "#dc2626", color: "#fff", border: "none" }}
+                        onClick={(e) => handleDelete(o, e)}
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -261,16 +391,43 @@ export function ServiceOrders({
       {statusModalOrder && (
         <Modal title="تغيير الحالة" onClose={() => setStatusModalOrder(null)}>
           <div style={{ marginBottom: 8, color: "#6b7280", fontSize: 13 }}>
-            الأمر: <strong>{statusModalOrder.order_no}</strong> — الحالة الحالية: <strong>{STATUS_LABELS[statusModalOrder.status]}</strong>
+            الأمر: <strong>{statusModalOrder.order_no}</strong> — الحالة الحالية: <strong style={{ color: STATUS_COLORS[statusModalOrder.status] }}>{STATUS_LABELS[statusModalOrder.status]}</strong>
           </div>
           <label className="field">
             <span>الحالة الجديدة *</span>
             <select value={newStatus} onChange={(e) => setNewStatus(e.target.value as MaintenanceStatus)}>
               {nextOptions.map((s) => (
-                <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                <option key={s} value={s}>{STATUS_ICONS[s]} {STATUS_LABELS[s]}</option>
               ))}
             </select>
           </label>
+          {newStatus === "delivered" && statusModalOrder.remaining > 0 && (
+            <div style={{ marginTop: 10, padding: 12, background: "linear-gradient(135deg,#fff7ed,#ffedd5)", border: "1px solid #fed7aa", borderRadius: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 13 }}>
+                <span style={{ color: "#92400e" }}>المتبقي من الصيانة:</span>
+                <strong style={{ color: "#c2410c" }}>{money(statusModalOrder.remaining)}</strong>
+              </div>
+              <label className="field" style={{ marginBottom: 0 }}>
+                <span style={{ color: "#92400e", fontWeight: 600 }}>💰 المبلغ المستلم من العميل</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={statusModalOrder.remaining}
+                  step="0.01"
+                  value={deliveryAmount}
+                  onChange={(e) => setDeliveryAmount(Math.min(Number(e.target.value), statusModalOrder.remaining))}
+                  placeholder="0"
+                  style={{ fontSize: 16, fontWeight: 700, textAlign: "center" }}
+                />
+              </label>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 12 }}>
+                <span style={{ color: "#92400e" }}>المتبقي بعد الدفع:</span>
+                <strong style={{ color: statusModalOrder.remaining - deliveryAmount > 0 ? "#dc2626" : "#0f8a5f" }}>
+                  {money(statusModalOrder.remaining - deliveryAmount)}
+                </strong>
+              </div>
+            </div>
+          )}
           <label className="field" style={{ marginTop: 10 }}>
             <span>ملاحظات (اختياري)</span>
             <textarea rows={3} value={statusNotes} onChange={(e) => setStatusNotes(e.target.value)} placeholder="سبب تغيير الحالة..." />
@@ -324,15 +481,11 @@ export function ServiceOrders({
             </tbody>
           </table>
 
-          <div style={{ marginTop: 12, padding: 10, background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, textAlign: "center" }}>
-            <div style={{ fontSize: 12, color: "#6b7280" }}>المكسب الصافي</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: "#0f8a5f" }}>
-              {money(
-                (invoiceOrder.parts_cost + invoiceOrder.labor_cost + invoiceOrder.service_cost - invoiceOrder.discount + ((invoiceOrder.parts_cost + invoiceOrder.labor_cost + invoiceOrder.service_cost) * (invoiceOrder.tax_rate / 100)))
-                - invoiceOrder.parts_cost
-              )}
+          {invoiceOrder.remaining > 0 && (
+            <div style={{ marginTop: 8, padding: 10, background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, fontSize: 13, color: "#166534" }}>
+              ✅ تم تسجيل المتبقي ({money(invoiceOrder.remaining)}) في الصندوق تلقائياً
             </div>
-          </div>
+          )}
 
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
             <button className="btn primary" onClick={printDeliveryInvoice}>🖨️ طباعة الفاتورة</button>
