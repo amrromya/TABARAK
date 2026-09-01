@@ -544,7 +544,7 @@ export function Inventory({
               <>
                 <Field label={t("costPrice") + " *"}>
                   <input
-                    required={form.product_type !== "service"}
+                    required
                     type="number"
                     min={0}
                     step="0.01"
@@ -555,6 +555,8 @@ export function Inventory({
                     }
                   />
                 </Field>
+              </>
+            )}
             <Field label={t("sellPrice") + (form.product_type === "service" ? "" : " *")}>
               <input
                 type="number"
@@ -567,6 +569,8 @@ export function Inventory({
                 }
               />
             </Field>
+            {form.product_type !== "service" && (
+              <>
             <Field label={t("wholesalePrice")}>
               <input
                 type="number"
