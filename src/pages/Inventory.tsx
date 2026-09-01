@@ -555,23 +555,20 @@ export function Inventory({
                     }
                   />
                 </Field>
-              </>
-            )}
-            <Field label={t("sellPrice") + (form.product_type === "service" ? "" : " *")}>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                placeholder={form.product_type === "service" ? t("optionalLabelShort") : "0"}
-                value={priceDisplay(form.sell_price)}
-                onChange={(e) =>
-                  setForm({ ...form, sell_price: e.target.value === "" ? 0 : Number(e.target.value) })
-                }
-              />
-            </Field>
-            {form.product_type !== "service" && (
-              <>
-            <Field label={t("wholesalePrice")}>
+                <Field label={t("sellPrice") + " *"}>
+                  <input
+                    required
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="0"
+                    value={priceDisplay(form.sell_price)}
+                    onChange={(e) =>
+                      setForm({ ...form, sell_price: e.target.value === "" ? 0 : Number(e.target.value) })
+                    }
+                  />
+                </Field>
+                <Field label={t("wholesalePrice")}>
               <input
                 type="number"
                 min={0}
