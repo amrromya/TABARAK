@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import JsBarcode from "jsbarcode";
 import { api } from "../api";
 import {
@@ -59,9 +59,7 @@ export function Inventory({
   const [newWarehouse, setNewWarehouse] = useState("");
   const [showUnit, setShowUnit] = useState(false);
   const [newUnit, setNewUnit] = useState("");
-  const [customUnits, setCustomUnits] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem("tabarak_custom_units") || "[]"); } catch { return []; }
-  });
+  const [unitVersion, setUnitVersion] = useState(0);
   const [productUnits, setProductUnits] = useState<ProductUnit[]>([]);
   const [movementProduct, setMovementProduct] = useState<Product | null>(null);
   const notify = useToast();
@@ -156,7 +154,7 @@ export function Inventory({
     if (!units.includes(unit)) {
       units.push(unit);
       localStorage.setItem("tabarak_custom_units", JSON.stringify(units));
-      setCustomUnits([...units]);
+      setUnitVersion((v) => v + 1);
     }
   };
 
@@ -297,11 +295,14 @@ export function Inventory({
     notify(t("unitAdded"));
   };
 
-  const existingUnits = [...new Set([
-    ...STANDARD_UNITS,
-    ...customUnits,
-    ...products.map((p) => p.unit).filter((u): u is string => !!u),
-  ])];
+  const existingUnits = useMemo(() => {
+    const custom: string[] = (() => { try { return JSON.parse(localStorage.getItem("tabarak_custom_units") || "[]"); } catch { return []; } })();
+    return [...new Set([
+      ...STANDARD_UNITS,
+      ...custom,
+      ...products.map((p) => p.unit).filter((u): u is string => !!u),
+    ])];
+  }, [products, unitVersion]);
 
   const totalValue = products.reduce(
     (s, p) => s + p.quantity * p.cost_price,
@@ -504,12 +505,12 @@ export function Inventory({
             <Field label={t("unit")}>
               <div className="select-row">
                 <input
-                  list="inventory-units"
+                  list={`inventory-units-${unitVersion}`}
                   value={form.unit ?? ""}
                   onChange={(e) => setForm({ ...form, unit: e.target.value })}
                   placeholder={t("unit")}
                 />
-                <datalist id="inventory-units">
+                <datalist id={`inventory-units-${unitVersion}`}>
                   {existingUnits.map((u) => (
                     <option key={u} value={u}>{u}</option>
                   ))}
