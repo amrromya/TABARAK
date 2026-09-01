@@ -620,8 +620,9 @@ export function Sales({
                 type="number"
                 min={0}
                 step="0.01"
-                value={selPrice}
-                onChange={(e) => setSelPrice(Number(e.target.value))}
+                value={selPrice === 0 ? "" : selPrice}
+                placeholder="0"
+                onChange={(e) => setSelPrice(e.target.value === "" ? 0 : Number(e.target.value))}
                 title="سعر البيع"
               />
               <button type="button" className="btn primary" onClick={addLine}>
@@ -835,8 +836,9 @@ export function Sales({
                 type="number"
                 min={0}
                 step="0.01"
-                value={selPrice}
-                onChange={(e) => setSelPrice(Number(e.target.value))}
+                value={selPrice === 0 ? "" : selPrice}
+                placeholder="0"
+                onChange={(e) => setSelPrice(e.target.value === "" ? 0 : Number(e.target.value))}
                 title="سعر البيع"
               />
               <button type="button" className="btn primary" onClick={addLine}>

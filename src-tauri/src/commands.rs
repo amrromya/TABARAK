@@ -3970,7 +3970,7 @@ pub fn get_dashboard(state: State<AppState>) -> Result<Dashboard, String> {
 
     let low_stock_count: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM products WHERE quantity <= min_quantity",
+            "SELECT COUNT(*) FROM products WHERE quantity <= min_quantity AND product_type != 'service'",
             [],
             |r| r.get(0),
         )

@@ -842,17 +842,18 @@ export function Pos({ onBack }: { onBack: () => void }) {
                         </div>
                       </td>
                       <td>
-                        <input
-                          className="price-input"
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={l.sell_price}
-                          onChange={(e) =>
-                            updateLine(l.product_id, {
-                              sell_price: Number(e.target.value),
-                            })
-                          }
+                          <input
+                            className="price-input"
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={l.sell_price === 0 ? "" : l.sell_price}
+                            placeholder="0"
+                            onChange={(e) =>
+                              updateLine(l.product_id, {
+                                sell_price: e.target.value === "" ? 0 : Number(e.target.value),
+                              })
+                            }
                         />
                       </td>
                       <td className="strong">{money(l.quantity * l.sell_price)}</td>
