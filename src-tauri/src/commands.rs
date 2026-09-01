@@ -1282,14 +1282,14 @@ pub fn create_sale(state: State<AppState>, input: NewSale) -> Result<Sale, Strin
                 }
             }
         } else {
-            let available: f64 = tx
+            let (available, ptype): (f64, String) = tx
                 .query_row(
-                    "SELECT quantity FROM products WHERE id = ?1",
+                    "SELECT quantity, COALESCE(product_type, 'inventory') FROM products WHERE id = ?1",
                     params![it.product_id],
-                    |r| r.get(0),
+                    |r| Ok((r.get(0)?, r.get(1)?)),
                 )
                 .map_err(|_| "منتج غير موجود".to_string())?;
-            if available < it.quantity {
+            if ptype != "service" && available < it.quantity {
                 let name: String = tx
                     .query_row(
                         "SELECT name FROM products WHERE id = ?1",
@@ -1521,14 +1521,14 @@ pub fn update_sale(
                 }
             }
         } else {
-            let available: f64 = tx
+            let (available, ptype): (f64, String) = tx
                 .query_row(
-                    "SELECT quantity FROM products WHERE id = ?1",
+                    "SELECT quantity, COALESCE(product_type, 'inventory') FROM products WHERE id = ?1",
                     params![it.product_id],
-                    |r| r.get(0),
+                    |r| Ok((r.get(0)?, r.get(1)?)),
                 )
                 .map_err(|_| "منتج غير موجود".to_string())?;
-            if available < it.quantity {
+            if ptype != "service" && available < it.quantity {
                 let name: String = tx
                     .query_row(
                         "SELECT name FROM products WHERE id = ?1",
