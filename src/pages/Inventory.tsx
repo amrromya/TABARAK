@@ -285,7 +285,10 @@ export function Inventory({
     notify(t("unitAdded"));
   };
 
-  const existingUnits = [...new Set(products.map((p) => p.unit).filter((u): u is string => !!u))];
+  const existingUnits = [...new Set([
+    ...(() => { try { return JSON.parse(localStorage.getItem("tabarak_custom_units") || "[]") as string[]; } catch { return []; } })(),
+    ...products.map((p) => p.unit).filter((u): u is string => !!u),
+  ])];
 
   const totalValue = products.reduce(
     (s, p) => s + p.quantity * p.cost_price,
@@ -494,14 +497,16 @@ export function Inventory({
                   placeholder={t("unit")}
                 />
                 <datalist id="inventory-units">
-                  <option value="قطعة">{t("unitPiece")}</option>
-                  <option value="كرتونة">{t("unitCarton")}</option>
-                  <option value="كيلو">{t("unitKilo")}</option>
-                  <option value="لتر">{t("unitLiter")}</option>
-                  <option value="علبة">{t("unitBox")}</option>
-                  <option value="شنطة">{t("unitBag")}</option>
-                  {existingUnits.map((u) => (
-                    <option key={u} value={u} />
+                  {[...new Set([
+                    "قطعة",
+                    "كرتونة",
+                    "كيلو",
+                    "لتر",
+                    "علبة",
+                    "شنطة",
+                    ...existingUnits,
+                  ])].map((u) => (
+                    <option key={u} value={u}>{u}</option>
                   ))}
                 </datalist>
                 <button
