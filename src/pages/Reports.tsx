@@ -3,6 +3,8 @@ import { api } from "../api";
 import { money, qty, useToast } from "../components/ui";
 import { t } from "../i18n";
 import type { BestSeller, DailySalesRow, ProfitLoss, StockValue } from "../types";
+import { SalesReportPopup } from "../components/SalesReportPopup";
+import { PurchaseReportPopup } from "../components/PurchaseReportPopup";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const monthStart = () => {
@@ -23,6 +25,8 @@ export function Reports() {
   const [activeTab, setActiveTab] = useState<ReportTab>("summary");
   const notify = useToast();
   const printRef = useRef<HTMLDivElement>(null);
+  const [showSalesReport, setShowSalesReport] = useState(false);
+  const [showPurchasesReport, setShowPurchasesReport] = useState(false);
 
   const range = { from: from || null, to: to || null };
 
@@ -207,6 +211,26 @@ export function Reports() {
           <button className="btn sm" onClick={handlePrint}>🖨️ {t("print")}</button>
           <button className="btn sm primary" onClick={handleExportPDF}>📥 {t("exportPDF")}</button>
         </div>
+      </div>
+
+      {/* بطاقات التقارير السريعة */}
+      <div className="rpt-quick-reports">
+        <button className="rpt-report-card rpt-sales-card" onClick={() => setShowSalesReport(true)}>
+          <div className="rpt-report-card-icon">🛒</div>
+          <div className="rpt-report-card-body">
+            <h3>تقارير المبيعات</h3>
+            <p>عرض جميع فواتير البيع مع التفاصيل والتصدير</p>
+          </div>
+          <div className="rpt-report-card-arrow">←</div>
+        </button>
+        <button className="rpt-report-card rpt-purchases-card" onClick={() => setShowPurchasesReport(true)}>
+          <div className="rpt-report-card-icon">📦</div>
+          <div className="rpt-report-card-body">
+            <h3>تقارير المشتريات</h3>
+            <p>عرض جميع فواتير المشتريات مع التفاصيل والتصدير</p>
+          </div>
+          <div className="rpt-report-card-arrow">←</div>
+        </button>
       </div>
 
       {/* شريط الفلاتر */}
@@ -439,6 +463,9 @@ export function Reports() {
           </div>
         )}
       </div>
+
+      {showSalesReport && <SalesReportPopup onClose={() => setShowSalesReport(false)} />}
+      {showPurchasesReport && <PurchaseReportPopup onClose={() => setShowPurchasesReport(false)} />}
     </div>
   );
 }
