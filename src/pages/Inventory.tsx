@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import JsBarcode from "jsbarcode";
 import { api } from "../api";
 import {
@@ -18,7 +18,7 @@ const emptyForm: NewProduct = {
   barcode: "",
   category_id: null,
   warehouse_id: null,
-  unit: "قطعة",
+  unit: "",
   cost_price: 0,
   sell_price: 0,
   wholesale_price: 0,
@@ -59,7 +59,6 @@ export function Inventory({
   const [newWarehouse, setNewWarehouse] = useState("");
   const [showUnit, setShowUnit] = useState(false);
   const [newUnit, setNewUnit] = useState("");
-  const [unitVersion, setUnitVersion] = useState(0);
   const [productUnits, setProductUnits] = useState<ProductUnit[]>([]);
   const [movementProduct, setMovementProduct] = useState<Product | null>(null);
   const notify = useToast();
@@ -154,7 +153,6 @@ export function Inventory({
     if (!units.includes(unit)) {
       units.push(unit);
       localStorage.setItem("tabarak_custom_units", JSON.stringify(units));
-      setUnitVersion((v) => v + 1);
     }
   };
 
@@ -295,14 +293,16 @@ export function Inventory({
     notify(t("unitAdded"));
   };
 
-  const existingUnits = useMemo(() => {
+  const getAllUnits = (): string[] => {
     const custom: string[] = (() => { try { return JSON.parse(localStorage.getItem("tabarak_custom_units") || "[]"); } catch { return []; } })();
     return [...new Set([
       ...STANDARD_UNITS,
       ...custom,
       ...products.map((p) => p.unit).filter((u): u is string => !!u),
     ])];
-  }, [products, unitVersion]);
+  };
+
+  const existingUnits = getAllUnits();
 
   const totalValue = products.reduce(
     (s, p) => s + p.quantity * p.cost_price,
@@ -505,12 +505,12 @@ export function Inventory({
             <Field label={t("unit")}>
               <div className="select-row">
                 <input
-                  list={`inventory-units-${unitVersion}`}
+                  list={`inv-units-${existingUnits.join(",")}`}
                   value={form.unit ?? ""}
                   onChange={(e) => setForm({ ...form, unit: e.target.value })}
                   placeholder={t("unit")}
                 />
-                <datalist id={`inventory-units-${unitVersion}`}>
+                <datalist id={`inv-units-${existingUnits.join(",")}`}>
                   {existingUnits.map((u) => (
                     <option key={u} value={u}>{u}</option>
                   ))}
@@ -599,9 +599,10 @@ export function Inventory({
                 type="number"
                 min={0}
                 step="0.01"
-                value={form.quantity}
+                placeholder="0"
+                value={form.quantity ?? ""}
                 onChange={(e) =>
-                  setForm({ ...form, quantity: Number(e.target.value) })
+                  setForm({ ...form, quantity: e.target.value === "" ? 0 : Number(e.target.value) })
                 }
               />
             </Field>
@@ -610,9 +611,10 @@ export function Inventory({
                 type="number"
                 min={0}
                 step="0.01"
-                value={form.min_quantity}
+                placeholder="0"
+                value={form.min_quantity ?? ""}
                 onChange={(e) =>
-                  setForm({ ...form, min_quantity: Number(e.target.value) })
+                  setForm({ ...form, min_quantity: e.target.value === "" ? 0 : Number(e.target.value) })
                 }
               />
             </Field>
