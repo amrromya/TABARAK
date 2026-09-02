@@ -600,7 +600,7 @@ export function Inventory({
                 min={0}
                 step="0.01"
                 placeholder="0"
-                value={form.quantity ?? ""}
+                value={form.quantity || ""}
                 onChange={(e) =>
                   setForm({ ...form, quantity: e.target.value === "" ? 0 : Number(e.target.value) })
                 }
@@ -612,7 +612,7 @@ export function Inventory({
                 min={0}
                 step="0.01"
                 placeholder="0"
-                value={form.min_quantity ?? ""}
+                value={form.min_quantity || ""}
                 onChange={(e) =>
                   setForm({ ...form, min_quantity: e.target.value === "" ? 0 : Number(e.target.value) })
                 }
