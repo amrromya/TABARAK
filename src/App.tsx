@@ -161,11 +161,14 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
 
   const handleBackupAndClose = async () => {
     try {
-      const saved = localStorage.getItem("tabarak_auto_backup");
-      const auto = saved ? JSON.parse(saved) : null;
-      if (auto?.enabled && auto.path) {
-        const outPath = `${auto.path}/tabarak_backup_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.db`;
-        await api.exportBackup(outPath);
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const path = await save({
+        defaultPath: `tabarak_backup_${today}.db`,
+        filters: [{ name: "Database", extensions: ["db"] }],
+      });
+      if (path) {
+        await api.exportBackup(path);
       }
     } catch (e: any) {
       console.error("Backup failed:", e);
