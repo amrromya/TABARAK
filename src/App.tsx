@@ -166,12 +166,11 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
       if (auto?.enabled && auto.path) {
         const outPath = `${auto.path}/tabarak_backup_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.db`;
         await api.exportBackup(outPath);
-        window.alert(`✅ تم حفظ النسخة الاحتياطية في:\n${outPath}`);
       }
     } catch (e: any) {
-      window.alert(`⚠️ فشل النسخ الاحتياطي: ${e?.message || e}`);
+      console.error("Backup failed:", e);
     }
-    try { await api.forceExit(); } catch { try { getCurrentWindow().destroy(); } catch {} }
+    try { getCurrentWindow().destroy(); } catch { try { await api.forceExit(); } catch {} }
   };
 
   const handleCloseWithoutBackup = async () => {
