@@ -6,12 +6,12 @@ import type { Dashboard as DashboardData } from "../types";
 
 const FEATURES_KEY = "tabarak_features";
 
-function getFeatures(): { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean; cash_register: boolean } {
+function getFeatures(): { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean; cash_register: boolean; customer_turns: boolean } {
   try {
-    const raw = localStorage.getItem(FEATURES_KEY);
-    if (raw) return { maintenance: false, attendance: false, dark_mode: false, language: false, cash_register: false, ...JSON.parse(raw) };
+    const raw = localStorage.getItem("tabarak_features");
+    if (raw) return { maintenance: false, attendance: false, dark_mode: false, language: false, cash_register: false, customer_turns: false, ...JSON.parse(raw) };
   } catch {}
-  return { maintenance: false, attendance: false, dark_mode: false, language: false, cash_register: false };
+  return { maintenance: false, attendance: false, dark_mode: false, language: false, cash_register: false, customer_turns: false };
 }
 
 export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string) => void; onOpenPos: (type: "sales-pos" | "purchase-pos") => void }) {

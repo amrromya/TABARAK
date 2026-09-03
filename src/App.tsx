@@ -22,6 +22,7 @@ import { StockCount } from "./pages/StockCount";
 import { StockCounts } from "./pages/StockCounts";
 import { FullInventoryCount } from "./pages/FullInventoryCount";
 import { Attendance } from "./pages/Attendance";
+import { CustomerTurns } from "./pages/CustomerTurns";
 import { SplashScreen } from "./components/SplashScreen";
 import { AutoLogin } from "./components/AutoLogin";
 import { LoginScreen } from "./components/LoginScreen";
@@ -55,6 +56,7 @@ const NAV = [
   { key: "expenses", labelKey: "expenses", icon: "🧾" },
   { key: "sales", labelKey: "sales", icon: "🧾" },
   { key: "cash_register", labelKey: "cashRegister", icon: "🏧" },
+  { key: "customer_turns", labelKey: "customerTurns", icon: "🔄" },
   { key: "reports", labelKey: "reports", icon: "📈" },
   { key: "settings", labelKey: "settings", icon: "⚙️" },
 ];
@@ -121,12 +123,12 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
   const [page, setPage] = useState("dashboard");
   const [appVersion, setAppVersion] = useState("");
   const [showCloseDialog, setShowCloseDialog] = useState(false);
-  const [features, setFeatures] = useState<{ dark_mode: boolean; language: boolean; cash_register: boolean }>(() => {
+  const [features, setFeatures] = useState<{ dark_mode: boolean; language: boolean; cash_register: boolean; customer_turns: boolean }>(() => {
     try {
       const raw = localStorage.getItem("tabarak_features");
-      if (raw) return { dark_mode: false, language: false, cash_register: false, ...JSON.parse(raw) };
+      if (raw) return { dark_mode: false, language: false, cash_register: false, customer_turns: false, ...JSON.parse(raw) };
     } catch {}
-    return { dark_mode: false, language: false, cash_register: false };
+    return { dark_mode: false, language: false, cash_register: false, customer_turns: false };
   });
 
   // Listen for feature changes
@@ -267,6 +269,7 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
 
   const visibleNav = NAV.filter((n) => {
     if (n.key === "cash_register" && !features.cash_register) return false;
+    if (n.key === "customer_turns" && !features.customer_turns) return false;
     return canAccess(n.key);
   });
 
@@ -368,6 +371,7 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
         {safePage === "warehouse_transfers" && <WarehouseTransfers />}
         {safePage === "reports" && <Reports />}
         {safePage === "cash_register" && <CashRegister />}
+        {safePage === "customer_turns" && <CustomerTurns />}
         {safePage === "settings" && <SettingsPage />}
         {safePage === "maint_home" && <MaintenanceHome onNavigate={setPage} onBack={() => setPage("dashboard")} />}
         {safePage === "maint_dashboard" && <MaintenanceDashboard />}

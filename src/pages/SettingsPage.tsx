@@ -89,15 +89,15 @@ type SectionKey = "store" | "warehouses" | "sync" | "branches" | "notifications"
 
 const FEATURES_KEY = "tabarak_features";
 
-function getFeatures(): { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean; sync: boolean; branches: boolean; attendance_url: boolean; notifications: boolean; cash_register: boolean } {
+function getFeatures(): { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean; sync: boolean; branches: boolean; attendance_url: boolean; notifications: boolean; cash_register: boolean; customer_turns: boolean } {
   try {
     const raw = localStorage.getItem(FEATURES_KEY);
-    if (raw) return { maintenance: false, attendance: false, dark_mode: false, language: false, sync: false, branches: false, attendance_url: false, notifications: false, cash_register: false, ...JSON.parse(raw) };
+    if (raw) return { maintenance: false, attendance: false, dark_mode: false, language: false, sync: false, branches: false, attendance_url: false, notifications: false, cash_register: false, customer_turns: false, ...JSON.parse(raw) };
   } catch {}
-  return { maintenance: false, attendance: false, dark_mode: false, language: false, sync: false, branches: false, attendance_url: false, notifications: false, cash_register: false };
+  return { maintenance: false, attendance: false, dark_mode: false, language: false, sync: false, branches: false, attendance_url: false, notifications: false, cash_register: false, customer_turns: false };
 }
 
-function saveFeatures(f: { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean; sync: boolean; branches: boolean; attendance_url: boolean; notifications: boolean; cash_register: boolean }) {
+function saveFeatures(f: { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean; sync: boolean; branches: boolean; attendance_url: boolean; notifications: boolean; cash_register: boolean; customer_turns: boolean }) {
   localStorage.setItem(FEATURES_KEY, JSON.stringify(f));
 }
 
@@ -267,7 +267,7 @@ export function SettingsPage() {
     }
   };
 
-  const toggleFeature = async (key: "maintenance" | "attendance" | "dark_mode" | "language" | "sync" | "branches" | "attendance_url" | "notifications" | "cash_register") => {
+  const toggleFeature = async (key: "maintenance" | "attendance" | "dark_mode" | "language" | "sync" | "branches" | "attendance_url" | "notifications" | "cash_register" | "customer_turns") => {
     const next = { ...features, [key]: !features[key] };
     setFeatures(next);
     saveFeatures(next);
@@ -300,6 +300,13 @@ export function SettingsPage() {
             perms = perms.filter((p) => p !== "view_cash_register");
           }
         }
+        if (key === "customer_turns") {
+          if (next.customer_turns) {
+            if (!menus.includes("customer_turns")) menus.push("customer_turns");
+          } else {
+            menus = menus.filter((m) => m !== "customer_turns");
+          }
+        }
         return { ...a, visibleMenus: [...new Set(menus)], permissions: [...new Set(perms)] };
       });
       localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(updated));
@@ -311,6 +318,7 @@ export function SettingsPage() {
         language: { enabled: t("languageEnabled"), disabled: t("languageDisabled") },
         notifications: { enabled: t("notificationsEnabled"), disabled: t("notificationsDisabled") },
         cash_register: { enabled: t("cashRegisterEnabled"), disabled: t("cashRegisterDisabled") },
+        customer_turns: { enabled: t("customerTurnsEnabled"), disabled: t("customerTurnsDisabled") },
       };
       notify(next[key] ? labelMap[key].enabled : labelMap[key].disabled);
     } catch (err) {
@@ -1937,6 +1945,49 @@ export function SettingsPage() {
                         position: "absolute",
                         top: 2,
                         left: features.cash_register ? 24 : 2,
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        background: "#fff",
+                        transition: "left 0.2s",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                      }} />
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "14px 16px",
+                      borderRadius: 12,
+                      background: features.customer_turns ? "#ecfdf5" : "#f9fafb",
+                      border: `1px solid ${features.customer_turns ? "#86efac" : "#e5e7eb"}`,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 22 }}>🔄</span>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>{t("customerTurnsItem")}</div>
+                        <div style={{ fontSize: 12, color: "#6b7280" }}>{t("customerTurnsItemDesc")}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => toggleFeature("customer_turns")}
+                      style={{
+                        width: 50,
+                        height: 28,
+                        borderRadius: 14,
+                        border: "none",
+                        cursor: "pointer",
+                        position: "relative",
+                        background: features.customer_turns ? "#10b981" : "#d1d5db",
+                        transition: "background 0.2s",
+                      }}
+                    >
+                      <span style={{
+                        position: "absolute",
+                        top: 2,
+                        left: features.customer_turns ? 24 : 2,
                         width: 24,
                         height: 24,
                         borderRadius: 12,
