@@ -303,7 +303,7 @@ export function Inventory({
     ])];
   };
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     const data = products.map((p, idx) => ({
       "الرقم": idx + 1,
       "اسم الصنف": p.name,
@@ -339,9 +339,19 @@ export function Inventory({
     ];
     ws["!cols"] = colWidths;
 
-    const fileName = `inventory_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    XLSX.writeFile(wb, fileName);
-    notify(t("exportSuccess"));
+    try {
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const path = await save({
+        defaultPath: `inventory_${new Date().toISOString().slice(0, 10)}.xlsx`,
+        filters: [{ name: "Excel", extensions: ["xlsx"] }],
+      });
+      if (!path) return;
+      const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      await api.writeBinaryFile(path, Array.from(new Uint8Array(buf)));
+      notify(t("exportSuccess"));
+    } catch (err) {
+      notify(String(err), "error");
+    }
   };
 
   const existingUnits = getAllUnits();
