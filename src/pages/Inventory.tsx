@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import JsBarcode from "jsbarcode";
+import * as XLSX from "xlsx";
 import { api } from "../api";
 import {
   Field,
@@ -302,6 +303,47 @@ export function Inventory({
     ])];
   };
 
+  const exportToExcel = () => {
+    const data = products.map((p, idx) => ({
+      "الرقم": idx + 1,
+      "اسم الصنف": p.name,
+      "الفئة": p.category_name ?? "",
+      "المستودع": p.warehouse_name ?? "",
+      "الباركود": p.barcode ?? "",
+      "الوحدة": p.unit ?? "",
+      "سعر التكلفة": p.cost_price,
+      "سعر البيع": p.sell_price,
+      "سعر الجملة": p.wholesale_price ?? 0,
+      "الكمية": p.quantity,
+      "الحد الأدنى": p.min_quantity,
+      "القيمة": p.cost_price * p.quantity,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "المخزون");
+
+    const colWidths = [
+      { wch: 6 },
+      { wch: 30 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 15 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 15 },
+    ];
+    ws["!cols"] = colWidths;
+
+    const fileName = `inventory_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    notify(t("exportSuccess"));
+  };
+
   const existingUnits = getAllUnits();
 
   const totalValue = products.reduce(
@@ -328,6 +370,9 @@ export function Inventory({
           </button>
           <button className="btn accent" onClick={onOpenFullCount}>
             📊 {t("fullInventoryCount")}
+          </button>
+          <button className="btn accent" onClick={exportToExcel} style={{ background: "#16a34a", color: "#fff" }}>
+            📥 {t("exportExcel")}
           </button>
           <button className="btn primary" onClick={openNew}>
             + {t("newProduct")}

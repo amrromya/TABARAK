@@ -208,6 +208,7 @@ pub fn run() {
             commands::download_online_update,
             commands::apply_online_update,
             commands::list_printers,
+            commands::print_html_direct,
             commands::is_first_run,
             commands::initialize_admin,
             commands::verify_admin_password,

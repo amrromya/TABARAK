@@ -1071,6 +1071,8 @@ const translations: Record<string, Record<Lang, string>> = {
   confirmDeleteProduct: { ar: "هل تريد حذف المنتج «{{name}}»؟", en: "Delete product \"{{name}}\"?" },
   productDeleted: { ar: "تم حذف المنتج", en: "Product deleted" },
   barcodeError: { ar: "خطأ في الباركود", en: "Barcode error" },
+  exportExcel: { ar: "تصدير Excel", en: "Export Excel" },
+  exportSuccess: { ar: "تم التصدير بنجاح", en: "Export successful" },
   doubleClickToOpen: { ar: "انقر مرتين لفتح", en: "Double click to open" },
   actualSize: { ar: "الحجم الفعلي:", en: "Actual size:" },
 

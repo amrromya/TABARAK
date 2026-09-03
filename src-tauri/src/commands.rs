@@ -5044,6 +5044,71 @@ pub fn list_printers() -> Result<Vec<String>, String> {
     }
 }
 
+#[tauri::command]
+pub fn print_html_direct(html: String, width_mm: f64, height_mm: f64) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        use std::io::Write;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        let temp_dir = std::env::temp_dir();
+        let file_name = format!("tabarak_print_{}.html", uuid::Uuid::new_v4());
+        let file_path = temp_dir.join(&file_name);
+
+        let full_html = format!(
+            "<!DOCTYPE html><html><head><meta charset=\"utf-8\">\
+             <style>\
+             @page{{size:{}mm {}mm;margin:0}}\
+             *{{margin:0;padding:0;box-sizing:border-box}}\
+             body{{margin:0;padding:0}}\
+             </style></head><body>{}</body></html>",
+            width_mm, height_mm, html
+        );
+
+        let mut f = std::fs::File::create(&file_path).map_err(|e| e.to_string())?;
+        f.write_all(full_html.as_bytes()).map_err(|e| e.to_string())?;
+        drop(f);
+
+        let ps_script = format!(
+            "Add-Type -AssemblyName System.Drawing\n\
+             $html = [System.IO.File]::ReadAllText('{}')\n\
+             $tempFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), 'tabarak_print_{}.htm')\n\
+             [System.IO.File]::WriteAllText($tempFile, $html, [System.Text.Encoding]::UTF8)\n\
+             $ie = New-Object -ComObject InternetExplorer.Application\n\
+             $ie.Visible = $false\n\
+             $ie.Navigate($tempFile)\n\
+             while ($ie.Busy) {{ Start-Sleep -Milliseconds 200 }}\n\
+             Start-Sleep -Milliseconds 500\n\
+             $ie.ExecWB(6, 1)\n\
+             Start-Sleep -Milliseconds 2000\n\
+             $ie.Quit()\n\
+             [System.Runtime.Interopservices.Marshal]::ReleaseComObject($ie) | Out-Null\n\
+             Remove-Item $tempFile -ErrorAction SilentlyContinue\n\
+             Remove-Item '{}' -ErrorAction SilentlyContinue",
+            file_path.to_string_lossy().replace('\\', "\\\\"),
+            uuid::Uuid::new_v4(),
+            file_path.to_string_lossy().replace('\\', "\\\\")
+        );
+
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &ps_script])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Print failed: {}", stderr));
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Direct printing is only supported on Windows".into())
+    }
+}
+
 // =============== أول تشغيل ===============
 
 #[tauri::command]

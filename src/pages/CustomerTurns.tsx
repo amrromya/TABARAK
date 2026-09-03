@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { t } from "../i18n";
+import { api } from "../api";
 
 interface TurnEntry {
   id: number;
@@ -78,26 +79,17 @@ export function CustomerTurns() {
     setTurns([]);
   };
 
-  const printNumber = (entry: TurnEntry) => {
-    const html = `<!DOCTYPE html><html><head><style>
-      *{margin:0;padding:0;box-sizing:border-box}
-      body{width:80mm;font-family:Arial,sans-serif;display:flex;flex-direction:column;align-items:center;padding:10mm 5mm}
-      .num{font-size:72px;font-weight:900;color:#111;margin:8mm 0 4mm}
-      .label{font-size:18px;color:#555;margin-bottom:6mm}
-      .time{font-size:12px;color:#999}
-      .store{font-size:14px;color:#333;margin-top:4mm;font-weight:600}
-    </style></head><body>
-      <div class="store">${getStoreName()}</div>
-      <div class="label">${t("turnNumber")}</div>
-      <div class="num">${entry.number}</div>
-      <div class="time">${entry.createdAt}</div>
-    </body></html>`;
-    const win = window.open("", "_blank", "width=300,height=400");
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-      win.print();
-      win.close();
+  const printNumber = async (entry: TurnEntry) => {
+    const html = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:80mm;height:120mm;font-family:Arial,sans-serif;padding:10mm 5mm">
+      <div style="font-size:14px;color:#333;margin-top:4mm;font-weight:600">${getStoreName()}</div>
+      <div style="font-size:18px;color:#555;margin-bottom:6mm">${t("turnNumber")}</div>
+      <div style="font-size:72px;font-weight:900;color:#111;margin:8mm 0 4mm">${entry.number}</div>
+      <div style="font-size:12px;color:#999">${entry.createdAt}</div>
+    </div>`;
+    try {
+      await api.printHtmlDirect(html, 80, 120);
+    } catch (err) {
+      console.error("Print error:", err);
     }
   };
 
