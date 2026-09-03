@@ -411,8 +411,8 @@ export const api = {
   // الطابعات
   listPrinters: () =>
     invoke<string[]>("list_printers"),
-  printHtmlDirect: (html: string, widthMm: number, heightMm: number) =>
-    invoke<void>("print_html_direct", { html, widthMm, heightMm }),
+  printTurnNumber: (number: number, storeName: string, createdAt: string) =>
+    invoke<void>("print_turn_number", { number, storeName, createdAt }),
 
   // البحث في الصيانة
   searchServiceOrders: (query: string) =>

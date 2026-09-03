@@ -5045,50 +5045,50 @@ pub fn list_printers() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub fn print_html_direct(html: String, width_mm: f64, height_mm: f64) -> Result<(), String> {
+pub fn print_turn_number(number: i32, store_name: String, created_at: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
-        use std::io::Write;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-        let temp_dir = std::env::temp_dir();
-        let file_name = format!("tabarak_print_{}.html", uuid::Uuid::new_v4());
-        let file_path = temp_dir.join(&file_name);
-
-        let full_html = format!(
-            "<!DOCTYPE html><html><head><meta charset=\"utf-8\">\
-             <style>\
-             @page{{size:{}mm {}mm;margin:0}}\
-             *{{margin:0;padding:0;box-sizing:border-box}}\
-             body{{margin:0;padding:0}}\
-             </style></head><body>{}</body></html>",
-            width_mm, height_mm, html
-        );
-
-        let mut f = std::fs::File::create(&file_path).map_err(|e| e.to_string())?;
-        f.write_all(full_html.as_bytes()).map_err(|e| e.to_string())?;
-        drop(f);
+        let store_esc = store_name.replace('\'', "''");
+        let time_esc = created_at.replace('\'', "''");
 
         let ps_script = format!(
             "Add-Type -AssemblyName System.Drawing\n\
-             $html = [System.IO.File]::ReadAllText('{}')\n\
-             $tempFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), 'tabarak_print_{}.htm')\n\
-             [System.IO.File]::WriteAllText($tempFile, $html, [System.Text.Encoding]::UTF8)\n\
-             $ie = New-Object -ComObject InternetExplorer.Application\n\
-             $ie.Visible = $false\n\
-             $ie.Navigate($tempFile)\n\
-             while ($ie.Busy) {{ Start-Sleep -Milliseconds 200 }}\n\
-             Start-Sleep -Milliseconds 500\n\
-             $ie.ExecWB(6, 1)\n\
-             Start-Sleep -Milliseconds 2000\n\
-             $ie.Quit()\n\
-             [System.Runtime.Interopservices.Marshal]::ReleaseComObject($ie) | Out-Null\n\
-             Remove-Item $tempFile -ErrorAction SilentlyContinue\n\
-             Remove-Item '{}' -ErrorAction SilentlyContinue",
-            file_path.to_string_lossy().replace('\\', "\\\\"),
-            uuid::Uuid::new_v4(),
-            file_path.to_string_lossy().replace('\\', "\\\\")
+             Add-Type -AssemblyName System.Drawing.Printing\n\
+             $doc = New-Object System.Drawing.Printing.PrintDocument\n\
+             $doc.DocumentName = 'Tabarak Turn #{number}'\n\
+             $doc.OriginAtMargins = $false\n\
+             $doc.DefaultPageSettings.Margins = (New-Object System.Drawing.Printing.Margins(0,0,0,0))\n\
+             $doc.DefaultPageSettings.PaperSize = $doc.PrinterSettings.PaperSizes[0]\n\
+             $w = $doc.DefaultPageSettings.PaperSize.Width\n\
+             $h = $doc.DefaultPageSettings.PaperSize.Height\n\
+             $doc.Add_PrintPage({{ param($sender, $e)\n\
+               $g = $e.Graphics\n\
+               $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit\n\
+               $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality\n\
+               $center = [System.Drawing.StringAlignment]::Center\n\
+               $far = [System.Drawing.StringAlignment]::Far\n\
+               $storeFont = New-Object System.Drawing.Font('Arial', 10, [System.Drawing.FontStyle]::Bold)\n\
+               $labelFont = New-Object System.Drawing.Font('Arial', 7)\n\
+               $numFont = New-Object System.Drawing.Font('Arial', 36, [System.Drawing.FontStyle]::Bold)\n\
+               $timeFont = New-Object System.Drawing.Font('Arial', 6)\n\
+               $brush = [System.Drawing.Brushes]::Black\n\
+               $cx = $w / 2\n\
+               $g.DrawString('{store_esc}', $storeFont, $brush, $cx, 10, (New-Object System.Drawing.StringFormat {{ Alignment = $center }}))\n\
+               $g.DrawString('رقم الدور', $labelFont, $brush, $cx, 30, (New-Object System.Drawing.StringFormat {{ Alignment = $center }}))\n\
+               $numText = '#{number}'\n\
+               $numSize = $g.MeasureString($numText, $numFont)\n\
+               $g.DrawString($numText, $numFont, $brush, $cx - ($numSize.Width / 2), 45)\n\
+               $g.DrawString('{time_esc}', $timeFont, $brush, $cx, 110, (New-Object System.Drawing.StringFormat {{ Alignment = $center }}))\n\
+             }})\n\
+             $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController\n\
+             $doc.Print()\n\
+             $doc.Dispose()",
+            number = number,
+            store_esc = store_esc,
+            time_esc = time_esc
         );
 
         let output = std::process::Command::new("powershell")
