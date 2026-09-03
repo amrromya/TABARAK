@@ -5293,61 +5293,65 @@ pub fn print_barcode_label(
         let show_price_i32 = if show_price { 1 } else { 0 };
         let show_bc_i32 = if show_barcode { 1 } else { 0 };
         let show_store_i32 = if show_store { 1 } else { 0 };
+        let qty_i32 = quantity.max(1);
 
         let ps_script = format!(
             "Add-Type -AssemblyName System.Drawing\n\
              Add-Type -AssemblyName System.Drawing.Printing\n\
              $doc = New-Object System.Drawing.Printing.PrintDocument\n\
-             $doc.DocumentName = 'Barcode: {bc_esc}'\n\
+             $doc.DocumentName = 'Barcode {bc_esc}'\n\
              $doc.OriginAtMargins = $false\n\
              $doc.DefaultPageSettings.Margins = (New-Object System.Drawing.Printing.Margins(5,5,5,5))\n\
-             $copies = {quantity}\n\
-             $doc.PrinterSettings.Copies = [int16]$copies\n\
+             $copiesLeft = {qty_i32}\n\
              $doc.Add_PrintPage({{ param($sender, $e)\n\
                $g = $e.Graphics\n\
                $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit\n\
                $pw = $e.PageBounds.Width\n\
-               $ph = $e.PageBounds.Height\n\
-               $cx = $pw / 2\n\
+               $cx = [float]($pw / 2)\n\
                $y = [float]8\n\
                $brush = [System.Drawing.Brushes]::Black\n\
                $font = New-Object System.Drawing.Font('Arial', 8)\n\
                $nameFont = New-Object System.Drawing.Font('Arial', 9, [System.Drawing.FontStyle]::Bold)\n\
-               $center = New-Object System.Drawing.StringFormat {{ Alignment = [System.Drawing.StringAlignment]::Center }}\n\
                $bcFont = New-Object System.Drawing.Font('Courier New', 7)\n\
+               $fmt = New-Object System.Drawing.StringFormat\n\
+               $fmt.Alignment = [System.Drawing.StringAlignment]::Center\n\
+               $fmt.LineAlignment = [System.Drawing.StringAlignment]::Near\n\
+               $fmt.FormatFlags = [System.Drawing.StringFormatFlags]::DirectionRightToLeft\n\
                \n\
                if ({show_store_i32} -eq 1) {{\n\
-                 $g.DrawString('{store_esc}', $font, $brush, $cx, $y, $center)\n\
-                 $y += 14\n\
+                 $g.DrawString(\"{store_esc}\", $font, $brush, $cx, $y, $fmt)\n\
+                 $y += 16\n\
                }}\n\
                if ({show_name_i32} -eq 1) {{\n\
-                 $g.DrawString('{name_esc}', $nameFont, $brush, $cx, $y, $center)\n\
-                 $y += 18\n\
+                 $g.DrawString(\"{name_esc}\", $nameFont, $brush, $cx, $y, $fmt)\n\
+                 $y += 20\n\
                }}\n\
-               $img = [System.Drawing.Image]::FromFile('{img_path_esc}')\n\
+               $img = [System.Drawing.Image]::FromFile(\"{img_path_esc}\")\n\
                $iw = $pw - 16\n\
-               $ih = [int]($iw * $img.Height / $img.Width)\n\
+               $ih = [int]([float]$iw * [float]$img.Height / [float]$img.Width)\n\
                $g.DrawImage($img, [float](($pw - $iw) / 2), $y, [float]$iw, [float]$ih)\n\
                $img.Dispose()\n\
                $y += $ih + 4\n\
                if ({show_bc_i32} -eq 1) {{\n\
-                 $g.DrawString('{bc_esc}', $bcFont, $brush, $cx, $y, $center)\n\
+                 $g.DrawString(\"{bc_esc}\", $bcFont, $brush, $cx, $y, $fmt)\n\
                  $y += 14\n\
                }}\n\
                if ({show_price_i32} -eq 1) {{\n\
                  $priceStr = [math]::Round({price}, 2).ToString('F2') + ' EGP'\n\
-                 $g.DrawString($priceStr, $font, $brush, $cx, $y, $center)\n\
+                 $g.DrawString($priceStr, $font, $brush, $cx, $y, $fmt)\n\
                }}\n\
+               $copiesLeft -= 1\n\
+               if ($copiesLeft -gt 0) {{ $e.HasMorePages = $true }} else {{ $e.HasMorePages = $false }}\n\
              }})\n\
              $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController\n\
              $doc.Print()\n\
              $doc.Dispose()\n\
-             Remove-Item '{img_path_esc}' -ErrorAction SilentlyContinue",
+             Remove-Item \"{img_path_esc}\" -ErrorAction SilentlyContinue",
             img_path_esc = img_path_esc,
             bc_esc = bc_esc,
             name_esc = name_esc,
             store_esc = store_esc,
-            quantity = quantity,
+            qty_i32 = qty_i32,
             show_name_i32 = show_name_i32,
             show_price_i32 = show_price_i32,
             show_bc_i32 = show_bc_i32,
