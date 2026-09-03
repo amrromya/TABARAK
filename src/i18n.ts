@@ -229,7 +229,7 @@ const translations: Record<string, Record<Lang, string>> = {
   previousInvoice: { ar: "الفاتورة السابقة", en: "Previous Invoice" },
   nextInvoice: { ar: "الفاتورة التالية", en: "Next Invoice" },
   deleteInvoice: { ar: "حذف الفاتورة", en: "Delete Invoice" },
-  searchPlaceholder: { ar: "🔍 اكتب اسم الصنف أو الباركود ثم Enter...", en: "🔍 Type product name or barcode then Enter..." },
+  searchPlaceholder: { ar: "🔍 ابحث بالاسم أو الباركود أو الفئة...", en: "🔍 Search by name, barcode, or category..." },
   noResults: { ar: "لا توجد نتائج مطابقة", en: "No matching results" },
   costPriceShort: { ar: "شراء", en: "Cost" },
   productMovement: { ar: "حركة صنف", en: "Product Movement" },

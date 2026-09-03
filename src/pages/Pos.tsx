@@ -245,7 +245,10 @@ export function Pos({ onBack }: { onBack: () => void }) {
       (p) =>
         !search.trim() ||
         p.name.toLowerCase().includes(search.trim().toLowerCase()) ||
-        (p.barcode ?? "").includes(search.trim()),
+        (p.barcode ?? "").toLowerCase().includes(search.trim().toLowerCase()) ||
+        (p.category_name ?? "").toLowerCase().includes(search.trim().toLowerCase()) ||
+        (p.warehouse_name ?? "").toLowerCase().includes(search.trim().toLowerCase()) ||
+        (p.unit ?? "").toLowerCase().includes(search.trim().toLowerCase()),
     )
     .slice(0, 20);
 
@@ -698,7 +701,10 @@ export function Pos({ onBack }: { onBack: () => void }) {
                   <div
                     key={p.id}
                     className="pos-item"
-                    onClick={() => addProduct(p)}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      addProduct(p);
+                    }}
                   >
                     <div className="pos-item-main">
                       <span className="pos-item-name">{p.name}</span>
@@ -722,8 +728,9 @@ export function Pos({ onBack }: { onBack: () => void }) {
                     <button
                       type="button"
                       className="btn sm pos-movement-btn"
-                      onClick={(e) => {
+                      onMouseDown={(e) => {
                         e.stopPropagation();
+                        e.preventDefault();
                         setMovementProduct(p);
                         setShowMovements(true);
                       }}
