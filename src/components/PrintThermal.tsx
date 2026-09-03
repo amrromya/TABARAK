@@ -1,5 +1,6 @@
 import { fmtDate, money, qty } from "./ui";
 import { t } from "../i18n";
+import { api } from "../api";
 import type { Sale, Settings } from "../types";
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -8,6 +9,14 @@ const PAYMENT_LABELS: Record<string, string> = {
   card: "شبكة",
   card_visa: "شبكة - فيزا",
   card_wallet: "شبكة - محفظة",
+};
+
+const PAYMENT_LABELS_EN: Record<string, string> = {
+  cash: "Cash",
+  credit: "Credit",
+  card: "Card",
+  card_visa: "Card - Visa",
+  card_wallet: "Card - Wallet",
 };
 
 const RECEIPT_FONT = "'Courier New', Courier, monospace";
@@ -23,6 +32,39 @@ export function PrintThermal({
   printerType: "58mm" | "80mm";
   onClose: () => void;
 }) {
+  const handleDirectPrint = async () => {
+    try {
+      const items = sale.items
+        .filter((it: any) => !(it.sell_price === 0 && !it.item_name))
+        .map((it: any) => ({
+          name: it.item_name || it.product_name,
+          qty: qty(it.quantity),
+          price: money(it.sell_price),
+          total: money(it.total),
+        }));
+      await api.printSaleReceipt({
+        storeName: settings.store_name || "تبارك",
+        phone: settings.phone || "",
+        address: settings.address || "",
+        invoiceNo: sale.invoice_no,
+        date: fmtDate(sale.date),
+        customerName: sale.customer_name ?? "نقدي",
+        paymentMethod: PAYMENT_LABELS_EN[sale.payment_method] ?? sale.payment_method,
+        employeeName: sale.employee_name || "",
+        itemsJson: JSON.stringify(items),
+        total: sale.total,
+        discount: sale.discount,
+        additional: sale.additional,
+        netTotal: sale.net_total,
+        currency: settings.currency || "ج.م",
+        footer: settings.invoice_footer || "",
+        printerWidth: printerType,
+      });
+    } catch (err) {
+      console.error("Print error:", err);
+    }
+  };
+
   const w = printerType === "58mm" ? 300 : 400;
   const dash = "┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄";
 
@@ -65,7 +107,7 @@ export function PrintThermal({
   return (
     <div className="print-overlay">
       <div className="print-controls no-print">
-        <button className="btn primary" onClick={() => window.print()}>
+        <button className="btn primary" onClick={handleDirectPrint}>
           🖨️ {t("thermalPrint")}
         </button>
         <button className="btn" onClick={onClose}>

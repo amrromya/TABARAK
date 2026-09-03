@@ -5109,6 +5109,143 @@ pub fn print_turn_number(number: i32, store_name: String, created_at: String) ->
     }
 }
 
+#[tauri::command]
+pub fn print_sale_receipt(
+    store_name: String,
+    phone: String,
+    address: String,
+    invoice_no: String,
+    date: String,
+    customer_name: String,
+    payment_method: String,
+    employee_name: String,
+    items_json: String,
+    total: f64,
+    discount: f64,
+    additional: f64,
+    net_total: f64,
+    currency: String,
+    footer: String,
+    printer_width: String,
+) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        let store_esc = store_name.replace('\'', "''");
+        let phone_esc = phone.replace('\'', "''");
+        let address_esc = address.replace('\'', "''");
+        let invoice_esc = invoice_no.replace('\'', "''");
+        let date_esc = date.replace('\'', "''");
+        let customer_esc = customer_name.replace('\'', "''");
+        let payment_esc = payment_method.replace('\'', "''");
+        let employee_esc = employee_name.replace('\'', "''");
+        let footer_esc = footer.replace('\'', "''");
+        let currency_esc = currency.replace('\'', "''");
+        let items_esc = items_json.replace('\'', "''");
+
+        let is_58mm = printer_width == "58mm";
+        let width_px = if is_58mm { 300 } else { 400 };
+        let font_size = if is_58mm { 9 } else { 10 };
+        let title_size = if is_58mm { 11 } else { 12 };
+
+        let ps_script = format!(
+            "Add-Type -AssemblyName System.Drawing\n\
+             Add-Type -AssemblyName System.Drawing.Printing\n\
+             $doc = New-Object System.Drawing.Printing.PrintDocument\n\
+             $doc.DocumentName = 'Sale Invoice {invoice_esc}'\n\
+             $doc.OriginAtMargins = $false\n\
+             $doc.DefaultPageSettings.Margins = (New-Object System.Drawing.Printing.Margins(10,10,10,10))\n\
+             $items = ConvertFrom-Json -InputObject '{items_esc}'\n\
+             $doc.Add_PrintPage({{ param($sender, $e)\n\
+               $g = $e.Graphics\n\
+               $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit\n\
+               $y = 10\n\
+               $cx = {width_px} / 2\n\
+               $right = {width_px} - 10\n\
+               $font = New-Object System.Drawing.Font('Courier New', {font_size})\n\
+               $boldFont = New-Object System.Drawing.Font('Courier New', {font_size}, [System.Drawing.FontStyle]::Bold)\n\
+               $titleFont = New-Object System.Drawing.Font('Courier New', {title_size}, [System.Drawing.FontStyle]::Bold)\n\
+               $smallFont = New-Object System.Drawing.Font('Courier New', {font_size} - 1)\n\
+               $brush = [System.Drawing.Brushes]::Black\n\
+               $center = New-Object System.Drawing.StringFormat {{ Alignment = [System.Drawing.StringAlignment]::Center }}\n\
+               $right2 = New-Object System.Drawing.StringFormat {{ Alignment = [System.Drawing.StringAlignment]::Far }}\n\
+               $pen = New-Object System.Drawing.Pen([System.Drawing.Brushes]::Black, 1)\n\
+               $pen.DashStyle = [System.Drawing.Drawing2D.DashStyle]::Dash\n\
+               \n\
+               $g.DrawString('{store_esc}', $titleFont, $brush, $cx, $y, $center)\n\
+               $y += 22\n\
+               if ('{phone_esc}') {{ $g.DrawString('Tel: {phone_esc}', $smallFont, $brush, $cx, $y, $center); $y += 16 }}\n\
+               if ('{address_esc}') {{ $g.DrawString('{address_esc}', $smallFont, $brush, $cx, $y, $center); $y += 16 }}\n\
+               $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
+               $g.DrawString('SALE INVOICE', $boldFont, $brush, $cx, $y, $center); $y += 18\n\
+               $g.DrawString('#{invoice_esc}', $boldFont, $brush, $right, $y, $right2); $y += 18\n\
+               $g.DrawString('Date: {date_esc}', $font, $brush, $right, $y, $right2); $y += 16\n\
+               $g.DrawString('Customer: {customer_esc}', $font, $brush, $right, $y, $right2); $y += 16\n\
+               $g.DrawString('Payment: {payment_esc}', $font, $brush, $right, $y, $right2); $y += 16\n\
+               if ('{employee_esc}') {{ $g.DrawString('Employee: {employee_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
+               $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
+               \n\
+               foreach ($item in $items) {{\n\
+                 $name = $item.name\n\
+                 if ($name.Length -gt 20) {{ $name = $name.Substring(0, 18) + '..' }}\n\
+                 $line = $name + ' ' + $item.qty + ' x ' + $item.price + ' = ' + $item.total\n\
+                 $g.DrawString($line, $font, $brush, $right, $y, $right2)\n\
+                 $y += 16\n\
+               }}\n\
+               \n\
+               $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
+               $g.DrawString('Total: ' + [math]::Round({total}, 2).ToString('F2'), $font, $brush, $right, $y, $right2); $y += 16\n\
+               $g.DrawString('Discount: ' + [math]::Round({discount}, 2).ToString('F2'), $font, $brush, $right, $y, $right2); $y += 16\n\
+               if ({additional} -gt 0) {{ $g.DrawString('Additional: ' + [math]::Round({additional}, 2).ToString('F2'), $font, $brush, $right, $y, $right2); $y += 16 }}\n\
+               $g.DrawString('NET: ' + [math]::Round({net_total}, 2).ToString('F2') + ' {currency_esc}', $boldFont, $brush, $right, $y, $right2); $y += 20\n\
+               \n\
+               $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
+               if ('{footer_esc}') {{ $g.DrawString('{footer_esc}', $smallFont, $brush, $cx, $y, $center); $y += 16 }}\n\
+               $g.DrawString('Thank you!', $boldFont, $brush, $cx, $y, $center)\n\
+             }})\n\
+             $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController\n\
+             $doc.Print()\n\
+             $doc.Dispose()",
+            store_esc = store_esc,
+            phone_esc = phone_esc,
+            address_esc = address_esc,
+            invoice_esc = invoice_esc,
+            date_esc = date_esc,
+            customer_esc = customer_esc,
+            payment_esc = payment_esc,
+            employee_esc = employee_esc,
+            footer_esc = footer_esc,
+            currency_esc = currency_esc,
+            items_esc = items_esc,
+            width_px = width_px,
+            font_size = font_size,
+            title_size = title_size,
+            total = total,
+            discount = discount,
+            additional = additional,
+            net_total = net_total,
+        );
+
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &ps_script])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Print failed: {}", stderr));
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Direct printing is only supported on Windows".into())
+    }
+}
+
 // =============== أول تشغيل ===============
 
 #[tauri::command]

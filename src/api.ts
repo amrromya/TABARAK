@@ -413,6 +413,12 @@ export const api = {
     invoke<string[]>("list_printers"),
   printTurnNumber: (number: number, storeName: string, createdAt: string) =>
     invoke<void>("print_turn_number", { number, storeName, createdAt }),
+  printSaleReceipt: (params: {
+    storeName: string; phone: string; address: string; invoiceNo: string;
+    date: string; customerName: string; paymentMethod: string; employeeName: string;
+    itemsJson: string; total: number; discount: number; additional: number;
+    netTotal: number; currency: string; footer: string; printerWidth: string;
+  }) => invoke<void>("print_sale_receipt", params),
 
   // البحث في الصيانة
   searchServiceOrders: (query: string) =>
