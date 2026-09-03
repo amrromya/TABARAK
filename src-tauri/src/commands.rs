@@ -5246,6 +5246,133 @@ pub fn print_sale_receipt(
     }
 }
 
+#[tauri::command]
+pub fn print_barcode_label(
+    barcode_image_base64: String,
+    product_name: String,
+    barcode_value: String,
+    price: f64,
+    store_name: String,
+    quantity: i32,
+    width_mm: f64,
+    height_mm: f64,
+    show_name: bool,
+    show_price: bool,
+    show_barcode: bool,
+    show_store: bool,
+) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        use std::io::Write;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        let temp_dir = std::env::temp_dir();
+        let uid = uuid::Uuid::new_v4().to_string();
+        let img_path = temp_dir.join(format!("tabarak_bc_{}.png", uid));
+        let img_path_esc = img_path.to_string_lossy().replace('\\', "\\\\");
+
+        let b64_data = barcode_image_base64
+            .trim_start_matches("data:image/png;base64,")
+            .trim_start_matches("data:image/jpeg;base64,");
+
+        if let Ok(bytes) = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            b64_data,
+        ) {
+            std::fs::write(&img_path, &bytes).map_err(|e| e.to_string())?;
+        } else {
+            return Err("Failed to decode barcode image".into());
+        }
+
+        let name_esc = product_name.replace('\'', "''");
+        let bc_esc = barcode_value.replace('\'', "''");
+        let store_esc = store_name.replace('\'', "''");
+
+        let show_name_i32 = if show_name { 1 } else { 0 };
+        let show_price_i32 = if show_price { 1 } else { 0 };
+        let show_bc_i32 = if show_barcode { 1 } else { 0 };
+        let show_store_i32 = if show_store { 1 } else { 0 };
+
+        let ps_script = format!(
+            "Add-Type -AssemblyName System.Drawing\n\
+             Add-Type -AssemblyName System.Drawing.Printing\n\
+             $doc = New-Object System.Drawing.Printing.PrintDocument\n\
+             $doc.DocumentName = 'Barcode: {bc_esc}'\n\
+             $doc.OriginAtMargins = $false\n\
+             $doc.DefaultPageSettings.Margins = (New-Object System.Drawing.Printing.Margins(5,5,5,5))\n\
+             $copies = {quantity}\n\
+             $doc.PrinterSettings.Copies = [int16]$copies\n\
+             $doc.Add_PrintPage({{ param($sender, $e)\n\
+               $g = $e.Graphics\n\
+               $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit\n\
+               $pw = $e.PageBounds.Width\n\
+               $ph = $e.PageBounds.Height\n\
+               $cx = $pw / 2\n\
+               $y = [float]8\n\
+               $brush = [System.Drawing.Brushes]::Black\n\
+               $font = New-Object System.Drawing.Font('Arial', 8)\n\
+               $nameFont = New-Object System.Drawing.Font('Arial', 9, [System.Drawing.FontStyle]::Bold)\n\
+               $center = New-Object System.Drawing.StringFormat {{ Alignment = [System.Drawing.StringAlignment]::Center }}\n\
+               $bcFont = New-Object System.Drawing.Font('Courier New', 7)\n\
+               \n\
+               if ({show_store_i32} -eq 1) {{\n\
+                 $g.DrawString('{store_esc}', $font, $brush, $cx, $y, $center)\n\
+                 $y += 14\n\
+               }}\n\
+               if ({show_name_i32} -eq 1) {{\n\
+                 $g.DrawString('{name_esc}', $nameFont, $brush, $cx, $y, $center)\n\
+                 $y += 18\n\
+               }}\n\
+               $img = [System.Drawing.Image]::FromFile('{img_path_esc}')\n\
+               $iw = $pw - 16\n\
+               $ih = [int]($iw * $img.Height / $img.Width)\n\
+               $g.DrawImage($img, [float](($pw - $iw) / 2), $y, [float]$iw, [float]$ih)\n\
+               $img.Dispose()\n\
+               $y += $ih + 4\n\
+               if ({show_bc_i32} -eq 1) {{\n\
+                 $g.DrawString('{bc_esc}', $bcFont, $brush, $cx, $y, $center)\n\
+                 $y += 14\n\
+               }}\n\
+               if ({show_price_i32} -eq 1) {{\n\
+                 $priceStr = [math]::Round({price}, 2).ToString('F2') + ' EGP'\n\
+                 $g.DrawString($priceStr, $font, $brush, $cx, $y, $center)\n\
+               }}\n\
+             }})\n\
+             $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController\n\
+             $doc.Print()\n\
+             $doc.Dispose()\n\
+             Remove-Item '{img_path_esc}' -ErrorAction SilentlyContinue",
+            img_path_esc = img_path_esc,
+            bc_esc = bc_esc,
+            name_esc = name_esc,
+            store_esc = store_esc,
+            quantity = quantity,
+            show_name_i32 = show_name_i32,
+            show_price_i32 = show_price_i32,
+            show_bc_i32 = show_bc_i32,
+            show_store_i32 = show_store_i32,
+            price = price,
+        );
+
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &ps_script])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Barcode print failed: {}", stderr));
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Direct printing is only supported on Windows".into())
+    }
+}
+
 // =============== أول تشغيل ===============
 
 #[tauri::command]

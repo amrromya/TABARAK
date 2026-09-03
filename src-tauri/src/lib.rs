@@ -210,6 +210,7 @@ pub fn run() {
             commands::list_printers,
             commands::print_turn_number,
             commands::print_sale_receipt,
+            commands::print_barcode_label,
             commands::is_first_run,
             commands::initialize_admin,
             commands::verify_admin_password,

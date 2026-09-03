@@ -191,7 +191,6 @@ export function Inventory({
     try { const raw = localStorage.getItem("tabarak_print_settings"); if (raw) ps = { ...ps, ...JSON.parse(raw) }; } catch {}
     let storeName = "";
     try { const settings = await api.getSettings(); storeName = settings.store_name || ""; } catch {}
-    const showStore = ps.barcodeShowStoreName !== false && storeName;
     const barcodeValue = p.barcode || String(p.id);
 
     let svgData = "";
@@ -210,48 +209,25 @@ export function Inventory({
       return;
     }
 
-    const storeLineH = showStore ? 10 : 0;
-    const totalH = ps.barcodeHeight + storeLineH + (ps.barcodeShowName ? 12 : 0) + (ps.barcodeShowPrice ? 8 : 0);
-
-    const frame = document.createElement("iframe");
-    frame.style.cssText = "position:fixed;left:-9999px;width:1px;height:1px;border:none";
-    document.body.appendChild(frame);
-    const doc = frame.contentDocument;
-    if (!doc) { document.body.removeChild(frame); return; }
-
-    doc.open();
-    doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
-      <style>
-        @page{size:${ps.barcodeWidth}mm ${totalH}mm;margin:0}
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{display:flex;justify-content:center;align-items:center;height:100vh;font-family:system-ui,sans-serif}
-        .box{display:flex;flex-direction:column;align-items:center;gap:2px}
-        .store{font-size:${ps.barcodeFontSize + 1}px;font-weight:600;color:#333}
-        .name{font-size:${ps.barcodeFontSize + 2}px;font-weight:700}
-        .code{font-size:9px;color:#666;letter-spacing:1px}
-        .price{font-size:${ps.barcodeFontSize}px;font-weight:700;color:#0f8a5f}
-        img{display:block}
-      </style></head><body>
-      <div class="box">
-        ${showStore ? `<div class="store">${storeName}</div>` : ""}
-        ${ps.barcodeShowName ? `<div class="name">${p.name}</div>` : ""}
-        <img src="${svgData}" />
-        ${ps.barcodeShowBarcode ? `<div class="code">${barcodeValue}</div>` : ""}
-        ${ps.barcodeShowPrice ? `<div class="price">${p.sell_price.toFixed(2)} ج.م</div>` : ""}
-      </div>
-    </body></html>`);
-    doc.close();
-
-    const tryPrint = (attempt: number) => {
-      try {
-        frame.contentWindow?.print();
-        setTimeout(() => document.body.removeChild(frame), 1000);
-      } catch {
-        if (attempt < 5) setTimeout(() => tryPrint(attempt + 1), 300);
-        else document.body.removeChild(frame);
-      }
-    };
-    setTimeout(() => tryPrint(0), 500);
+    try {
+      await api.printBarcodeLabel({
+        barcodeImageBase64: svgData,
+        productName: p.name,
+        barcodeValue,
+        price: p.sell_price,
+        storeName,
+        quantity: p.quantity > 0 ? p.quantity : 1,
+        widthMm: ps.barcodeWidth,
+        heightMm: ps.barcodeHeight,
+        showName: ps.barcodeShowName,
+        showPrice: ps.barcodeShowPrice,
+        showBarcode: ps.barcodeShowBarcode,
+        showStore: ps.barcodeShowStoreName !== false && !!storeName,
+      });
+      notify(t("barcodePrinted") || "تم طباعة الباركود");
+    } catch (err) {
+      notify(String(err), "error");
+    }
   };
 
   const addCategory = async (e: React.FormEvent) => {

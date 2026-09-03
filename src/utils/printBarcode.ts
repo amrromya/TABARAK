@@ -1,4 +1,5 @@
 import JsBarcode from "jsbarcode";
+import { api } from "../api";
 
 export interface BarcodePrintSettings {
   barcodePrinter: string;
@@ -30,16 +31,13 @@ export function getBarcodeSettings(): BarcodePrintSettings {
   return DEFAULT_SETTINGS;
 }
 
-export function printMaintenanceBarcode({
+export async function printMaintenanceBarcode({
   barcodeValue,
   orderNo,
   customerName,
-  customerPhone,
   deviceType,
   deviceModel,
-  complaint,
   total,
-  date,
   storeName,
 }: {
   barcodeValue: string;
@@ -54,9 +52,7 @@ export function printMaintenanceBarcode({
   storeName?: string;
 }) {
   const ps = getBarcodeSettings();
-  const showStore = ps.barcodeShowStoreName && storeName;
 
-  // Generate barcode image via canvas
   let svgData = "";
   try {
     const canvas = document.createElement("canvas");
@@ -69,66 +65,27 @@ export function printMaintenanceBarcode({
     });
     svgData = canvas.toDataURL("image/png");
   } catch {
-    // Fallback: no barcode image
-  }
-
-  const storeLineH = showStore ? 10 : 0;
-  const totalH =
-    ps.barcodeHeight +
-    storeLineH +
-    (ps.barcodeShowName ? 12 : 0) +
-    (ps.barcodeShowPrice ? 8 : 0);
-
-  const frame = document.createElement("iframe");
-  frame.style.cssText =
-    "position:fixed;left:-9999px;width:1px;height:1px;border:none";
-  document.body.appendChild(frame);
-  const doc = frame.contentDocument;
-  if (!doc) {
-    document.body.removeChild(frame);
     return;
   }
 
-  doc.open();
-  doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
-    <style>
-      @page{size:${ps.barcodeWidth}mm ${totalH}mm;margin:0}
-      *{margin:0;padding:0;box-sizing:border-box}
-      body{display:flex;justify-content:center;align-items:center;height:100vh;font-family:'Segoe UI',system-ui,sans-serif}
-      .box{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px}
-      .title{font-size:${ps.barcodeFontSize + 3}px;font-weight:800;color:#0f172a;margin-bottom:2px}
-      .store{font-size:${ps.barcodeFontSize + 1}px;font-weight:600;color:#333}
-      .num{font-size:${ps.barcodeFontSize + 4}px;font-weight:800;letter-spacing:2px;color:#0f8a5f;margin:4px 0}
-      .info{font-size:${ps.barcodeFontSize - 1}px;color:#333;margin:1px 0}
-      .code{font-size:9px;color:#666;letter-spacing:1px}
-      .price{font-size:${ps.barcodeFontSize}px;font-weight:700;color:#0f8a5f;margin-top:4px}
-      .date{font-size:${ps.barcodeFontSize - 2}px;color:#999;margin-top:2px}
-      img{display:block}
-    </style></head><body>
-    <div class="box">
-      ${showStore ? `<div class="store">${storeName}</div>` : ""}
-      <div class="title">تبارك — صيانة</div>
-      <div class="num">${orderNo}</div>
-      ${svgData ? `<img src="${svgData}" />` : ""}
-      ${ps.barcodeShowBarcode ? `<div class="code">${barcodeValue}</div>` : ""}
-      ${ps.barcodeShowName ? `<div class="info">العميل: ${customerName}</div>` : ""}
-      ${customerPhone ? `<div class="info">الهاتف: ${customerPhone}</div>` : ""}
-      <div class="info">الجهاز: ${deviceType} ${deviceModel || ""}</div>
-      ${complaint ? `<div class="info" style="font-size:${ps.barcodeFontSize - 2}px;color:#666">${complaint.length > 40 ? complaint.slice(0, 40) + "..." : complaint}</div>` : ""}
-      ${ps.barcodeShowPrice ? `<div class="price">${total.toFixed(2)} ج.م</div>` : ""}
-      <div class="date">${date}</div>
-    </div>
-  </body></html>`);
-  doc.close();
+  const label = `Order: ${orderNo} | ${customerName} | ${deviceType}${deviceModel ? " " + deviceModel : ""}`;
 
-  const tryPrint = (attempt: number) => {
-    try {
-      frame.contentWindow?.print();
-      setTimeout(() => document.body.removeChild(frame), 1000);
-    } catch {
-      if (attempt < 5) setTimeout(() => tryPrint(attempt + 1), 300);
-      else document.body.removeChild(frame);
-    }
-  };
-  setTimeout(() => tryPrint(0), 500);
+  try {
+    await api.printBarcodeLabel({
+      barcodeImageBase64: svgData,
+      productName: label,
+      barcodeValue,
+      price: total,
+      storeName: storeName || "تبارك",
+      quantity: 1,
+      widthMm: ps.barcodeWidth,
+      heightMm: ps.barcodeHeight + 20,
+      showName: true,
+      showPrice: true,
+      showBarcode: ps.barcodeShowBarcode,
+      showStore: ps.barcodeShowStoreName && !!storeName,
+    });
+  } catch {
+    // fallback: ignore
+  }
 }
