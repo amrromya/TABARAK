@@ -41,6 +41,7 @@ import { WarehouseTransfers } from "./pages/WarehouseTransfers";
 import { SuppliersPage } from "./pages/SuppliersPage";
 import { CashRegister } from "./pages/CashRegister";
 import { Activation } from "./pages/Activation";
+import AuditLog from "./pages/AuditLog";
 import type { Account } from "./types";
 import { api } from "./api";
 
@@ -59,6 +60,7 @@ const NAV = [
   { key: "customer_turns", labelKey: "customerTurns", icon: "🔄" },
   { key: "reports", labelKey: "reports", icon: "📈" },
   { key: "settings", labelKey: "settings", icon: "⚙️" },
+  { key: "audit_log", labelKey: "auditLog", icon: "📋" },
 ];
 
 const POS_WINDOWS: Record<string, { title: string }> = {
@@ -373,6 +375,7 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
         {safePage === "cash_register" && <CashRegister />}
         {safePage === "customer_turns" && <CustomerTurns />}
         {safePage === "settings" && <SettingsPage />}
+        {safePage === "audit_log" && <AuditLog />}
         {safePage === "maint_home" && <MaintenanceHome onNavigate={setPage} onBack={() => setPage("dashboard")} />}
         {safePage === "maint_dashboard" && <MaintenanceDashboard />}
         {safePage === "maint_new" && <NewServiceOrder onDone={(id) => setPage("maint_detail_" + id)} />}
@@ -461,24 +464,16 @@ function App() {
   // Start auto-backup from localStorage settings
   useEffect(() => {
     if (!authenticated) return;
-    let timer: ReturnType<typeof setInterval> | null = null;
     try {
       const raw = localStorage.getItem("tabarak_auto_backup");
       if (raw) {
         const cfg = JSON.parse(raw);
         if (cfg.enabled && cfg.path) {
-          const intervalMs = (Number(cfg.interval) || 24) * 60 * 60 * 1000;
-          timer = setInterval(async () => {
-            try {
-              const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-              const filename = `tabarak_auto_${ts}.db`;
-              await api.exportBackup(cfg.path + "\\" + filename);
-            } catch {}
-          }, intervalMs);
+          const intervalHours = Number(cfg.interval) || 24;
+          api.startAutoBackup(cfg.path, intervalHours);
         }
       }
     } catch {}
-    return () => { if (timer) clearInterval(timer); };
   }, [authenticated]);
 
   // License check — runs on mount + periodic check every 5 minutes

@@ -648,6 +648,20 @@ pub struct NewProductComponent {
     pub quantity_per_unit: f64,
 }
 
+// ---------- System Audit Log ----------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemAuditLog {
+    pub id: i64,
+    pub action: String,
+    pub entity_type: String,
+    pub entity_id: Option<i64>,
+    pub entity_name: Option<String>,
+    pub details: Option<String>,
+    pub user_name: Option<String>,
+    pub created_at: String,
+}
+
 // ---------- Cash Register ----------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

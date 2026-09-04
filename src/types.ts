@@ -606,7 +606,8 @@ export type Permission =
   | "maintenance.deliver"
   | "maintenance.reports"
   | "maintenance.financial"
-  | "maintenance.settings";
+  | "maintenance.settings"
+  | "view_audit_log";
 
 export interface Account {
   id: string;
@@ -962,6 +963,19 @@ export interface NewProductUnit {
   conversion_factor: number;
   sell_price: number;
   barcode?: string | null;
+}
+
+// ---------- System Audit Log ----------
+
+export interface SystemAuditLog {
+  id: number;
+  action: string;
+  entity_type: string;
+  entity_id: number | null;
+  entity_name: string | null;
+  details: string | null;
+  user_name: string | null;
+  created_at: string;
 }
 
 // ---------- Cash Register ----------

@@ -47,6 +47,7 @@ pub fn create_category(state: State<AppState>, input: NewCategory) -> Result<Cat
     conn.execute("INSERT INTO categories (name) VALUES (?1)", params![name])
         .map_err(|e| e.to_string())?;
     let id = conn.last_insert_rowid();
+    add_system_audit_log(&conn, "create", "category", Some(id), Some(&name), Some("تم إنشاء تصنيف جديد"));
     Ok(Category { id, name })
 }
 
@@ -55,6 +56,7 @@ pub fn delete_category(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = get_db(&state)?;
     conn.execute("DELETE FROM categories WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
+    add_system_audit_log(&conn, "delete", "category", Some(id), None, Some("تم حذف التصنيف"));
     Ok(())
 }
 
@@ -102,6 +104,7 @@ pub fn create_warehouse(state: State<AppState>, name: String) -> Result<Warehous
     )
     .map_err(|e| e.to_string())?;
     let id = conn.last_insert_rowid();
+    add_system_audit_log(&conn, "create", "warehouse", Some(id), Some(&name), Some("تم إنشاء مخزون جديد"));
     Ok(Warehouse {
         id,
         name,
@@ -200,6 +203,7 @@ pub fn delete_warehouse(state: State<AppState>, id: i64) -> Result<(), String> {
         }
     }
     tx.commit().map_err(|e| e.to_string())?;
+    add_system_audit_log(&conn, "delete", "warehouse", Some(id), None, Some("تم حذف المخزون"));
     Ok(())
 }
 
@@ -449,6 +453,7 @@ pub fn create_product(state: State<AppState>, input: NewProduct) -> Result<Produ
     )
     .map_err(|e| e.to_string())?;
     let id = conn.last_insert_rowid();
+    add_system_audit_log(&conn, "create", "product", Some(id), Some(&input.name), Some("تم إنشاء منتج جديد"));
     get_product(&conn, id)
 }
 
@@ -484,6 +489,7 @@ pub fn update_product(
         ],
     )
     .map_err(|e| e.to_string())?;
+    add_system_audit_log(&conn, "update", "product", Some(id), Some(&input.name), Some("تم تعديل المنتج"));
     get_product(&conn, id)
 }
 
@@ -492,6 +498,7 @@ pub fn delete_product(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = get_db(&state)?;
     conn.execute("DELETE FROM products WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
+    add_system_audit_log(&conn, "delete", "product", Some(id), None, Some("تم حذف المنتج"));
     Ok(())
 }
 
@@ -692,6 +699,7 @@ pub fn create_supplier(state: State<AppState>, input: NewSupplier) -> Result<Sup
     )
     .map_err(|e| e.to_string())?;
     let id = conn.last_insert_rowid();
+    add_system_audit_log(&conn, "create", "supplier", Some(id), Some(&input.name), Some("تم إنشاء مورد جديد"));
     Ok(Supplier {
         id,
         name: input.name.trim().to_string(),
@@ -713,6 +721,7 @@ pub fn update_supplier(state: State<AppState>, id: i64, input: NewSupplier) -> R
         params![input.name.trim(), input.phone, input.address, input.credit_limit.unwrap_or(0.0), input.notes, id],
     )
     .map_err(|e| e.to_string())?;
+    add_system_audit_log(&conn, "update", "supplier", Some(id), Some(&input.name), Some("تم تعديل بيانات المورد"));
     Ok(Supplier {
         id,
         name: input.name.trim().to_string(),
@@ -728,6 +737,7 @@ pub fn delete_supplier(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = get_db(&state)?;
     conn.execute("DELETE FROM suppliers WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
+    add_system_audit_log(&conn, "delete", "supplier", Some(id), None, Some("تم حذف المورد"));
     Ok(())
 }
 
@@ -920,6 +930,7 @@ pub fn create_customer(state: State<AppState>, input: NewCustomer) -> Result<Cus
     )
     .map_err(|e| e.to_string())?;
     let id = conn.last_insert_rowid();
+    add_system_audit_log(&conn, "create", "customer", Some(id), Some(&input.name), Some("تم إنشاء عميل جديد"));
     Ok(Customer {
         id,
         name: input.name.trim().to_string(),
@@ -942,6 +953,7 @@ pub fn update_customer(
         params![input.name.trim(), input.phone, input.notes, input.customer_type.as_deref().unwrap_or("regular"), id],
     )
     .map_err(|e| e.to_string())?;
+    add_system_audit_log(&conn, "update", "customer", Some(id), Some(&input.name), Some("تم تعديل بيانات العميل"));
     get_customer(&conn, id)
 }
 
@@ -950,6 +962,7 @@ pub fn delete_customer(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = get_db(&state)?;
     conn.execute("DELETE FROM customers WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
+    add_system_audit_log(&conn, "delete", "customer", Some(id), None, Some("تم حذف العميل"));
     Ok(())
 }
 
@@ -1412,6 +1425,7 @@ pub fn create_sale(state: State<AppState>, input: NewSale) -> Result<Sale, Strin
     )
     .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
+    add_system_audit_log(&conn, "create", "sale", Some(sale_id), Some(&customer_name.unwrap_or_default()), Some(&format!("فاتورة #{} بقيمة {}", invoice_no, total)));
 
     get_sale_full(&conn, sale_id)
 }
@@ -1681,6 +1695,7 @@ pub fn delete_sale(state: State<AppState>, id: i64) -> Result<(), String> {
     tx.execute("DELETE FROM sales WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
+    add_system_audit_log(&conn, "delete", "sale", Some(id), None, Some("تم حذف فاتورة بيع"));
     Ok(())
 }
 
@@ -2105,6 +2120,10 @@ pub fn create_purchase(state: State<AppState>, input: NewPurchase) -> Result<Pur
     )
     .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
+    let supplier_name = input.supplier_id.and_then(|sid| {
+        conn.query_row("SELECT name FROM suppliers WHERE id = ?1", params![sid], |r| r.get::<_, String>(0)).ok()
+    });
+    add_system_audit_log(&conn, "create", "purchase", Some(purchase_id), supplier_name.as_deref(), Some(&format!("فاتورة شراء بقيمة {}", total)));
 
     get_purchase_full(&conn, purchase_id)
 }
@@ -2134,6 +2153,7 @@ pub fn delete_purchase(state: State<AppState>, id: i64) -> Result<(), String> {
     tx.execute("DELETE FROM purchases WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
+    add_system_audit_log(&conn, "delete", "purchase", Some(id), None, Some("تم حذف فاتورة شراء"));
     Ok(())
 }
 
@@ -2909,6 +2929,7 @@ pub fn create_expense(state: State<AppState>, input: NewExpense) -> Result<Expen
     )
     .map_err(|e| e.to_string())?;
     let id = conn.last_insert_rowid();
+    add_system_audit_log(&conn, "create", "expense", Some(id), input.category.as_deref(), Some(&format!("مصروف بقيمة {}", input.amount)));
     Ok(Expense {
         id,
         date: input.date,
@@ -2923,6 +2944,7 @@ pub fn delete_expense(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = get_db(&state)?;
     conn.execute("DELETE FROM expenses WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
+    add_system_audit_log(&conn, "delete", "expense", Some(id), None, Some("تم حذف المصروف"));
     Ok(())
 }
 
@@ -5168,11 +5190,23 @@ pub fn print_sale_receipt(
     footer: String,
     printer_width: String,
     printer_name: String,
+    template_json: String,
 ) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        let tmpl: serde_json::Value = serde_json::from_str(&template_json).unwrap_or(serde_json::json!({}));
+        let t_font_size = tmpl.get("fontSize").and_then(|v| v.as_i64()).unwrap_or(if printer_width == "58mm" { 9 } else { 10 }) as u32;
+        let t_primary_color = tmpl.get("primaryColor").and_then(|v| v.as_str()).unwrap_or("0,0,0");
+        let t_show_employee = tmpl.get("showEmployee").and_then(|v| v.as_bool()).unwrap_or(true);
+        let t_show_payment = tmpl.get("showPayment").and_then(|v| v.as_bool()).unwrap_or(true);
+        let t_show_date = tmpl.get("showDate").and_then(|v| v.as_bool()).unwrap_or(true);
+        let t_show_customer = tmpl.get("showCustomer").and_then(|v| v.as_bool()).unwrap_or(true);
+        let t_thank_you = tmpl.get("thankYouText").and_then(|v| v.as_str()).unwrap_or("شكراً لاختياركم!");
+        let t_thank_you_esc = t_thank_you.replace('\'', "''");
+        let t_header_align = tmpl.get("headerAlign").and_then(|v| v.as_str()).unwrap_or("center");
 
         let store_esc = store_name.replace('\'', "''");
         let phone_esc = phone.replace('\'', "''");
@@ -5189,7 +5223,7 @@ pub fn print_sale_receipt(
 
         let is_58mm = printer_width == "58mm";
         let width_px = if is_58mm { 300 } else { 400 };
-        let font_size = if is_58mm { 9 } else { 10 };
+        let font_size = t_font_size;
         let title_size = if is_58mm { 11 } else { 12 };
 
         let ps_script = format!(
@@ -5211,10 +5245,21 @@ pub fn print_sale_receipt(
                $boldFont = New-Object System.Drawing.Font('Courier New', {font_size}, [System.Drawing.FontStyle]::Bold)\n\
                $titleFont = New-Object System.Drawing.Font('Courier New', {title_size}, [System.Drawing.FontStyle]::Bold)\n\
                $smallFont = New-Object System.Drawing.Font('Courier New', {font_size} - 1)\n\
+               $hexColor = '{t_primary_color_hex}'\n\
                $brush = [System.Drawing.Brushes]::Black\n\
-               $center = New-Object System.Drawing.StringFormat {{ Alignment = [System.Drawing.StringAlignment]::Center }}\n\
+               if ($hexColor.Length -ge 7) {{ try {{\n\
+                 $cr = [Convert]::ToInt32($hexColor.Substring(1,2), 16)\n\
+                 $cg = [Convert]::ToInt32($hexColor.Substring(3,2), 16)\n\
+                 $cb = [Convert]::ToInt32($hexColor.Substring(5,2), 16)\n\
+                 $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb($cr, $cg, $cb))\n\
+               }} catch {{}} }}\n\
+               $alignVal = '{t_header_align}'\n\
+               $alignEnum = [System.Drawing.StringAlignment]::Center\n\
+               if ($alignVal -eq 'right') {{ $alignEnum = [System.Drawing.StringAlignment]::Far }}\n\
+               if ($alignVal -eq 'left') {{ $alignEnum = [System.Drawing.StringAlignment]::Near }}\n\
+               $center = New-Object System.Drawing.StringFormat {{ Alignment = $alignEnum }}\n\
                $right2 = New-Object System.Drawing.StringFormat {{ Alignment = [System.Drawing.StringAlignment]::Far }}\n\
-               $pen = New-Object System.Drawing.Pen([System.Drawing.Brushes]::Black, 1)\n\
+               $pen = New-Object System.Drawing.Pen($brush, 1)\n\
                $pen.DashStyle = [System.Drawing.Drawing2D.DashStyle]::Dash\n\
                \n\
                $g.DrawString('{store_esc}', $titleFont, $brush, $cx, $y, $center)\n\
@@ -5224,10 +5269,10 @@ pub fn print_sale_receipt(
                $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
                $g.DrawString('SALE INVOICE', $boldFont, $brush, $cx, $y, $center); $y += 18\n\
                $g.DrawString('#{invoice_esc}', $boldFont, $brush, $right, $y, $right2); $y += 18\n\
-               $g.DrawString('Date: {date_esc}', $font, $brush, $right, $y, $right2); $y += 16\n\
-               $g.DrawString('Customer: {customer_esc}', $font, $brush, $right, $y, $right2); $y += 16\n\
-               $g.DrawString('Payment: {payment_esc}', $font, $brush, $right, $y, $right2); $y += 16\n\
-               if ('{employee_esc}') {{ $g.DrawString('Employee: {employee_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
+               if ({t_show_date_ps}) {{ $g.DrawString('Date: {date_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
+               if ({t_show_customer_ps}) {{ $g.DrawString('Customer: {customer_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
+               if ({t_show_payment_ps}) {{ $g.DrawString('Payment: {payment_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
+               if ('{employee_esc}' -and {t_show_employee_ps}) {{ $g.DrawString('Employee: {employee_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
                $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
                \n\
                foreach ($item in $items) {{\n\
@@ -5246,7 +5291,7 @@ pub fn print_sale_receipt(
                \n\
                $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
                if ('{footer_esc}') {{ $g.DrawString('{footer_esc}', $smallFont, $brush, $cx, $y, $center); $y += 16 }}\n\
-               $g.DrawString('Thank you!', $boldFont, $brush, $cx, $y, $center)\n\
+               $g.DrawString('{t_thank_you}', $boldFont, $brush, $cx, $y, $center)\n\
              }})\n\
              $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController\n\
              $doc.Print()\n\
@@ -5270,6 +5315,13 @@ pub fn print_sale_receipt(
             discount = discount,
             additional = additional,
             net_total = net_total,
+            t_primary_color_hex = t_primary_color.trim_start_matches('#'),
+            t_header_align = t_header_align,
+            t_show_date_ps = if t_show_date { "$true" } else { "$false" },
+            t_show_customer_ps = if t_show_customer { "$true" } else { "$false" },
+            t_show_payment_ps = if t_show_payment { "$true" } else { "$false" },
+            t_show_employee_ps = if t_show_employee { "$true" } else { "$false" },
+            t_thank_you = t_thank_you_esc,
         );
 
         let output = std::process::Command::new("powershell")
@@ -5727,36 +5779,34 @@ lazy_static::lazy_static! {
 }
 
 #[tauri::command]
-pub fn start_auto_backup(state: State<AppState>) -> Result<(), String> {
+pub fn start_auto_backup(state: State<AppState>, backup_path: String, interval_hours: u64) -> Result<(), String> {
     let db_path = state.db_path.clone();
     let (tx, rx) = std::sync::mpsc::channel::<()>();
     BACKUP_TIMERS.lock().map_err(|e| e.to_string())?.push(tx);
 
     std::thread::spawn(move || {
-        let backup_interval = std::time::Duration::from_secs(24 * 60 * 60);
+        let backup_interval = std::time::Duration::from_secs(interval_hours * 60 * 60);
         loop {
             std::thread::sleep(backup_interval);
             if rx.try_recv().is_ok() {
                 break;
             }
-            if let Some(parent) = db_path.parent() {
-                let backup_dir = parent.join("backups");
-                let _ = std::fs::create_dir_all(&backup_dir);
-                let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-                let backup_path = backup_dir.join(format!("tabarak_{}.db", timestamp));
-                let _ = std::fs::copy(&db_path, &backup_path);
-                if let Ok(entries) = std::fs::read_dir(&backup_dir) {
-                    let mut backups: Vec<_> = entries
-                        .filter_map(|e| e.ok())
-                        .filter(|e| e.path().extension().map_or(false, |ext| ext == "db"))
-                        .collect();
-                    backups.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
-                    while backups.len() > 7 {
-                        if let Some(oldest) = backups.first() {
-                            let _ = std::fs::remove_file(oldest.path());
-                        }
-                        backups.remove(0);
+            let backup_dir = std::path::PathBuf::from(&backup_path);
+            let _ = std::fs::create_dir_all(&backup_dir);
+            let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+            let dest = backup_dir.join(format!("tabarak_auto_{}.db", timestamp));
+            let _ = std::fs::copy(&db_path, &dest);
+            if let Ok(entries) = std::fs::read_dir(&backup_dir) {
+                let mut backups: Vec<_> = entries
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().map_or(false, |ext| ext == "db"))
+                    .collect();
+                backups.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+                while backups.len() > 7 {
+                    if let Some(oldest) = backups.first() {
+                        let _ = std::fs::remove_file(oldest.path());
                     }
+                    backups.remove(0);
                 }
             }
         }
@@ -5884,4 +5934,90 @@ pub fn save_product_units(state: State<AppState>, product_id: i64, units: Vec<Ne
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
     Ok(rows)
+}
+
+// =============== سجل التدقيق العام ===============
+
+pub fn add_system_audit_log(conn: &rusqlite::Connection, action: &str, entity_type: &str, entity_id: Option<i64>, entity_name: Option<&str>, details: Option<&str>) {
+    let _ = conn.execute(
+        "INSERT INTO audit_log (action, entity_type, entity_id, entity_name, details, user_name) VALUES (?1, ?2, ?3, ?4, ?5, 'admin')",
+        rusqlite::params![action, entity_type, entity_id, entity_name, details],
+    );
+}
+
+#[tauri::command]
+pub fn get_audit_logs(state: State<AppState>, limit: Option<i64>, offset: Option<i64>, entity_type: Option<String>, action: Option<String>, search: Option<String>) -> Result<Vec<crate::models::SystemAuditLog>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let mut query = String::from("SELECT id, action, entity_type, entity_id, entity_name, details, user_name, created_at FROM audit_log WHERE 1=1");
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(ref et) = entity_type {
+        query.push_str(" AND entity_type = ?");
+        params.push(Box::new(et.clone()));
+    }
+    if let Some(ref a) = action {
+        query.push_str(" AND action = ?");
+        params.push(Box::new(a.clone()));
+    }
+    if let Some(ref s) = search {
+        query.push_str(" AND (entity_name LIKE ? OR details LIKE ? OR action LIKE ?)");
+        let pattern = format!("%{}%", s);
+        params.push(Box::new(pattern.clone()));
+        params.push(Box::new(pattern.clone()));
+        params.push(Box::new(pattern));
+    }
+
+    query.push_str(" ORDER BY id DESC");
+
+    let lim = limit.unwrap_or(100);
+    let off = offset.unwrap_or(0);
+    query.push_str(&format!(" LIMIT {} OFFSET {}", lim, off));
+
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;
+    let rows = stmt.query_map(param_refs.as_slice(), |row| {
+        Ok(crate::models::SystemAuditLog {
+            id: row.get(0)?,
+            action: row.get(1)?,
+            entity_type: row.get(2)?,
+            entity_id: row.get(3)?,
+            entity_name: row.get(4)?,
+            details: row.get(5)?,
+            user_name: row.get(6)?,
+            created_at: row.get(7)?,
+        })
+    }).map_err(|e| e.to_string())?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        results.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(results)
+}
+
+#[tauri::command]
+pub fn get_audit_log_count(state: State<AppState>, entity_type: Option<String>, action: Option<String>, search: Option<String>) -> Result<i64, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let mut query = String::from("SELECT COUNT(*) FROM audit_log WHERE 1=1");
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(ref et) = entity_type {
+        query.push_str(" AND entity_type = ?");
+        params.push(Box::new(et.clone()));
+    }
+    if let Some(ref a) = action {
+        query.push_str(" AND action = ?");
+        params.push(Box::new(a.clone()));
+    }
+    if let Some(ref s) = search {
+        query.push_str(" AND (entity_name LIKE ? OR details LIKE ? OR action LIKE ?)");
+        let pattern = format!("%{}%", s);
+        params.push(Box::new(pattern.clone()));
+        params.push(Box::new(pattern.clone()));
+        params.push(Box::new(pattern));
+    }
+
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    let count: i64 = conn.query_row(&query, param_refs.as_slice(), |row| row.get(0)).map_err(|e| e.to_string())?;
+    Ok(count)
 }

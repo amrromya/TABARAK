@@ -609,6 +609,20 @@ fn migrate(conn: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_so_payments_order ON service_order_payments(order_id);
         CREATE INDEX IF NOT EXISTS idx_so_notes_order ON service_order_notes(order_id);
         CREATE INDEX IF NOT EXISTS idx_so_log_order ON service_order_audit_log(order_id);
+
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action TEXT NOT NULL,
+            entity_type TEXT NOT NULL,
+            entity_id INTEGER,
+            entity_name TEXT,
+            details TEXT,
+            user_name TEXT DEFAULT 'admin',
+            created_at TEXT DEFAULT (datetime('now','localtime'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id);
+        CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
         CREATE INDEX IF NOT EXISTS idx_receipt_vouchers_date ON receipt_vouchers(date);
         CREATE INDEX IF NOT EXISTS idx_receipt_vouchers_source ON receipt_vouchers(source_type, source_id);
         CREATE INDEX IF NOT EXISTS idx_payment_vouchers_date ON payment_vouchers(date);

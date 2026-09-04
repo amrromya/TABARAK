@@ -228,6 +228,8 @@ pub fn run() {
             commands::list_cash_movements,
             commands::get_cash_session_summary,
             commands::list_cash_sessions,
+            commands::get_audit_logs,
+            commands::get_audit_log_count,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1139,6 +1139,90 @@ export function SettingsPage() {
                   style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 13, resize: "vertical", fontFamily: "inherit", direction: "rtl" }}
                 />
               </div>
+
+              {/* Receipt Template Settings */}
+              <div className="print-section" style={{ marginTop: 16 }}>
+                <h3>{t("receiptTemplate")}</h3>
+                <div className="print-fields">
+                  <div className="print-field">
+                    <label>{t("receiptFontSize")}</label>
+                    <input type="number" min={8} max={16} value={printSettings.receiptFontSize || 10} onChange={(e) => updatePrintSettings({ receiptFontSize: Number(e.target.value) })} />
+                  </div>
+                  <div className="print-field">
+                    <label>{t("receiptPrimaryColor")}</label>
+                    <input type="color" value={printSettings.receiptPrimaryColor || "#000000"} onChange={(e) => updatePrintSettings({ receiptPrimaryColor: e.target.value })} style={{ width: 50, height: 34, padding: 2, cursor: "pointer" }} />
+                  </div>
+                  <div className="print-field" style={{ minWidth: 150 }}>
+                    <label>{t("receiptHeaderAlign")}</label>
+                    <select value={printSettings.receiptHeaderAlign || "center"} onChange={(e) => updatePrintSettings({ receiptHeaderAlign: e.target.value })}>
+                      <option value="center">{t("alignCenter")}</option>
+                      <option value="right">{t("alignRight")}</option>
+                      <option value="left">{t("alignLeft")}</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="print-fields">
+                  <div className="print-field" style={{ minWidth: 250 }}>
+                    <label>{t("receiptThankYouText")}</label>
+                    <input type="text" value={printSettings.receiptThankYouText || "شكراً لاختياركم!"} onChange={(e) => updatePrintSettings({ receiptThankYouText: e.target.value })} style={{ width: "100%" }} />
+                  </div>
+                </div>
+                <div className="print-toggles">
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={printSettings.receiptShowEmployee !== false} onChange={(e) => updatePrintSettings({ receiptShowEmployee: e.target.checked })} />
+                    {t("receiptShowEmployee")}
+                  </label>
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={printSettings.receiptShowPayment !== false} onChange={(e) => updatePrintSettings({ receiptShowPayment: e.target.checked })} />
+                    {t("receiptShowPayment")}
+                  </label>
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={printSettings.receiptShowDate !== false} onChange={(e) => updatePrintSettings({ receiptShowDate: e.target.checked })} />
+                    {t("receiptShowDate")}
+                  </label>
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={printSettings.receiptShowCustomer !== false} onChange={(e) => updatePrintSettings({ receiptShowCustomer: e.target.checked })} />
+                    {t("receiptShowCustomer")}
+                  </label>
+                </div>
+
+                {/* Live Preview */}
+                <div style={{ marginTop: 20 }}>
+                  <h4 style={{ margin: "0 0 12px", fontSize: 15 }}>{t("receiptPreview")}</h4>
+                  <div style={{
+                    border: "1px solid #d1d5db", borderRadius: 8, padding: 16,
+                    maxWidth: 350, fontFamily: "'Courier New', monospace",
+                    fontSize: printSettings.receiptFontSize || 10, backgroundColor: "#fff",
+                    direction: "ltr", textAlign: (printSettings.receiptHeaderAlign || "center") as "center" | "right" | "left",
+                  }}>
+                    <div style={{ fontWeight: "bold", fontSize: (printSettings.receiptFontSize || 10) + 2, marginBottom: 4, color: printSettings.receiptPrimaryColor || "#000" }}>
+                      {form?.store_name || "تبارك"}
+                    </div>
+                    {form?.phone && <div style={{ fontSize: (printSettings.receiptFontSize || 10) - 1 }}>Tel: {form.phone}</div>}
+                    {form?.address && <div style={{ fontSize: (printSettings.receiptFontSize || 10) - 1 }}>{form.address}</div>}
+                    <hr style={{ margin: "6px 0", border: "none", borderTop: `1px dashed ${printSettings.receiptPrimaryColor || "#000"}` }} />
+                    <div style={{ fontWeight: "bold", marginBottom: 4, color: printSettings.receiptPrimaryColor || "#000" }}>SALE INVOICE</div>
+                    <div style={{ textAlign: "right" }}>
+                      <div>#12345</div>
+                      {printSettings.receiptShowDate !== false && <div>Date: {new Date().toLocaleDateString()}</div>}
+                      {printSettings.receiptShowCustomer !== false && <div>Customer: نقدي</div>}
+                      {printSettings.receiptShowPayment !== false && <div>Payment: نقدي</div>}
+                      {printSettings.receiptShowEmployee !== false && <div>Employee: موظف</div>}
+                    </div>
+                    <hr style={{ margin: "6px 0", border: "none", borderTop: `1px dashed ${printSettings.receiptPrimaryColor || "#000"}` }} />
+                    <div style={{ textAlign: "right" }}>
+                      <div>منتج Example 2 x 10.00 = 20.00</div>
+                    </div>
+                    <hr style={{ margin: "6px 0", border: "none", borderTop: `1px dashed ${printSettings.receiptPrimaryColor || "#000"}` }} />
+                    <div style={{ textAlign: "right", fontWeight: "bold", color: printSettings.receiptPrimaryColor || "#000" }}>
+                      <div>Total: 20.00</div>
+                      <div>NET: 20.00 {form?.currency || "ج.م"}</div>
+                    </div>
+                    <hr style={{ margin: "6px 0", border: "none", borderTop: `1px dashed ${printSettings.receiptPrimaryColor || "#000"}` }} />
+                    <div style={{ fontWeight: "bold", color: printSettings.receiptPrimaryColor || "#000" }}>{printSettings.receiptThankYouText || "شكراً لاختياركم!"}</div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Barcode print settings */}

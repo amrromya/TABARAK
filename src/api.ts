@@ -54,6 +54,7 @@ import type {
   SyncConflict,
   SyncResult,
   SyncStatus,
+  SystemAuditLog,
   Vacation,
   Warehouse,
   WarehouseStats,
@@ -418,7 +419,7 @@ export const api = {
     date: string; customerName: string; paymentMethod: string; employeeName: string;
     itemsJson: string; total: number; discount: number; additional: number;
     netTotal: number; currency: string; footer: string; printerWidth: string;
-    printerName: string;
+    printerName: string; templateJson: string;
   }) => invoke<void>("print_sale_receipt", params),
   printBarcodeLabel: (params: {
     barcodeImageBase64: string; productName: string; barcodeValue: string;
@@ -444,7 +445,8 @@ export const api = {
     invoke<string>("export_purchases_csv", { from: from || null, to: to || null }),
 
   // النسخ الاحتياطي التلقائي
-  startAutoBackup: () => invoke<void>("start_auto_backup"),
+  startAutoBackup: (backupPath: string, intervalHours: number) =>
+    invoke<void>("start_auto_backup", { backupPath, intervalHours }),
 
   // ==================== Cash Register ====================
   getCashSession: () => invoke<CashRegisterSession | null>("get_cash_session"),
@@ -457,4 +459,10 @@ export const api = {
   listCashMovements: () => invoke<CashRegisterMovement[]>("list_cash_movements"),
   getCashSessionSummary: () => invoke<CashSessionSummary | null>("get_cash_session_summary"),
   listCashSessions: () => invoke<CashRegisterSession[]>("list_cash_sessions"),
+
+  // ==================== Audit Log ====================
+  getAuditLogs: (params: { limit?: number; offset?: number; entityType?: string; action?: string; search?: string }) =>
+    invoke<SystemAuditLog[]>("get_audit_logs", params),
+  getAuditLogCount: (params: { entityType?: string; action?: string; search?: string }) =>
+    invoke<number>("get_audit_log_count", params),
 };

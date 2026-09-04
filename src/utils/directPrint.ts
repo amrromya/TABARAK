@@ -19,6 +19,14 @@ export interface PrintSettings {
   barcodeShowPrice: boolean;
   barcodeShowBarcode: boolean;
   barcodeShowStoreName: boolean;
+  receiptFontSize: number;
+  receiptPrimaryColor: string;
+  receiptShowEmployee: boolean;
+  receiptShowPayment: boolean;
+  receiptShowDate: boolean;
+  receiptShowCustomer: boolean;
+  receiptThankYouText: string;
+  receiptHeaderAlign: string;
 }
 
 const STORAGE_KEY = "tabarak_print_settings";
@@ -41,6 +49,14 @@ const DEFAULT_SETTINGS: PrintSettings = {
   barcodeShowPrice: true,
   barcodeShowBarcode: true,
   barcodeShowStoreName: true,
+  receiptFontSize: 10,
+  receiptPrimaryColor: "#000000",
+  receiptShowEmployee: true,
+  receiptShowPayment: true,
+  receiptShowDate: true,
+  receiptShowCustomer: true,
+  receiptThankYouText: "شكراً لاختياركم!",
+  receiptHeaderAlign: "center",
 };
 
 export function getPrintSettings(): PrintSettings {
@@ -95,12 +111,24 @@ export async function printSaleReceipt(params: {
   total: number; discount: number; additional: number;
   netTotal: number; currency: string; footer: string;
 }) {
+  const ps = getPrintSettings();
   const width = getReceiptWidth();
+  const template = JSON.stringify({
+    fontSize: ps.receiptFontSize || 10,
+    primaryColor: ps.receiptPrimaryColor || "#000000",
+    showEmployee: ps.receiptShowEmployee !== false,
+    showPayment: ps.receiptShowPayment !== false,
+    showDate: ps.receiptShowDate !== false,
+    showCustomer: ps.receiptShowCustomer !== false,
+    thankYouText: ps.receiptThankYouText || "شكراً لاختياركم!",
+    headerAlign: ps.receiptHeaderAlign || "center",
+  });
   await api.printSaleReceipt({
     ...params,
     itemsJson: JSON.stringify(params.items),
     printerWidth: width,
     printerName: getReceiptPrinter(),
+    templateJson: template,
   });
 }
 
