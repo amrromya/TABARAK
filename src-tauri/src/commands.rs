@@ -3809,10 +3809,39 @@ pub fn verify_section_password(state: State<AppState>, password: String) -> Resu
         .ok();
     match stored {
         Some(expected) => {
-            bcrypt::verify(&password, &expected)
-                .map_err(|_| "فشل التحقق من كلمة المرور".to_string())
+            match bcrypt::verify(&password, &expected) {
+                Ok(result) => Ok(result),
+                Err(_) => {
+                    // Hash may be corrupted — fallback: check if password matches "5506" default
+                    if password == "5506" {
+                        if let Ok(new_hash) = bcrypt::hash("5506", bcrypt::DEFAULT_COST) {
+                            let _ = conn.execute(
+                                "INSERT OR REPLACE INTO settings (key, value) VALUES ('section_password_hash', ?1)",
+                                params![new_hash],
+                            );
+                        }
+                        Ok(true)
+                    } else {
+                        Ok(false)
+                    }
+                }
+            }
         }
-        None => Err("لم يتم تعيين كلمة مرور الأقسام بعد".to_string()),
+        None => {
+            // No hash exists — set default "5506"
+            if let Ok(hash) = bcrypt::hash("5506", bcrypt::DEFAULT_COST) {
+                let _ = conn.execute(
+                    "INSERT OR REPLACE INTO settings (key, value) VALUES ('section_password_hash', ?1)",
+                    params![hash],
+                );
+            }
+            // Now verify
+            if password == "5506" {
+                Ok(true)
+            } else {
+                Ok(false)
+            }
+        }
     }
 }
 
@@ -3832,11 +3861,19 @@ pub fn change_section_password(
         .ok();
     match &stored {
         Some(expected) => {
-            if !bcrypt::verify(&current_password, expected).unwrap_or(false) {
+            let ok = match bcrypt::verify(&current_password, expected) {
+                Ok(result) => result,
+                Err(_) => current_password == "5506",
+            };
+            if !ok {
                 return Err("كلمة المرور الحالية خاطئة".into());
             }
         }
-        None => return Err("لم يتم تعيين كلمة مرور الأقسام بعد".to_string()),
+        None => {
+            if current_password != "5506" {
+                return Err("كلمة المرور الحالية خاطئة".into());
+            }
+        }
     }
     if new_password.len() < 4 {
         return Err("كلمة المرور الجديدة يجب أن تكون 4 أحرف على الأقل".into());
@@ -5045,7 +5082,7 @@ pub fn list_printers() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub fn print_turn_number(number: i32, store_name: String, created_at: String) -> Result<(), String> {
+pub fn print_turn_number(number: i32, store_name: String, created_at: String, printer_name: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
@@ -5053,6 +5090,7 @@ pub fn print_turn_number(number: i32, store_name: String, created_at: String) ->
 
         let store_esc = store_name.replace('\'', "''");
         let time_esc = created_at.replace('\'', "''");
+        let printer_name_esc = printer_name.replace('\'', "''");
 
         let ps_script = format!(
             "Add-Type -AssemblyName System.Drawing\n\
@@ -5062,6 +5100,7 @@ pub fn print_turn_number(number: i32, store_name: String, created_at: String) ->
              $doc.OriginAtMargins = $false\n\
              $doc.DefaultPageSettings.Margins = (New-Object System.Drawing.Printing.Margins(0,0,0,0))\n\
              $doc.DefaultPageSettings.PaperSize = $doc.PrinterSettings.PaperSizes[0]\n\
+             if ('{printer_name_esc}') {{ try {{ $doc.PrinterSettings.PrinterName = '{printer_name_esc}' }} catch {{}} }}\n\
              $w = $doc.DefaultPageSettings.PaperSize.Width\n\
              $h = $doc.DefaultPageSettings.PaperSize.Height\n\
              $doc.Add_PrintPage({{ param($sender, $e)\n\
@@ -5088,7 +5127,8 @@ pub fn print_turn_number(number: i32, store_name: String, created_at: String) ->
              $doc.Dispose()",
             number = number,
             store_esc = store_esc,
-            time_esc = time_esc
+            time_esc = time_esc,
+            printer_name_esc = printer_name_esc
         );
 
         let output = std::process::Command::new("powershell")
@@ -5127,6 +5167,7 @@ pub fn print_sale_receipt(
     currency: String,
     footer: String,
     printer_width: String,
+    printer_name: String,
 ) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
@@ -5144,6 +5185,7 @@ pub fn print_sale_receipt(
         let footer_esc = footer.replace('\'', "''");
         let currency_esc = currency.replace('\'', "''");
         let items_esc = items_json.replace('\'', "''");
+        let printer_name_esc = printer_name.replace('\'', "''");
 
         let is_58mm = printer_width == "58mm";
         let width_px = if is_58mm { 300 } else { 400 };
@@ -5158,6 +5200,7 @@ pub fn print_sale_receipt(
              $doc.OriginAtMargins = $false\n\
              $doc.DefaultPageSettings.Margins = (New-Object System.Drawing.Printing.Margins(10,10,10,10))\n\
              $items = ConvertFrom-Json -InputObject '{items_esc}'\n\
+             if ('{printer_name_esc}') {{ try {{ $doc.PrinterSettings.PrinterName = '{printer_name_esc}' }} catch {{}} }}\n\
              $doc.Add_PrintPage({{ param($sender, $e)\n\
                $g = $e.Graphics\n\
                $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit\n\
@@ -5219,6 +5262,7 @@ pub fn print_sale_receipt(
             footer_esc = footer_esc,
             currency_esc = currency_esc,
             items_esc = items_esc,
+            printer_name_esc = printer_name_esc,
             width_px = width_px,
             font_size = font_size,
             title_size = title_size,
@@ -5260,6 +5304,7 @@ pub fn print_barcode_label(
     show_price: bool,
     show_barcode: bool,
     show_store: bool,
+    printer_name: String,
 ) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
@@ -5288,6 +5333,7 @@ pub fn print_barcode_label(
         let name_esc = product_name.replace('\'', "''");
         let bc_esc = barcode_value.replace('\'', "''");
         let store_esc = store_name.replace('\'', "''");
+        let printer_name_esc = printer_name.replace('\'', "''");
 
         let show_name_i32 = if show_name { 1 } else { 0 };
         let show_price_i32 = if show_price { 1 } else { 0 };
@@ -5302,6 +5348,7 @@ pub fn print_barcode_label(
              $doc.DocumentName = 'Barcode {bc_esc}'\n\
              $doc.OriginAtMargins = $false\n\
              $doc.DefaultPageSettings.Margins = (New-Object System.Drawing.Printing.Margins(5,5,5,5))\n\
+             if ('{printer_name_esc}') {{ try {{ $doc.PrinterSettings.PrinterName = '{printer_name_esc}' }} catch {{}} }}\n\
              $copiesLeft = {qty_i32}\n\
              $doc.Add_PrintPage({{ param($sender, $e)\n\
                $g = $e.Graphics\n\
@@ -5351,6 +5398,7 @@ pub fn print_barcode_label(
             bc_esc = bc_esc,
             name_esc = name_esc,
             store_esc = store_esc,
+            printer_name_esc = printer_name_esc,
             qty_i32 = qty_i32,
             show_name_i32 = show_name_i32,
             show_price_i32 = show_price_i32,

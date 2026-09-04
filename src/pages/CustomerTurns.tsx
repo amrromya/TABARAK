@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { t } from "../i18n";
-import { api } from "../api";
+import { printTurnNumber, getStoreName } from "../utils/directPrint";
 
 interface TurnEntry {
   id: number;
@@ -81,21 +81,11 @@ export function CustomerTurns() {
 
   const printNumber = async (entry: TurnEntry) => {
     try {
-      await api.printTurnNumber(entry.number, getStoreName(), entry.createdAt);
+      const name = await getStoreName();
+      await printTurnNumber(entry.number, name, entry.createdAt);
     } catch (err) {
       console.error("Print error:", err);
     }
-  };
-
-  const getStoreName = (): string => {
-    try {
-      const raw = localStorage.getItem("tabarak_settings");
-      if (raw) {
-        const s = JSON.parse(raw);
-        return s.store_name || "تبارك";
-      }
-    } catch {}
-    return "تبارك";
   };
 
   const serving = turns.find((t) => t.status === "serving");

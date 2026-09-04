@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import JsBarcode from "jsbarcode";
 import * as XLSX from "xlsx";
 import { api } from "../api";
+import { generateAndPrintBarcode } from "../utils/directPrint";
 import {
   Field,
   Modal,
@@ -187,43 +187,8 @@ export function Inventory({
   };
 
   const printBarcode = async (p: Product) => {
-    let ps: any = { barcodePrinter: "", barcodeWidth: 50, barcodeHeight: 25, barcodeFontSize: 10, barcodeShowName: true, barcodeShowPrice: true, barcodeShowBarcode: true, barcodeShowStoreName: true };
-    try { const raw = localStorage.getItem("tabarak_print_settings"); if (raw) ps = { ...ps, ...JSON.parse(raw) }; } catch {}
-    let storeName = "";
-    try { const settings = await api.getSettings(); storeName = settings.store_name || ""; } catch {}
-    const barcodeValue = p.barcode || String(p.id);
-
-    let svgData = "";
     try {
-      const canvas = document.createElement("canvas");
-      JsBarcode(canvas, barcodeValue, {
-        format: "CODE128",
-        width: Math.max(1, Math.floor(ps.barcodeWidth / 15)),
-        height: Math.min(ps.barcodeHeight * 2, 60),
-        displayValue: false,
-        margin: 0,
-      });
-      svgData = canvas.toDataURL("image/png");
-    } catch (e: any) {
-      notify(t("barcodeError") + e.message, "error");
-      return;
-    }
-
-    try {
-      await api.printBarcodeLabel({
-        barcodeImageBase64: svgData,
-        productName: p.name,
-        barcodeValue,
-        price: p.sell_price,
-        storeName,
-        quantity: p.quantity > 0 ? p.quantity : 1,
-        widthMm: ps.barcodeWidth,
-        heightMm: ps.barcodeHeight,
-        showName: ps.barcodeShowName,
-        showPrice: ps.barcodeShowPrice,
-        showBarcode: ps.barcodeShowBarcode,
-        showStore: ps.barcodeShowStoreName !== false && !!storeName,
-      });
+      await generateAndPrintBarcode(p);
       notify(t("barcodePrinted") || "تم طباعة الباركود");
     } catch (err) {
       notify(String(err), "error");

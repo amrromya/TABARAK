@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { api } from "../api";
 import { Field, useToast } from "../components/ui";
 import { isNotifEnabled, setNotifEnabled as saveNotifEnabled, getNotifSoundPath, setNotifSoundPath as saveNotifSoundPath, playNotifSound, getSuccessSoundPath, setSuccessSoundPath as saveSuccessSoundPath, getErrorSoundPath, setErrorSoundPath as saveErrorSoundPath, playSuccessSound, playErrorSound } from "../utils/notifications";
+import { getPrintSettings, savePrintSettings, type PrintSettings } from "../utils/directPrint";
 import type { Account, Branch, Permission, Settings, SyncConfig, SyncStatus, Warehouse } from "../types";
 import { t } from "../i18n";
 
@@ -183,51 +184,22 @@ export function SettingsPage() {
   const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
 
   // Print settings
-  const [printSettings, setPrintSettings] = useState<{
-    invoicePaper: string;
-    invoiceLandscape: boolean;
-    invoiceMargins: number;
-    invoiceHeader: boolean;
-    invoiceFooter: boolean;
-    invoicePrinter: string;
-    invoiceLogo: string;
-    warrantyText: string;
-    receiptPrinter: string;
-    barcodePrinter: string;
-    barcodeWidth: number;
-    barcodeHeight: number;
-    barcodeFontSize: number;
-    barcodeShowName: boolean;
-    barcodeShowPrice: boolean;
-    barcodeShowBarcode: boolean;
-    barcodeShowStoreName: boolean;
-    barcodeCustomSizes: { name: string; width: number; height: number }[];
-  }>(() => {
+  const [printSettings, setPrintSettings] = useState<PrintSettings>(getPrintSettings);
+  const [barcodeCustomSizes, setBarcodeCustomSizes] = useState<{ name: string; width: number; height: number }[]>(() => {
     try {
-      const raw = localStorage.getItem("tabarak_print_settings");
+      const raw = localStorage.getItem("tabarak_barcode_custom_sizes");
       if (raw) return JSON.parse(raw);
     } catch {}
-    return {
-      invoicePaper: "A4",
-      invoiceLandscape: false,
-      invoiceMargins: 10,
-      invoiceHeader: true,
-      invoiceFooter: true,
-      invoicePrinter: "",
-      invoiceLogo: "",
-      warrantyText: "",
-      barcodePrinter: "",
-      barcodeWidth: 50,
-      barcodeHeight: 25,
-      barcodeFontSize: 10,
-      barcodeShowName: true,
-      barcodeShowPrice: true,
-      barcodeShowBarcode: true,
-      barcodeShowStoreName: true,
-      barcodeCustomSizes: [] as { name: string; width: number; height: number }[],
-      receiptPrinter: "A4" as string,
-    };
+    return [];
   });
+
+  const updatePrintSettings = (patch: Partial<PrintSettings>) => {
+    setPrintSettings((prev) => {
+      const next = { ...prev, ...patch };
+      savePrintSettings(next);
+      return next;
+    });
+  };
   const [selectedBarcodeSize, setSelectedBarcodeSize] = useState<string>("default");
   const [newSizeName, setNewSizeName] = useState("");
   const [newSizeW, setNewSizeW] = useState(50);
@@ -1065,7 +1037,7 @@ export function SettingsPage() {
       case "printing":
         const allBarcodeSizes = [
           { name: "افتراضي", width: printSettings.barcodeWidth, height: printSettings.barcodeHeight },
-          ...printSettings.barcodeCustomSizes,
+          ...barcodeCustomSizes,
         ];
         const activeSize = allBarcodeSizes.find((s) => s.name === selectedBarcodeSize) || allBarcodeSizes[0];
         return (
@@ -1076,7 +1048,7 @@ export function SettingsPage() {
               <div className="print-fields">
                 <div className="print-field">
                   <label>{t("receiptPrinterType")}</label>
-                  <select value={printSettings.receiptPrinter || "A4"} onChange={(e) => setPrintSettings({ ...printSettings, receiptPrinter: e.target.value })}>
+                  <select value={printSettings.receiptPrinter || "A4"} onChange={(e) => updatePrintSettings({ receiptPrinter: e.target.value })}>
                     <option value="A4">A4 — {t("standardA4")}</option>
                     <option value="A5">A5 — {t("standardA5")}</option>
                     <option value="80mm">80mm — {t("thermal80")}</option>
@@ -1085,7 +1057,7 @@ export function SettingsPage() {
                 </div>
                 <div className="print-field">
                   <label>{t("invoiceDefaultPrinter")}</label>
-                  <select value={printSettings.invoicePrinter || ""} onChange={(e) => setPrintSettings({ ...printSettings, invoicePrinter: e.target.value })}>
+                  <select value={printSettings.invoicePrinter || ""} onChange={(e) => updatePrintSettings({ invoicePrinter: e.target.value })}>
                     <option value="">{t("systemDefaultPrinter")}</option>
                     {availablePrinters.map((p) => (
                       <option key={p} value={p}>{p}</option>
@@ -1094,7 +1066,7 @@ export function SettingsPage() {
                 </div>
                 <div className="print-field">
                   <label>{t("paperSize")}</label>
-                  <select value={printSettings.invoicePaper} onChange={(e) => setPrintSettings({ ...printSettings, invoicePaper: e.target.value })}>
+                  <select value={printSettings.invoicePaper} onChange={(e) => updatePrintSettings({ invoicePaper: e.target.value })}>
                     <option value="A4">A4</option>
                     <option value="A5">A5</option>
                     <option value="80mm">80mm (termal)</option>
@@ -1103,23 +1075,23 @@ export function SettingsPage() {
                 </div>
                 <div className="print-field">
                   <label>{t("orientationLabel")}</label>
-                  <select value={printSettings.invoiceLandscape ? "landscape" : "portrait"} onChange={(e) => setPrintSettings({ ...printSettings, invoiceLandscape: e.target.value === "landscape" })}>
+                  <select value={printSettings.invoiceLandscape ? "landscape" : "portrait"} onChange={(e) => updatePrintSettings({ invoiceLandscape: e.target.value === "landscape" })}>
                     <option value="portrait">{t("portrait")}</option>
                     <option value="landscape">{t("landscape")}</option>
                   </select>
                 </div>
                 <div className="print-field">
                   <label>{t("margins")}</label>
-                  <input type="number" min={0} max={30} value={printSettings.invoiceMargins} onChange={(e) => setPrintSettings({ ...printSettings, invoiceMargins: Number(e.target.value) })} />
+                  <input type="number" min={0} max={30} value={printSettings.invoiceMargins} onChange={(e) => updatePrintSettings({ invoiceMargins: Number(e.target.value) })} />
                 </div>
               </div>
               <div className="print-toggles">
                 <label className="checkbox-label">
-                  <input type="checkbox" checked={printSettings.invoiceHeader} onChange={(e) => setPrintSettings({ ...printSettings, invoiceHeader: e.target.checked })} />
+                  <input type="checkbox" checked={printSettings.invoiceHeader} onChange={(e) => updatePrintSettings({ invoiceHeader: e.target.checked })} />
                   {t("showHeader")}
                 </label>
                 <label className="checkbox-label">
-                  <input type="checkbox" checked={printSettings.invoiceFooter} onChange={(e) => setPrintSettings({ ...printSettings, invoiceFooter: e.target.checked })} />
+                  <input type="checkbox" checked={printSettings.invoiceFooter} onChange={(e) => updatePrintSettings({ invoiceFooter: e.target.checked })} />
                   {t("showFooter")}
                 </label>
               </div>
@@ -1139,7 +1111,7 @@ export function SettingsPage() {
                         if (!file) return;
                         if (file.size > 500 * 1024) { notify(t("logoTooLarge"), "error"); return; }
                         const reader = new FileReader();
-                        reader.onload = () => setPrintSettings({ ...printSettings, invoiceLogo: reader.result as string });
+                        reader.onload = () => updatePrintSettings({ invoiceLogo: reader.result as string });
                         reader.readAsDataURL(file);
                       }}
                     />
@@ -1150,7 +1122,7 @@ export function SettingsPage() {
                   {printSettings.invoiceLogo && (
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <img src={printSettings.invoiceLogo} alt="logo" style={{ maxWidth: 120, maxHeight: 60, border: "1px solid #e5e7eb", borderRadius: 8, padding: 4, background: "#fff" }} />
-                      <button className="btn danger sm" onClick={() => setPrintSettings({ ...printSettings, invoiceLogo: "" })}>{t("removeLogo")}</button>
+                      <button className="btn danger sm" onClick={() => updatePrintSettings({ invoiceLogo: "" })}>{t("removeLogo")}</button>
                     </div>
                   )}
                 </div>
@@ -1161,7 +1133,7 @@ export function SettingsPage() {
                 <h3>{t("warrantyTitle")}</h3>
                 <textarea
                   value={printSettings.warrantyText}
-                  onChange={(e) => setPrintSettings({ ...printSettings, warrantyText: e.target.value })}
+                  onChange={(e) => updatePrintSettings({ warrantyText: e.target.value })}
                   placeholder={t("warrantyPlaceholder")}
                   rows={4}
                   style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 13, resize: "vertical", fontFamily: "inherit", direction: "rtl" }}
@@ -1175,7 +1147,7 @@ export function SettingsPage() {
               <div className="print-fields">
                 <div className="print-field" style={{ minWidth: 200 }}>
                   <label>{t("defaultPrinter")}</label>
-                  <select value={printSettings.barcodePrinter} onChange={(e) => setPrintSettings({ ...printSettings, barcodePrinter: e.target.value })}>
+                  <select value={printSettings.barcodePrinter} onChange={(e) => updatePrintSettings({ barcodePrinter: e.target.value })}>
                     <option value="">{t("choosePrinter")}</option>
                     {availablePrinters.map((p) => (
                       <option key={p} value={p}>{p}</option>
@@ -1188,38 +1160,38 @@ export function SettingsPage() {
                   <label>{t("widthLabel")}</label>
                   <input type="number" min={20} max={150} value={activeSize.width} onChange={(e) => {
                     const v = Number(e.target.value);
-                    if (selectedBarcodeSize === "افتراضي") setPrintSettings({ ...printSettings, barcodeWidth: v });
-                    else setPrintSettings({ ...printSettings, barcodeCustomSizes: printSettings.barcodeCustomSizes.map((sz) => sz.name === selectedBarcodeSize ? { ...sz, width: v } : sz) });
+                    if (selectedBarcodeSize === "افتراضي") updatePrintSettings({ barcodeWidth: v });
+                    else setBarcodeCustomSizes(barcodeCustomSizes.map((sz) => sz.name === selectedBarcodeSize ? { ...sz, width: v } : sz));
                   }} />
                 </div>
                 <div className="print-field">
                   <label>{t("heightLabel")}</label>
                   <input type="number" min={10} max={100} value={activeSize.height} onChange={(e) => {
                     const v = Number(e.target.value);
-                    if (selectedBarcodeSize === "افتراضي") setPrintSettings({ ...printSettings, barcodeHeight: v });
-                    else setPrintSettings({ ...printSettings, barcodeCustomSizes: printSettings.barcodeCustomSizes.map((sz) => sz.name === selectedBarcodeSize ? { ...sz, height: v } : sz) });
+                    if (selectedBarcodeSize === "افتراضي") updatePrintSettings({ barcodeHeight: v });
+                    else setBarcodeCustomSizes(barcodeCustomSizes.map((sz) => sz.name === selectedBarcodeSize ? { ...sz, height: v } : sz));
                   }} />
                 </div>
                 <div className="print-field">
                   <label>{t("fontSize")}</label>
-                  <input type="number" min={6} max={18} value={printSettings.barcodeFontSize} onChange={(e) => setPrintSettings({ ...printSettings, barcodeFontSize: Number(e.target.value) })} />
+                  <input type="number" min={6} max={18} value={printSettings.barcodeFontSize} onChange={(e) => updatePrintSettings({ barcodeFontSize: Number(e.target.value) })} />
                 </div>
               </div>
               <div className="print-toggles">
                 <label className="checkbox-label">
-                  <input type="checkbox" checked={printSettings.barcodeShowName} onChange={(e) => setPrintSettings({ ...printSettings, barcodeShowName: e.target.checked })} />
+                  <input type="checkbox" checked={printSettings.barcodeShowName} onChange={(e) => updatePrintSettings({ barcodeShowName: e.target.checked })} />
                   {t("showItemName")}
                 </label>
                 <label className="checkbox-label">
-                  <input type="checkbox" checked={printSettings.barcodeShowPrice} onChange={(e) => setPrintSettings({ ...printSettings, barcodeShowPrice: e.target.checked })} />
+                  <input type="checkbox" checked={printSettings.barcodeShowPrice} onChange={(e) => updatePrintSettings({ barcodeShowPrice: e.target.checked })} />
                   {t("showPriceLabel")}
                 </label>
                 <label className="checkbox-label">
-                  <input type="checkbox" checked={printSettings.barcodeShowBarcode} onChange={(e) => setPrintSettings({ ...printSettings, barcodeShowBarcode: e.target.checked })} />
+                  <input type="checkbox" checked={printSettings.barcodeShowBarcode} onChange={(e) => updatePrintSettings({ barcodeShowBarcode: e.target.checked })} />
                   {t("showBarcodeLabel")}
                 </label>
                 <label className="checkbox-label">
-                  <input type="checkbox" checked={printSettings.barcodeShowStoreName ?? true} onChange={(e) => setPrintSettings({ ...printSettings, barcodeShowStoreName: e.target.checked })} />
+                  <input type="checkbox" checked={printSettings.barcodeShowStoreName ?? true} onChange={(e) => updatePrintSettings({ barcodeShowStoreName: e.target.checked })} />
                   {t("showStoreNameLabel")}
                 </label>
               </div>
@@ -1244,17 +1216,15 @@ export function SettingsPage() {
                 <input type="number" min={10} max={100} value={newSizeH} onChange={(e) => setNewSizeH(Number(e.target.value))} style={{ width: 70 }} placeholder={t("heightLabel")} />
                 <button type="button" className="btn primary sm" onClick={() => {
                   if (!newSizeName.trim()) { notify(t("enterSizeName"), "error"); return; }
-                  if (printSettings.barcodeCustomSizes.some((sz) => sz.name === newSizeName.trim())) { notify(t("sizeExists"), "error"); return; }
-                  const updated = { ...printSettings, barcodeCustomSizes: [...printSettings.barcodeCustomSizes, { name: newSizeName.trim(), width: newSizeW, height: newSizeH }] };
-                  setPrintSettings(updated);
+                  if (barcodeCustomSizes.some((sz) => sz.name === newSizeName.trim())) { notify(t("sizeExists"), "error"); return; }
+                  setBarcodeCustomSizes([...barcodeCustomSizes, { name: newSizeName.trim(), width: newSizeW, height: newSizeH }]);
                   setSelectedBarcodeSize(newSizeName.trim());
                   setNewSizeName("");
                   notify(t("sizeAdded"));
                 }}>{t("addSizeBtn")}</button>
                 {selectedBarcodeSize !== "افتراضي" && (
                   <button type="button" className="btn danger sm" onClick={() => {
-                    const updated = { ...printSettings, barcodeCustomSizes: printSettings.barcodeCustomSizes.filter((sz) => sz.name !== selectedBarcodeSize) };
-                    setPrintSettings(updated);
+                    setBarcodeCustomSizes(barcodeCustomSizes.filter((sz) => sz.name !== selectedBarcodeSize));
                     setSelectedBarcodeSize("افتراضي");
                     notify(t("sizeDeleted"));
                   }}>{t("deleteSizeBtn")}</button>
@@ -1288,7 +1258,8 @@ export function SettingsPage() {
 
             <div className="form-actions" style={{ marginTop: 8 }}>
               <button type="button" className="btn primary" onClick={() => {
-                localStorage.setItem("tabarak_print_settings", JSON.stringify(printSettings));
+                savePrintSettings(printSettings);
+                localStorage.setItem("tabarak_barcode_custom_sizes", JSON.stringify(barcodeCustomSizes));
                 notify(t("syncSettingsSaved"));
               }}>{t("savePrintSettings")}</button>
             </div>

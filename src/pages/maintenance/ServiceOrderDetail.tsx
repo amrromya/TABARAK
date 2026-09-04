@@ -337,80 +337,61 @@ export function ServiceOrderDetail({
   };
 
   // ---- Print Delivery Receipt ----
+  const printHtml = (html: string, width: string = "210mm", height: string = "297mm") => {
+    const frame = document.createElement("iframe");
+    frame.style.cssText = "position:fixed;left:-9999px;width:1px;height:1px;border:none";
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument;
+    if (!doc) { document.body.removeChild(frame); return; }
+    doc.open();
+    doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>@page{size:${width} ${height};margin:10mm} *{margin:0;padding:0;box-sizing:border-box} body{font-family:Arial,sans-serif;font-size:12px;color:#000}</style></head><body>${html}</body></html>`);
+    doc.close();
+    setTimeout(() => {
+      frame.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(frame), 1000);
+    }, 300);
+  };
+
   const handlePrintReceipt = () => {
     if (!order) return;
-    const frame = document.createElement("iframe");
-    frame.style.position = "fixed";
-    frame.style.right = "0";
-    frame.style.bottom = "0";
-    frame.style.width = "0";
-    frame.style.height = "0";
-    frame.style.border = "none";
-    document.body.appendChild(frame);
-    const doc = frame.contentDocument || frame.contentWindow?.document;
-    if (!doc) { document.body.removeChild(frame); return; }
     const partsHtml = order.parts.map((p, i) => `<tr><td>${i + 1}</td><td>${p.part_name}</td><td>${p.quantity}</td><td>${money(p.sell_price)}</td><td>${money(p.sell_price * p.quantity)}</td></tr>`).join("");
     const paymentsHtml = order.payments.map((p, i) => `<tr><td>${i + 1}</td><td>${money(p.amount)}</td><td>${p.payment_method === "cash" ? "نقدي" : p.payment_method === "card" ? "بطاقة" : p.payment_method === "transfer" ? "تحويل" : p.payment_method}</td><td>${p.date ?? ""}</td></tr>`).join("");
     const taxAmt = (order.parts_cost + order.labor_cost + order.service_cost) * (order.tax_rate / 100);
     const finalTotal = order.parts_cost + order.labor_cost + order.service_cost - order.discount + taxAmt;
-    doc.open();
-    doc.write(`
-      <!DOCTYPE html>
-      <html dir="rtl" lang="ar">
-      <head><meta charset="utf-8"><title>إيصال تسليم - ${order.order_no}</title>
-      <style>
-        body{font-family:system-ui,sans-serif;padding:15px;margin:0;color:#1f2937;font-size:12px}
-        h2{text-align:center;color:#0f8a5f;border-bottom:2px solid #0f8a5f;padding-bottom:6px;font-size:16px}
-        .info-row{display:flex;justify-content:space-between;margin:3px 0}
-        .info-label{color:#6b7280}
-        table{width:100%;border-collapse:collapse;margin:8px 0}
-        th,td{border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px}
-        th{background:#f3f4f6;font-weight:700}
-        .total-row{font-weight:700;border-top:2px solid #333}
-        .footer{margin-top:16px;border-top:1px dashed #ccc;padding-top:8px;color:#6b7280;font-size:10px;text-align:center}
-        .signature{margin-top:30px;display:flex;justify-content:space-between}
-        .sig-line{border-top:1px solid #333;width:200px;text-align:center;padding-top:4px;font-size:11px}
-        @media print{body{padding:10px}}
-      </style></head>
-      <body>
-        <h2>إيصال استلام جهاز</h2>
+    printHtml(`<div dir="rtl" lang="ar" style="font-family:system-ui,sans-serif;padding:15px;color:#1f2937;font-size:12px">
+        <h2 style="text-align:center;color:#0f8a5f;border-bottom:2px solid #0f8a5f;padding-bottom:6px;font-size:16px">إيصال استلام جهاز</h2>
         <div style="text-align:center;color:#6b7280;margin-bottom:10px">رقم أمر الصيانة: <strong style="color:#0f8a5f">${order.order_no}</strong></div>
         <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:10px">
-          <div class="info-row"><span class="info-label">العميل:</span><strong>${order.customer_name ?? "—"}</strong></div>
-          <div class="info-row"><span class="info-label">الهاتف:</span><strong>${order.customer_phone ?? "—"}</strong></div>
-          <div class="info-row"><span class="info-label">الجهاز:</span><strong>${order.device_type} ${order.device_brand ?? ""} ${order.device_model ?? ""}</strong></div>
-          <div class="info-row"><span class="info-label">الحالة:</span><strong>${STATUS_LABELS[order.status]}</strong></div>
-          ${order.delivered_to ? `<div class="info-row"><span class="info-label">المستلم:</span><strong>${order.delivered_to}</strong></div>` : ""}
-          ${order.delivered_date ? `<div class="info-row"><span class="info-label">تاريخ التسليم:</span><strong>${fmtDate(order.delivered_date)}</strong></div>` : ""}
+          <div style="display:flex;justify-content:space-between;margin:3px 0"><span style="color:#6b7280">العميل:</span><strong>${order.customer_name ?? "—"}</strong></div>
+          <div style="display:flex;justify-content:space-between;margin:3px 0"><span style="color:#6b7280">الهاتف:</span><strong>${order.customer_phone ?? "—"}</strong></div>
+          <div style="display:flex;justify-content:space-between;margin:3px 0"><span style="color:#6b7280">الجهاز:</span><strong>${order.device_type} ${order.device_brand ?? ""} ${order.device_model ?? ""}</strong></div>
+          <div style="display:flex;justify-content:space-between;margin:3px 0"><span style="color:#6b7280">الحالة:</span><strong>${STATUS_LABELS[order.status]}</strong></div>
+          ${order.delivered_to ? `<div style="display:flex;justify-content:space-between;margin:3px 0"><span style="color:#6b7280">المستلم:</span><strong>${order.delivered_to}</strong></div>` : ""}
+          ${order.delivered_date ? `<div style="display:flex;justify-content:space-between;margin:3px 0"><span style="color:#6b7280">تاريخ التسليم:</span><strong>${fmtDate(order.delivered_date)}</strong></div>` : ""}
         </div>
         ${order.parts.length > 0 ? `
         <h3 style="font-size:13px;margin:8px 0 4px">قطع الغيار</h3>
-        <table><thead><tr><th>#</th><th>القطعة</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+        <table style="width:100%;border-collapse:collapse;margin:8px 0"><thead><tr><th style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">#</th><th style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">القطعة</th><th style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">الكمية</th><th style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">السعر</th><th style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">الإجمالي</th></tr></thead>
         <tbody>${partsHtml}</tbody></table>` : ""}
         <h3 style="font-size:13px;margin:8px 0 4px">التكاليف</h3>
-        <table>
-          <tr><td>قطع الغيار</td><td style="text-align:left">${money(order.parts_cost)}</td></tr>
-          <tr><td>أجرة العمل</td><td style="text-align:left">${money(order.labor_cost)}</td></tr>
-          <tr><td>رسوم الخدمة</td><td style="text-align:left">${money(order.service_cost)}</td></tr>
-          ${order.discount > 0 ? `<tr><td>الخصم</td><td style="text-align:left;color:#dc2626">-${money(order.discount)}</td></tr>` : ""}
-          ${order.tax_rate > 0 ? `<tr><td>الضريبة (${order.tax_rate}%)</td><td style="text-align:left">${money(taxAmt)}</td></tr>` : ""}
-          <tr class="total-row"><td>الإجمالي</td><td style="text-align:left">${money(finalTotal)}</td></tr>
-          <tr><td>المدفوع</td><td style="text-align:left;color:#10b981">${money(order.amount_paid)}</td></tr>
-          <tr class="total-row"><td>المتبقي</td><td style="text-align:left;color:${(finalTotal - order.amount_paid) > 0 ? "#dc2626" : "#10b981"}">${money(finalTotal - order.amount_paid)}</td></tr>
+        <table style="width:100%;border-collapse:collapse;margin:8px 0">
+          <tr><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px">قطع الغيار</td><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:left;font-size:11px">${money(order.parts_cost)}</td></tr>
+          <tr><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px">أجرة العمل</td><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:left;font-size:11px">${money(order.labor_cost)}</td></tr>
+          <tr><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px">رسوم الخدمة</td><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:left;font-size:11px">${money(order.service_cost)}</td></tr>
+          ${order.discount > 0 ? `<tr><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px">الخصم</td><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:left;font-size:11px;color:#dc2626">-${money(order.discount)}</td></tr>` : ""}
+          ${order.tax_rate > 0 ? `<tr><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px">الضريبة (${order.tax_rate}%)</td><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:left;font-size:11px">${money(taxAmt)}</td></tr>` : ""}
+          <tr style="font-weight:700;border-top:2px solid #333"><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px">الإجمالي</td><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:left;font-size:11px">${money(finalTotal)}</td></tr>
+          <tr><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px">المدفوع</td><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:left;font-size:11px;color:#10b981">${money(order.amount_paid)}</td></tr>
+          <tr style="font-weight:700;border-top:2px solid #333"><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px">المتبقي</td><td style="border:1px solid #d1d5db;padding:4px 8px;text-align:left;font-size:11px;color:${(finalTotal - order.amount_paid) > 0 ? "#dc2626" : "#10b981"}">${money(finalTotal - order.amount_paid)}</td></tr>
         </table>
         ${order.warranty_end ? `<div style="margin-top:8px;color:#6b7280"><strong>الضمان:</strong> حتى ${fmtDate(order.warranty_end)}</div>` : ""}
-        ${paymentsHtml ? `<h3 style="font-size:13px;margin:8px 0 4px">الدفعات</h3><table><thead><tr><th>#</th><th>المبلغ</th><th>الطريقة</th><th>التاريخ</th></tr></thead><tbody>${paymentsHtml}</tbody></table>` : ""}
-        <div class="signature">
-          <div class="sig-line">توقيع المستلم</div>
-          <div class="sig-line">توقيع الموظف</div>
+        ${paymentsHtml ? `<h3 style="font-size:13px;margin:8px 0 4px">الدفعات</h3><table style="width:100%;border-collapse:collapse;margin:8px 0"><thead><tr><th style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">#</th><th style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">المبلغ</th><th style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">الطريقة</th><th style="border:1px solid #d1d5db;padding:4px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">التاريخ</th></tr></thead><tbody>${paymentsHtml}</tbody></table>` : ""}
+        <div style="margin-top:30px;display:flex;justify-content:space-between">
+          <div style="border-top:1px solid #333;width:200px;text-align:center;padding-top:4px;font-size:11px">توقيع المستلم</div>
+          <div style="border-top:1px solid #333;width:200px;text-align:center;padding-top:4px;font-size:11px">توقيع الموظف</div>
         </div>
-        <div class="footer">شكراً لثقتكم بنا — صيانة تبارك</div>
-      </body></html>
-    `);
-    doc.close();
-    frame.contentWindow?.focus();
-    frame.contentWindow?.print();
-    setTimeout(() => document.body.removeChild(frame), 1000);
+        <div style="margin-top:16px;border-top:1px dashed #ccc;padding-top:8px;color:#6b7280;font-size:10px;text-align:center">شكراً لثقتكم بنا — صيانة تبارك</div>
+      </div>`);
   };
 
   // ---- Calculations ----

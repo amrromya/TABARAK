@@ -16,6 +16,21 @@ import type { SyncConfig } from "../types";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+const printHtml = (html: string, width: string = "210mm", height: string = "297mm") => {
+  const frame = document.createElement("iframe");
+  frame.style.cssText = "position:fixed;left:-9999px;width:1px;height:1px;border:none";
+  document.body.appendChild(frame);
+  const doc = frame.contentDocument;
+  if (!doc) { document.body.removeChild(frame); return; }
+  doc.open();
+  doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>@page{size:${width} ${height};margin:10mm} *{margin:0;padding:0;box-sizing:border-box} body{font-family:Arial,sans-serif;font-size:12px;color:#000}</style></head><body>${html}</body></html>`);
+  doc.close();
+  setTimeout(() => {
+    frame.contentWindow?.print();
+    setTimeout(() => document.body.removeChild(frame), 1000);
+  }, 300);
+};
+
 interface AttRecord {
   id: number;
   employee_id: number;
@@ -267,18 +282,7 @@ export function Attendance() {
   const handlePrintReport = () => {
     const content = reportPrintRef.current;
     if (!content) return;
-    const printFrame = document.createElement("iframe");
-    printFrame.style.position = "fixed";
-    printFrame.style.right = "0";
-    printFrame.style.bottom = "0";
-    printFrame.style.width = "0";
-    printFrame.style.height = "0";
-    printFrame.style.border = "none";
-    document.body.appendChild(printFrame);
-    const doc = printFrame.contentDocument || printFrame.contentWindow?.document;
-    if (!doc) { document.body.removeChild(printFrame); return; }
-    doc.open();
-    doc.write(`
+    const html = `
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
       <head>
@@ -334,10 +338,8 @@ export function Attendance() {
           </tbody>
         </table>
       </body></html>
-    `);
-    doc.close();
-    printFrame.contentWindow?.focus();
-    setTimeout(() => { printFrame.contentWindow?.print(); }, 300);
+    `;
+    printHtml(html);
   };
 
   const handleExportShiftPDF = async () => {

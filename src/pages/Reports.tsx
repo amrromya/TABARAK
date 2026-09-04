@@ -6,6 +6,21 @@ import type { BestSeller, DailySalesRow, ProfitLoss, StockValue } from "../types
 import { SalesReportPopup } from "../components/SalesReportPopup";
 import { PurchaseReportPopup } from "../components/PurchaseReportPopup";
 
+const printHtml = (html: string, width: string = "210mm", height: string = "297mm") => {
+  const frame = document.createElement("iframe");
+  frame.style.cssText = "position:fixed;left:-9999px;width:1px;height:1px;border:none";
+  document.body.appendChild(frame);
+  const doc = frame.contentDocument;
+  if (!doc) { document.body.removeChild(frame); return; }
+  doc.open();
+  doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>@page{size:${width} ${height};margin:10mm} *{margin:0;padding:0;box-sizing:border-box} body{font-family:Arial,sans-serif;font-size:12px;color:#000}</style></head><body>${html}</body></html>`);
+  doc.close();
+  setTimeout(() => {
+    frame.contentWindow?.print();
+    setTimeout(() => document.body.removeChild(frame), 1000);
+  }, 300);
+};
+
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const monthStart = () => {
   const d = new Date();
@@ -52,13 +67,7 @@ export function Reports() {
   const handlePrint = () => {
     const content = printRef.current;
     if (!content) return;
-    const frame = document.createElement("iframe");
-    frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:none";
-    document.body.appendChild(frame);
-    const doc = frame.contentDocument || frame.contentWindow?.document;
-    if (!doc) { document.body.removeChild(frame); return; }
-    doc.open();
-    doc.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>تقرير تبارك</title>
+    const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>تقرير تبارك</title>
       <style>body{font-family:system-ui,sans-serif;padding:20px;margin:0;color:#1f2937;font-size:12px}
       h2{text-align:center;color:#0f8a5f;border-bottom:2px solid #0f8a5f;padding-bottom:6px;font-size:18px}
       h3{color:#374151;margin:20px 0 8px;font-size:14px;border-right:3px solid #0f8a5f;padding-right:8px}
@@ -105,10 +114,8 @@ export function Reports() {
       ${bestsellers.length > 0 ? `<h3>الأكثر مبيعاً</h3>
       <table><thead><tr><th>#</th><th>المنتج</th><th>الكمية</th><th>الإيراد</th></tr></thead>
       <tbody>${bestsellers.map((b,i) => `<tr><td>${i+1}</td><td style="font-weight:700">${b.product_name}</td><td>${qty(b.quantity)}</td><td>${money(b.revenue)}</td></tr>`).join("")}</tbody></table>` : ""}
-      <div class="footer">تقرير نظام تبارك — ${new Date().toLocaleDateString("ar-EG")}</div></body></html>`);
-    doc.close();
-    frame.contentWindow?.focus();
-    setTimeout(() => { frame.contentWindow?.print(); setTimeout(() => document.body.removeChild(frame), 1000); }, 500);
+      <div class="footer">تقرير نظام تبارك — ${new Date().toLocaleDateString("ar-EG")}</div></body></html>`;
+    printHtml(html);
   };
 
   const handleExportPDF = async () => {

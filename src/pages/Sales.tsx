@@ -999,14 +999,10 @@ export function Sales({
       )}
 
       {printSale && settings && (() => {
-        let logo = ""; let warranty = "";
-        try { const raw = localStorage.getItem("tabarak_print_settings"); if (raw) { const ps = JSON.parse(raw); if (ps.invoiceLogo) logo = ps.invoiceLogo; if (ps.warrantyText) warranty = ps.warrantyText; } } catch {}
         return (
           <PrintInvoice
             sale={printSale}
             settings={settings}
-            invoiceLogo={logo}
-            warrantyText={warranty}
             onClose={() => setPrintSale(null)}
           />
         );

@@ -240,66 +240,55 @@ export function NewServiceOrder({ onDone }: { onDone: (orderId: number) => void 
   };
 
   // ---- Print Order ----
+  const printHtml = (html: string, width: string = "210mm", height: string = "297mm") => {
+    const frame = document.createElement("iframe");
+    frame.style.cssText = "position:fixed;left:-9999px;width:1px;height:1px;border:none";
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument;
+    if (!doc) { document.body.removeChild(frame); return; }
+    doc.open();
+    doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>@page{size:${width} ${height};margin:10mm} *{margin:0;padding:0;box-sizing:border-box} body{font-family:Arial,sans-serif;font-size:12px;color:#000}</style></head><body>${html}</body></html>`);
+    doc.close();
+    setTimeout(() => {
+      frame.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(frame), 1000);
+    }, 300);
+  };
+
   const printOrder = () => {
     if (!created) return;
-    const frame = document.createElement("iframe");
-    frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:none";
-    document.body.appendChild(frame);
-    const doc = frame.contentDocument || frame.contentWindow?.document;
-    if (!doc) { document.body.removeChild(frame); return; }
     const partsHtml = parts.map((p, i) =>
       `<tr><td>${i + 1}</td><td>${p.name}</td><td>${p.qty}</td><td>${money(p.sell_price)}</td><td>${money(p.sell_price * p.qty)}</td></tr>`
     ).join("");
-    doc.open();
-    doc.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
-      <style>
-        body{font-family:'Segoe UI',system-ui,sans-serif;padding:20px;margin:0;color:#1f2937;font-size:13px}
-        h2{text-align:center;color:#0f172a;border-bottom:3px solid #0f172a;padding-bottom:8px;margin-bottom:16px}
-        .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
-        .info-box{border:1px solid #e5e7eb;border-radius:8px;padding:10px}
-        .info-box .lbl{color:#6b7280;font-size:11px;margin-bottom:2px}
-        .info-box .val{font-weight:700;font-size:14px}
-        table{width:100%;border-collapse:collapse;margin:12px 0}
-        th,td{border:1px solid #d1d5db;padding:6px 10px;text-align:right;font-size:12px}
-        th{background:#f1f5f9;font-weight:700}
-        .total-row{background:#f0fdf4;font-weight:700}
-        .summary{margin-top:12px;text-align:left;font-size:14px}
-        .summary .line{display:flex;justify-content:space-between;margin:4px 0}
-        .summary .grand{border-top:2px solid #0f172a;padding-top:6px;font-size:16px;color:#0f8a5f}
-        .footer{margin-top:24px;border-top:1px dashed #d1d5db;padding-top:10px;color:#6b7280;font-size:11px;text-align:center}
-      </style></head><body>
-      <h2> أمر صيانة — ${created.orderNo}</h2>
-      <div class="info-grid">
-        <div class="info-box"><div class="lbl">العميل</div><div class="val">${customerName}</div></div>
-        <div class="info-box"><div class="lbl">الهاتف</div><div class="val">${customerPhone || "—"}</div></div>
-        <div class="info-box"><div class="lbl">الجهاز</div><div class="val">${deviceType} ${deviceModel}</div></div>
-        <div class="info-box"><div class="lbl">اللون</div><div class="val">${deviceColor || "—"}</div></div>
+    printHtml(`<div dir="rtl" lang="ar" style="font-family:'Segoe UI',system-ui,sans-serif;padding:20px;color:#1f2937;font-size:13px">
+      <h2 style="text-align:center;color:#0f172a;border-bottom:3px solid #0f172a;padding-bottom:8px;margin-bottom:16px">أمر صيانة — ${created.orderNo}</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+        <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px"><div style="color:#6b7280;font-size:11px;margin-bottom:2px">العميل</div><div style="font-weight:700;font-size:14px">${customerName}</div></div>
+        <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px"><div style="color:#6b7280;font-size:11px;margin-bottom:2px">الهاتف</div><div style="font-weight:700;font-size:14px">${customerPhone || "—"}</div></div>
+        <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px"><div style="color:#6b7280;font-size:11px;margin-bottom:2px">الجهاز</div><div style="font-weight:700;font-size:14px">${deviceType} ${deviceModel}</div></div>
+        <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px"><div style="color:#6b7280;font-size:11px;margin-bottom:2px">اللون</div><div style="font-weight:700;font-size:14px">${deviceColor || "—"}</div></div>
       </div>
       <div style="margin-bottom:12px"><strong>المتعلقات:</strong> ${accessories || "—"}</div>
       <div style="margin-bottom:12px"><strong>وصف المشكلة:</strong> ${complaint}</div>
       ${parts.length > 0 ? `
         <h3 style="margin:12px 0 6px">قطع الغيار</h3>
-        <table>
-          <thead><tr><th>#</th><th>القطعة</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+        <table style="width:100%;border-collapse:collapse;margin:12px 0">
+          <thead><tr style="background:#f1f5f9"><th style="border:1px solid #d1d5db;padding:6px 10px;text-align:right;font-size:12px;font-weight:700">#</th><th style="border:1px solid #d1d5db;padding:6px 10px;text-align:right;font-size:12px;font-weight:700">القطعة</th><th style="border:1px solid #d1d5db;padding:6px 10px;text-align:right;font-size:12px;font-weight:700">الكمية</th><th style="border:1px solid #d1d5db;padding:6px 10px;text-align:right;font-size:12px;font-weight:700">السعر</th><th style="border:1px solid #d1d5db;padding:6px 10px;text-align:right;font-size:12px;font-weight:700">الإجمالي</th></tr></thead>
           <tbody>${partsHtml}
-            <tr class="total-row"><td colSpan={4}>إجمالي القطع</td><td>${money(totalParts)}</td></tr>
+            <tr style="background:#f0fdf4;font-weight:700"><td style="border:1px solid #d1d5db;padding:6px 10px;text-align:right;font-size:12px" colSpan={4}>إجمالي القطع</td><td style="border:1px solid #d1d5db;padding:6px 10px;text-align:right;font-size:12px">${money(totalParts)}</td></tr>
           </tbody>
         </table>` : ""}
-      <div class="summary">
-        <div class="line"><span>قطع الغيار:</span><span>${money(totalParts)}</span></div>
-        <div class="line"><span>أجرا الصيانة:</span><span>${money(laborCost)}</span></div>
-        ${deposit > 0 ? `<div class="line" style="color:#0f8a5f"><span>عربون:</span><span>-${money(deposit)}</span></div>` : ""}
-        <div class="line grand"><span>المتبقي:</span><span>${money(remaining)}</span></div>
-        ${deposit > 0 ? `<div class="line" style="color:#6b7280;font-size:11px"><span>الإجمالي الكلي:</span><span>${money(grandTotal)}</span></div>` : ""}
+      <div style="margin-top:12px;text-align:left;font-size:14px">
+        <div style="display:flex;justify-content:space-between;margin:4px 0"><span>قطع الغيار:</span><span>${money(totalParts)}</span></div>
+        <div style="display:flex;justify-content:space-between;margin:4px 0"><span>أجرا الصيانة:</span><span>${money(laborCost)}</span></div>
+        ${deposit > 0 ? `<div style="display:flex;justify-content:space-between;margin:4px 0;color:#0f8a5f"><span>عربون:</span><span>-${money(deposit)}</span></div>` : ""}
+        <div style="display:flex;justify-content:space-between;margin:4px 0;border-top:2px solid #0f172a;padding-top:6px;font-size:16px;color:#0f8a5f"><span>المتبقي:</span><span>${money(remaining)}</span></div>
+        ${deposit > 0 ? `<div style="display:flex;justify-content:space-between;margin:4px 0;color:#6b7280;font-size:11px"><span>الإجمالي الكلي:</span><span>${money(grandTotal)}</span></div>` : ""}
       </div>
       ${assignedEmployee > 0 ? `<div style="margin-top:12px"><strong>الموظف:</strong> ${employees.find(e => e.id === assignedEmployee)?.name}</div>` : ""}
       ${warrantyDays > 0 ? `<div style="margin-top:6px"><strong>مدة الضمان:</strong> ${warrantyDays} يوم</div>` : ""}
-      <div class="footer">شكراً لثقتكم بنا — صيانة تبارك</div>
-    </body></html>`);
-    doc.close();
-    frame.contentWindow?.focus();
-    frame.contentWindow?.print();
-    setTimeout(() => document.body.removeChild(frame), 1000);
+      <div style="margin-top:24px;border-top:1px dashed #d1d5db;padding-top:10px;color:#6b7280;font-size:11px;text-align:center">شكراً لثقتكم بنا — صيانة تبارك</div>
+    </div>`);
   };
 
   // ---- Print Barcode ----

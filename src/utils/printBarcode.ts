@@ -84,6 +84,7 @@ export async function printMaintenanceBarcode({
       showPrice: true,
       showBarcode: ps.barcodeShowBarcode,
       showStore: ps.barcodeShowStoreName && !!storeName,
+      printerName: "",
     });
   } catch {
     // fallback: ignore

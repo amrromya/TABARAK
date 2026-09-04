@@ -411,19 +411,21 @@ export const api = {
   // الطابعات
   listPrinters: () =>
     invoke<string[]>("list_printers"),
-  printTurnNumber: (number: number, storeName: string, createdAt: string) =>
-    invoke<void>("print_turn_number", { number, storeName, createdAt }),
+  printTurnNumber: (number: number, storeName: string, createdAt: string, printerName: string) =>
+    invoke<void>("print_turn_number", { number, storeName, createdAt, printerName }),
   printSaleReceipt: (params: {
     storeName: string; phone: string; address: string; invoiceNo: string;
     date: string; customerName: string; paymentMethod: string; employeeName: string;
     itemsJson: string; total: number; discount: number; additional: number;
     netTotal: number; currency: string; footer: string; printerWidth: string;
+    printerName: string;
   }) => invoke<void>("print_sale_receipt", params),
   printBarcodeLabel: (params: {
     barcodeImageBase64: string; productName: string; barcodeValue: string;
     price: number; storeName: string; quantity: number;
     widthMm: number; heightMm: number;
     showName: boolean; showPrice: boolean; showBarcode: boolean; showStore: boolean;
+    printerName: string;
   }) => invoke<void>("print_barcode_label", params),
 
   // البحث في الصيانة

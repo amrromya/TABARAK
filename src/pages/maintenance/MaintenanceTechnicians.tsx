@@ -78,13 +78,23 @@ export function MaintenanceTechnicians() {
     });
   }, [reportEmp, reportSearch, reportFromDate, reportToDate]);
 
+  const printHtml = (html: string, width: string = "210mm", height: string = "297mm") => {
+    const frame = document.createElement("iframe");
+    frame.style.cssText = "position:fixed;left:-9999px;width:1px;height:1px;border:none";
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument;
+    if (!doc) { document.body.removeChild(frame); return; }
+    doc.open();
+    doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>@page{size:${width} ${height};margin:10mm} *{margin:0;padding:0;box-sizing:border-box} body{font-family:Arial,sans-serif;font-size:12px;color:#000}</style></head><body>${html}</body></html>`);
+    doc.close();
+    setTimeout(() => {
+      frame.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(frame), 1000);
+    }, 300);
+  };
+
   const printEmployeeReport = () => {
     if (!reportEmp) return;
-    const frame = document.createElement("iframe");
-    frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:none";
-    document.body.appendChild(frame);
-    const doc = frame.contentDocument || frame.contentWindow?.document;
-    if (!doc) { document.body.removeChild(frame); return; }
     const rowsHtml = reportOrders.map((o, i) =>
       `<tr>
         <td>${i + 1}</td>
@@ -99,30 +109,16 @@ export function MaintenanceTechnicians() {
     ).join("");
     const totalCost = reportOrders.reduce((s, o) => s + (o.total_cost || 0), 0);
     const totalLabor = reportOrders.reduce((s, o) => s + (o.labor_cost || 0), 0);
-    doc.open();
-    doc.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
-      <style>body{font-family:system-ui,sans-serif;padding:15px;margin:0;font-size:12px;color:#1f2937}
-      h2{text-align:center;color:#0f8a5f;border-bottom:2px solid #0f8a5f;padding-bottom:6px}
-      .info{text-align:center;color:#6b7280;margin-bottom:10px}
-      table{width:100%;border-collapse:collapse;margin:8px 0}
-      th,td{border:1px solid #d1d5db;padding:5px 8px;text-align:right;font-size:11px}
-      th{background:#f3f4f6;font-weight:700}
-      .total{font-weight:700;background:#f0fdf4;border-top:2px solid #0f8a5f}
-      .footer{margin-top:16px;border-top:1px dashed #ccc;padding-top:8px;color:#6b7280;font-size:10px;text-align:center}
-      @media print{body{padding:10px}}</style></head><body>
-      <h2>تقرير أعمال الصيانة — ${reportEmp.employee_name}</h2>
-      <div class="info">من: ${reportFromDate || fromDate} إلى: ${reportToDate || toDate} | العدد: ${reportOrders.length} أمر</div>
-      <table>
-        <thead><tr><th>#</th><th>رقم الأمر</th><th>العميل</th><th>الجهاز</th><th>الحالة</th><th>التكلفة</th><th>أجرة العمل</th><th>التاريخ</th></tr></thead>
+    printHtml(`<div dir="rtl" lang="ar" style="font-family:system-ui,sans-serif;padding:15px;font-size:12px;color:#1f2937">
+      <h2 style="text-align:center;color:#0f8a5f;border-bottom:2px solid #0f8a5f;padding-bottom:6px">تقرير أعمال الصيانة — ${reportEmp.employee_name}</h2>
+      <div style="text-align:center;color:#6b7280;margin-bottom:10px">من: ${reportFromDate || fromDate} إلى: ${reportToDate || toDate} | العدد: ${reportOrders.length} أمر</div>
+      <table style="width:100%;border-collapse:collapse;margin:8px 0">
+        <thead><tr><th style="border:1px solid #d1d5db;padding:5px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">#</th><th style="border:1px solid #d1d5db;padding:5px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">رقم الأمر</th><th style="border:1px solid #d1d5db;padding:5px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">العميل</th><th style="border:1px solid #d1d5db;padding:5px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">الجهاز</th><th style="border:1px solid #d1d5db;padding:5px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">الحالة</th><th style="border:1px solid #d1d5db;padding:5px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">التكلفة</th><th style="border:1px solid #d1d5db;padding:5px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">أجرة العمل</th><th style="border:1px solid #d1d5db;padding:5px 8px;text-align:right;font-size:11px;background:#f3f4f6;font-weight:700">التاريخ</th></tr></thead>
         <tbody>${rowsHtml}
-        <tr class="total"><td colspan="5">الإجمالي</td><td>${money(totalCost)}</td><td>${money(totalLabor)}</td><td></td></tr>
+        <tr style="font-weight:700;background:#f0fdf4;border-top:2px solid #0f8a5f"><td style="border:1px solid #d1d5db;padding:5px 8px;text-align:right;font-size:11px" colspan="5">الإجمالي</td><td style="border:1px solid #d1d5db;padding:5px 8px;text-align:right;font-size:11px">${money(totalCost)}</td><td style="border:1px solid #d1d5db;padding:5px 8px;text-align:right;font-size:11px">${money(totalLabor)}</td><td style="border:1px solid #d1d5db;padding:5px 8px;text-align:right;font-size:11px"></td></tr>
         </tbody>
       </table>
-      <div class="footer">تقرير موظفي الصيانة — تبارك — ${new Date().toLocaleDateString("ar-EG")}</div></body></html>`);
-    doc.close();
-    frame.contentWindow?.focus();
-    frame.contentWindow?.print();
-    setTimeout(() => document.body.removeChild(frame), 1000);
+      <div style="margin-top:16px;border-top:1px dashed #ccc;padding-top:8px;color:#6b7280;font-size:10px;text-align:center">تقرير موظفي الصيانة — تبارك — ${new Date().toLocaleDateString("ar-EG")}</div></div>`);
   };
 
   return (

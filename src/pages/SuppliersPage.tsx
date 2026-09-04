@@ -4,6 +4,21 @@ import { Field, Modal, confirmDialog, fmtDate, money, useToast } from "../compon
 import { t } from "../i18n";
 import type { NewSupplier, Settings, Supplier } from "../types";
 
+const printHtml = (html: string, width: string = "210mm", height: string = "297mm") => {
+  const frame = document.createElement("iframe");
+  frame.style.cssText = "position:fixed;left:-9999px;width:1px;height:1px;border:none";
+  document.body.appendChild(frame);
+  const doc = frame.contentDocument;
+  if (!doc) { document.body.removeChild(frame); return; }
+  doc.open();
+  doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>@page{size:${width} ${height};margin:10mm} *{margin:0;padding:0;box-sizing:border-box} body{font-family:Arial,sans-serif;font-size:12px;color:#000}</style></head><body>${html}</body></html>`);
+  doc.close();
+  setTimeout(() => {
+    frame.contentWindow?.print();
+    setTimeout(() => document.body.removeChild(frame), 1000);
+  }, 300);
+};
+
 export function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [search, setSearch] = useState("");
@@ -146,11 +161,8 @@ export function SuppliersPage() {
   const printAccount = () => {
     const content = printRef.current;
     if (!content) return;
-    const w = window.open("", "_blank", "width=800,height=600");
-    if (!w) return;
     const supplierName = selected?.name || "";
-    w.document.write(
-      '<html dir="rtl"><head><title>كشف حساب ' + supplierName + '</title><style>' +
+    const html = '<html dir="rtl"><head><title>كشف حساب ' + supplierName + '</title><style>' +
       'body{font-family:Cairo,sans-serif;padding:20px;font-size:13px}' +
       'table{width:100%;border-collapse:collapse;margin:12px 0}' +
       'th,td{border:1px solid #ddd;padding:8px;text-align:right}' +
@@ -158,10 +170,8 @@ export function SuppliersPage() {
       '.total{font-weight:700;font-size:15px;margin-top:12px}' +
       'h2{text-align:center;margin-bottom:4px}' +
       '.meta{text-align:center;color:#666;margin-bottom:16px;font-size:12px}' +
-      '</style></head><body>' + content.innerHTML + '</body></html>'
-    );
-    w.document.close();
-    w.print();
+      '</style></head><body>' + content.innerHTML + '</body></html>';
+    printHtml(html);
   };
 
   const titleAccount = t("supplierStatement") + " - " + (selected?.name || "");

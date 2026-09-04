@@ -1190,13 +1190,13 @@ export function Pos({ onBack }: { onBack: () => void }) {
       )}
 
       {printSale && settings && (() => {
-        let rp = "A4"; let logo = ""; let warranty = "";
-        try { const raw = localStorage.getItem("tabarak_print_settings"); if (raw) { const ps = JSON.parse(raw); if (ps.receiptPrinter) rp = ps.receiptPrinter; if (ps.invoiceLogo) logo = ps.invoiceLogo; if (ps.warrantyText) warranty = ps.warrantyText; } } catch {}
+        let rp = "A4";
+        try { const raw = localStorage.getItem("tabarak_print_settings"); if (raw) { const ps = JSON.parse(raw); if (ps.receiptPrinter) rp = ps.receiptPrinter; } } catch {}
         const isThermal = rp === "58mm" || rp === "80mm";
         return isThermal ? (
-          <PrintThermal sale={printSale} settings={settings} printerType={rp as "58mm" | "80mm"} onClose={() => setPrintSale(null)} />
+          <PrintThermal sale={printSale} settings={settings} onClose={() => setPrintSale(null)} />
         ) : (
-          <PrintInvoice sale={printSale} settings={settings} invoiceLogo={logo} warrantyText={warranty} onClose={() => setPrintSale(null)} />
+          <PrintInvoice sale={printSale} settings={settings} onClose={() => setPrintSale(null)} />
         );
       })()}
 

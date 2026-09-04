@@ -1037,7 +1037,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
         try { const raw = localStorage.getItem("tabarak_print_settings"); if (raw) { const ps = JSON.parse(raw); if (ps.receiptPrinter) rp = ps.receiptPrinter; } } catch {}
         const isThermal = rp === "58mm" || rp === "80mm";
         return isThermal && settings ? (
-          <PrintPurchaseThermal purchase={printPurchase} settings={settings} printerType={rp as "58mm" | "80mm"} onClose={() => setPrintPurchase(null)} />
+          <PrintPurchaseThermal purchase={printPurchase} settings={settings} onClose={() => setPrintPurchase(null)} />
         ) : (
           <Modal title={`${t("purchaseInvoice")} P-${printPurchase.id}`} onClose={() => setPrintPurchase(null)} width="720px">
             <div className="view-invoice">
