@@ -71,6 +71,7 @@ const ALL_MENUS: { key: string; label: string; icon: string }[] = [
   { key: "reports", label: "reports", icon: "📈" },
   { key: "cash_register", label: "cashRegister", icon: "🏧" },
   { key: "maintenance", label: "maintenance", icon: "🔧" },
+  { key: "audit_log", label: "auditLog", icon: "📋" },
   { key: "settings", label: "settings", icon: "⚙️" },
 ];
 

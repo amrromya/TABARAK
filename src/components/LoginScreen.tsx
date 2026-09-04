@@ -107,6 +107,7 @@ function getAccounts(): Account[] {
         "view_payment_vouchers",
         "view_warehouse_transfers",
         "view_cash_register",
+        "view_audit_log",
       ],
       visibleMenus: [
         "dashboard",
@@ -124,6 +125,7 @@ function getAccounts(): Account[] {
         "cash_register",
         "reports",
         "settings",
+        "audit_log",
         "pos",
         "ppos",
       ],
@@ -222,11 +224,12 @@ export function LoginScreen({ onLogin }: { onLogin: (account: Account) => void }
           "create_customer", "edit_customer", "delete_customer", "create_employee",
           "edit_employee", "delete_employee", "manage_accounts",
           "view_receipt_vouchers", "view_payment_vouchers", "view_warehouse_transfers",
+          "view_audit_log",
         ],
         visibleMenus: [
           "dashboard", "inventory", "warehouses", "sales", "purchases", "suppliers",
           "customers", "employees", "expenses", "receipt_vouchers", "payment_vouchers",
-          "warehouse_transfers", "reports", "settings", "pos", "ppos",
+          "warehouse_transfers", "reports", "settings", "audit_log", "pos", "ppos",
         ],
       };
       localStorage.setItem(ACCOUNTS_KEY, JSON.stringify([newAccount]));
