@@ -1116,7 +1116,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
       )}
 
       {viewingSale && (
-        <Modal title={`${t("saleInvoiceTitle")} ${viewingSale.invoice_no}`} onClose={() => setViewingSale(null)} width="720px">
+        <Modal title={`${t("saleInvoiceTitle")} ${viewingSale.invoice_no}`} onClose={() => setViewingSale(null)} fullScreen>
           <div className="view-invoice">
             <div className="inv-meta">
               <div><span>{t("date")}:</span> <b>{fmtDate(viewingSale.date)}</b></div>
@@ -1149,7 +1149,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
       )}
 
       {viewingReturn && (
-        <Modal title={`${t("returnInvoiceTitle")} ${viewingReturn.invoice_no}`} onClose={() => setViewingReturn(null)} width="720px">
+        <Modal title={`${t("returnInvoiceTitle")} ${viewingReturn.invoice_no}`} onClose={() => setViewingReturn(null)} fullScreen>
           <div className="view-invoice">
             <div className="inv-meta">
               <div><span>{t("date")}:</span> <b>{fmtDate(viewingReturn.date)}</b></div>

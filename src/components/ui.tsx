@@ -82,6 +82,7 @@ export function Modal({
   width,
   className,
   closeOnOverlay = true,
+  fullScreen = false,
 }: {
   title: string;
   onClose: () => void;
@@ -89,12 +90,13 @@ export function Modal({
   width?: string;
   className?: string;
   closeOnOverlay?: boolean;
+  fullScreen?: boolean;
 }) {
   return (
     <div className="modal-overlay" onClick={closeOnOverlay ? onClose : undefined}>
       <div
-        className={"modal" + (className ? " " + className : "")}
-        style={width ? { width } : undefined}
+        className={"modal" + (fullScreen ? " modal-fullscreen" : "") + (className ? " " + className : "")}
+        style={fullScreen ? { width: "100vw", height: "100vh", maxWidth: "100vw", maxHeight: "100vh", borderRadius: 0 } : width ? { width } : undefined}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">

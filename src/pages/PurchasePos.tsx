@@ -1039,7 +1039,7 @@ export function PurchasePos({ onBack }: { onBack: () => void }) {
         return isThermal && settings ? (
           <PrintPurchaseThermal purchase={printPurchase} settings={settings} onClose={() => setPrintPurchase(null)} />
         ) : (
-          <Modal title={`${t("purchaseInvoice")} P-${printPurchase.id}`} onClose={() => setPrintPurchase(null)} width="720px">
+          <Modal title={`${t("purchaseInvoice")} P-${printPurchase.id}`} onClose={() => setPrintPurchase(null)} fullScreen>
             <div className="view-invoice">
               <div className="inv-meta">
                 <div><span>{t("date")}:</span> <b>{fmtDate(printPurchase.date)}</b></div>

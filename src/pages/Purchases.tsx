@@ -946,7 +946,7 @@ export function Purchases({
         <Modal
           title={`فاتورة مشتريات P-${viewingPurchase.id}`}
           onClose={() => setViewingPurchase(null)}
-          width="720px"
+          fullScreen
         >
           <div className="purchase-view">
             <div className="purchase-view-head">
@@ -1039,7 +1039,7 @@ export function Purchases({
       )}
 
       {printPurchase && (
-        <Modal title={`فاتورة مشتريات P-${printPurchase.id}`} onClose={() => setPrintPurchase(null)} width="720px">
+        <Modal title={`فاتورة مشتريات P-${printPurchase.id}`} onClose={() => setPrintPurchase(null)} fullScreen>
           <div className="view-invoice">
             <div className="inv-meta">
               <div><span>التاريخ:</span> <b>{fmtDate(printPurchase.date)}</b></div>

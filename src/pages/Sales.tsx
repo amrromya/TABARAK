@@ -925,7 +925,7 @@ export function Sales({
       )}
 
       {viewingSale && (
-        <Modal title={`فاتورة بيع ${viewingSale.invoice_no}`} onClose={() => setViewingSale(null)} width="720px">
+        <Modal title={`فاتورة بيع ${viewingSale.invoice_no}`} onClose={() => setViewingSale(null)} fullScreen>
           <div className="view-invoice">
             <div className="inv-meta">
               <div><span>التاريخ:</span> <b>{fmtDate(viewingSale.date)}</b></div>
@@ -958,7 +958,7 @@ export function Sales({
       )}
 
       {viewingReturn && (
-        <Modal title={`فاتورة مردود مبيعات ${viewingReturn.invoice_no}`} onClose={() => setViewingReturn(null)} width="720px">
+        <Modal title={`فاتورة مردود مبيعات ${viewingReturn.invoice_no}`} onClose={() => setViewingReturn(null)} fullScreen>
           <div className="view-invoice">
             <div className="inv-meta">
               <div><span>التاريخ:</span> <b>{fmtDate(viewingReturn.date)}</b></div>
