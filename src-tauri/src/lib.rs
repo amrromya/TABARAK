@@ -110,6 +110,7 @@ pub fn run() {
             commands::update_attendance,
             commands::delete_attendance,
             commands::copy_sound_file,
+            commands::read_file_base64,
             commands::cleanup_duplicate_attendance,
             commands::list_shifts,
             commands::create_shift,

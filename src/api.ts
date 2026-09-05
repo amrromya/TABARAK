@@ -304,8 +304,10 @@ export const api = {
   writeBinaryFile: (path: string, data: number[]) =>
     invoke<void>("write_binary_file", { path, data }),
 
-  copySoundFile: (sourcePath: string) =>
-    invoke<string>("copy_sound_file", { sourcePath }),
+  copySoundFile: (sourcePath: string, soundType: string) =>
+    invoke<string>("copy_sound_file", { sourcePath, soundType }),
+  readFileBase64: (path: string) =>
+    invoke<string>("read_file_base64", { path }),
 
   // ==================== Maintenance ====================
   listServiceOrders: (search?: string) =>

@@ -300,13 +300,13 @@ export function SuppliersPage() {
                   </thead>
                   <tbody>
                     {transactions.length === 0 && <tr><td colSpan={5} className="empty">{t("noTransactions")}</td></tr>}
-                    {transactions.map((t, i) => (
+                    {transactions.map((tx, i) => (
                       <tr key={i}>
-                        <td>{fmtDate(t.date)}</td>
-                        <td className="strong">{t.description}</td>
-                        <td style={{ color: "#dc2626" }}>{t.debit > 0 ? money(t.debit) : "—"}</td>
-                        <td style={{ color: "#16a34a" }}>{t.credit > 0 ? money(t.credit) : "—"}</td>
-                        <td>{t.notes ?? "—"}</td>
+                        <td>{fmtDate(tx.date)}</td>
+                        <td className="strong">{tx.description}</td>
+                        <td style={{ color: "#dc2626" }}>{tx.debit > 0 ? money(tx.debit) : "—"}</td>
+                        <td style={{ color: "#16a34a" }}>{tx.credit > 0 ? money(tx.credit) : "—"}</td>
+                        <td>{tx.notes ?? "—"}</td>
                       </tr>
                     ))}
                   </tbody>

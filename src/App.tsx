@@ -91,6 +91,7 @@ async function openTool(label: string, pendingKey?: string, pendingValue?: numbe
     minWidth: 900,
     minHeight: 600,
     center: true,
+    maximized: true,
   });
   window.setTimeout(() => opening.delete(label), 1500);
 }

@@ -426,8 +426,9 @@ export function SettingsPage() {
       });
       if (!selected) return;
       const path = typeof selected === "string" ? selected : selected;
-      saveNotifSoundPath(path as string);
-      setNotifSoundName(path as string);
+      const copied = await api.copySoundFile(path as string, "notif");
+      saveNotifSoundPath(copied);
+      setNotifSoundName(copied);
       notify(t("soundSaved"));
     } catch (err) {
       notify(String(err), "error");
@@ -452,8 +453,9 @@ export function SettingsPage() {
       });
       if (!selected) return;
       const path = typeof selected === "string" ? selected : selected;
-      saveSuccessSoundPath(path as string);
-      setSuccessSoundName(path as string);
+      const copied = await api.copySoundFile(path as string, "success");
+      saveSuccessSoundPath(copied);
+      setSuccessSoundName(copied);
       notify(t("soundSaved"));
     } catch (err) {
       notify(String(err), "error");
@@ -478,8 +480,9 @@ export function SettingsPage() {
       });
       if (!selected) return;
       const path = typeof selected === "string" ? selected : selected;
-      saveErrorSoundPath(path as string);
-      setErrorSoundName(path as string);
+      const copied = await api.copySoundFile(path as string, "error");
+      saveErrorSoundPath(copied);
+      setErrorSoundName(copied);
       notify(t("soundSaved"));
     } catch (err) {
       notify(String(err), "error");

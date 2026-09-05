@@ -156,7 +156,7 @@ pub fn set_default_warehouse(state: State<AppState>, id: i64) -> Result<Vec<Ware
 }
 
 #[tauri::command]
-pub fn copy_sound_file(source_path: String) -> Result<String, String> {
+pub fn copy_sound_file(source_path: String, sound_type: String) -> Result<String, String> {
     let ext = std::path::Path::new(&source_path)
         .extension()
         .and_then(|e| e.to_str())
@@ -166,9 +166,20 @@ pub fn copy_sound_file(source_path: String) -> Result<String, String> {
         .join("tabarak")
         .join("sounds");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let dest = dir.join(format!("notif.{}", ext));
+    let safe_name = sound_type.replace(|c: char| !c.is_alphanumeric() && c != '_', "_");
+    let dest = dir.join(format!("{}.{}", safe_name, ext));
     fs::copy(&source_path, &dest).map_err(|e| e.to_string())?;
     Ok(dest.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn read_file_base64(path: String) -> Result<String, String> {
+    use std::io::Read;
+    use base64::Engine;
+    let mut file = fs::File::open(&path).map_err(|e| format!("لا يمكن فتح الملف: {}", e))?;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf).map_err(|e| format!("لا يمكن قراءة الملف: {}", e))?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(&buf))
 }
 
 #[tauri::command]
@@ -262,13 +273,24 @@ pub fn get_warehouse_cash_balances(
 
         let cash_in = sales_cash + receipts;
         let cash_out = purchases + payments;
-        let balance = cash_in - cash_out;
+
+        // Financial transfers: money transferred TO this warehouse (cash_in) and FROM this warehouse (cash_out)
+        let transfer_in: f64 = conn.query_row(
+            "SELECT COALESCE(SUM(amount), 0) FROM warehouse_transfers WHERE to_warehouse_id = ?1 AND transfer_type = 'financial'",
+            params![wh_id], |r| r.get(0),
+        ).unwrap_or(0.0);
+        let transfer_out: f64 = conn.query_row(
+            "SELECT COALESCE(SUM(amount), 0) FROM warehouse_transfers WHERE from_warehouse_id = ?1 AND transfer_type = 'financial'",
+            params![wh_id], |r| r.get(0),
+        ).unwrap_or(0.0);
+
+        let balance = (cash_in + transfer_in) - (cash_out + transfer_out);
 
         result.push(WarehouseCashBalance {
             warehouse_id: wh_id,
             warehouse_name: wh_name,
-            cash_in: crate::utils::money(cash_in),
-            cash_out: crate::utils::money(cash_out),
+            cash_in: crate::utils::money(cash_in + transfer_in),
+            cash_out: crate::utils::money(cash_out + transfer_out),
             balance: crate::utils::money(balance),
         });
     }
@@ -4823,6 +4845,21 @@ pub fn create_warehouse_transfer(state: State<AppState>, input: serde_json::Valu
 
     if transfer_type == "products" {
         if let Some(items) = input["items"].as_array() {
+            // Validate stock availability first
+            for item in items {
+                let product_id = item["product_id"].as_i64().unwrap_or(0);
+                let quantity = item["quantity"].as_f64().unwrap_or(0.0);
+                if product_id == 0 || quantity <= 0.0 { continue; }
+                let available: f64 = tx.query_row(
+                    "SELECT COALESCE(quantity, 0) FROM products WHERE id=?1 AND warehouse_id=?2",
+                    params![product_id, from_warehouse_id],
+                    |r| r.get(0),
+                ).unwrap_or(0.0);
+                if quantity > available {
+                    let pname: String = tx.query_row("SELECT name FROM products WHERE id=?1", params![product_id], |r| r.get(0)).unwrap_or_default();
+                    return Err(format!("الكمية غير كافية للمنتج «{}» (المتوفر: {})", pname, available));
+                }
+            }
             for item in items {
                 let product_id = item["product_id"].as_i64().unwrap_or(0);
                 let quantity = item["quantity"].as_f64().unwrap_or(0.0);
@@ -4839,6 +4876,8 @@ pub fn create_warehouse_transfer(state: State<AppState>, input: serde_json::Valu
     }
 
     tx.commit().map_err(|e| e.to_string())?;
+
+    add_system_audit_log(&conn, "create", "warehouse_transfer", Some(transfer_id), Some(&transfer_no), Some("تم إنشاء تحويل مستودع"));
 
     let row = conn.query_row(
         "SELECT t.id, t.transfer_no, t.date, w1.name, w2.name, t.transfer_type, t.amount, t.notes, t.created_at, t.from_warehouse_id, t.to_warehouse_id
@@ -4857,8 +4896,46 @@ pub fn create_warehouse_transfer(state: State<AppState>, input: serde_json::Valu
 #[tauri::command]
 pub fn delete_warehouse_transfer(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = get_db(&state)?;
-    conn.execute("DELETE FROM warehouse_transfer_items WHERE transfer_id=?1", params![id]).map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM warehouse_transfers WHERE id=?1", params![id]).map_err(|e| e.to_string())?;
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+
+    // Fetch transfer info to reverse quantities
+    let (transfer_type, from_wh, to_wh): (String, i64, i64) = tx.query_row(
+        "SELECT transfer_type, from_warehouse_id, to_warehouse_id FROM warehouse_transfers WHERE id=?1",
+        params![id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    ).map_err(|e| "التحويل غير موجود".to_string())?;
+
+    if transfer_type == "products" {
+        // Fetch all items before deleting
+        let items: Vec<(i64, f64)> = {
+            let mut stmt = tx.prepare(
+                "SELECT product_id, quantity FROM warehouse_transfer_items WHERE transfer_id=?1"
+            ).map_err(|e| e.to_string())?;
+            let rows = stmt.query_map(params![id], |r| Ok((r.get(0)?, r.get(1)?)))
+                .map_err(|e| e.to_string())?;
+            rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?
+        };
+
+        for (product_id, quantity) in &items {
+            // Reverse: add back to source warehouse
+            tx.execute(
+                "UPDATE products SET quantity = quantity + ?1 WHERE id = ?2 AND warehouse_id = ?3",
+                params![quantity, product_id, from_wh],
+            ).map_err(|e| e.to_string())?;
+            // Reverse: remove from destination warehouse
+            tx.execute(
+                "UPDATE products SET quantity = quantity - ?1 WHERE id = ?2 AND warehouse_id = ?3",
+                params![quantity, product_id, to_wh],
+            ).map_err(|e| e.to_string())?;
+        }
+    }
+
+    tx.execute("DELETE FROM warehouse_transfer_items WHERE transfer_id=?1", params![id]).map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM warehouse_transfers WHERE id=?1", params![id]).map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())?;
+
+    add_system_audit_log(&conn, "delete", "warehouse_transfer", Some(id), None, Some("تم حذف تحويل مستودع"));
+
     Ok(())
 }
 

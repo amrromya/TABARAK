@@ -3,6 +3,8 @@ const NOTIF_ENABLED_KEY = "tabarak_notif_enabled";
 const SUCCESS_SOUND_KEY = "tabarak_success_sound";
 const ERROR_SOUND_KEY = "tabarak_error_sound";
 
+import { invoke } from "@tauri-apps/api/core";
+
 export type BuiltInSoundId =
   | "success_default" | "success_bell" | "success_pop"
   | "error_default" | "error_buzz" | "error_thud"
@@ -61,6 +63,7 @@ export function setErrorSoundPath(p: string | null) {
 }
 
 let audioEl: HTMLAudioElement | null = null;
+const blobUrlCache = new Map<string, string>();
 
 function stopCurrentAudio() {
   if (audioEl) { audioEl.pause(); audioEl = null; }
@@ -73,29 +76,49 @@ function playSound(url: string, volume = 0.7) {
   audioEl.play().catch(() => {});
 }
 
-function resolveUrl(saved: string | null, defaultId: BuiltInSoundId): string {
+function guessMime(path: string): string {
+  const ext = path.split(".").pop()?.toLowerCase() || "mp3";
+  const map: Record<string, string> = {
+    mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg",
+    m4a: "audio/mp4", aac: "audio/aac", flac: "audio/flac",
+  };
+  return map[ext] || "audio/mpeg";
+}
+
+async function resolveUrl(saved: string | null, defaultId: BuiltInSoundId): Promise<string> {
   if (saved && isBuiltIn(saved)) {
     return BUILT_IN_SOUNDS[saved];
   }
   if (saved) {
-    return saved;
+    if (blobUrlCache.has(saved)) return blobUrlCache.get(saved)!;
+    try {
+      const b64: string = await invoke("read_file_base64", { path: saved });
+      const mime = guessMime(saved);
+      const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: mime });
+      const url = URL.createObjectURL(blob);
+      blobUrlCache.set(saved, url);
+      return url;
+    } catch {
+      return BUILT_IN_SOUNDS[defaultId];
+    }
   }
   return BUILT_IN_SOUNDS[defaultId];
 }
 
-export function playNotifSound() {
+export async function playNotifSound() {
   if (!isNotifEnabled()) return;
-  try { playSound(resolveUrl(getNotifSoundPath(), "notif_default")); } catch {}
+  try { playSound(await resolveUrl(getNotifSoundPath(), "notif_default")); } catch {}
 }
 
-export function playSuccessSound() {
+export async function playSuccessSound() {
   if (!isNotifEnabled()) return;
-  try { playSound(resolveUrl(getSuccessSoundPath(), "success_default")); } catch {}
+  try { playSound(await resolveUrl(getSuccessSoundPath(), "success_default")); } catch {}
 }
 
-export function playErrorSound() {
+export async function playErrorSound() {
   if (!isNotifEnabled()) return;
-  try { playSound(resolveUrl(getErrorSoundPath(), "error_default")); } catch {}
+  try { playSound(await resolveUrl(getErrorSoundPath(), "error_default")); } catch {}
 }
 
 export function playBuiltInSound(id: BuiltInSoundId) {

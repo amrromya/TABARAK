@@ -3,7 +3,6 @@ import { api } from "../api";
 import {
   Field,
   Modal,
-  confirmDialog,
   money,
   today,
   useToast,
@@ -36,17 +35,19 @@ export function WarehouseTransfers() {
   const [selQty, setSelQty] = useState(1);
   const [warehouseStatsList, setWarehouseStatsList] = useState<{ id: number; name: string; cashIn: number; cashOut: number; balance: number }[]>([]);
 
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
   const notify = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [t, w, p] = await Promise.all([
+      const [tr, w, p] = await Promise.all([
         api.listWarehouseTransfers(search || undefined),
         api.listWarehouses(),
         api.listProducts(),
       ]);
-      setTransfers(t);
+      setTransfers(tr);
       setWarehouses(w);
       setProducts(p);
 
@@ -141,8 +142,10 @@ export function WarehouseTransfers() {
     }
   };
 
-  const remove = async (id: number) => {
-    if (!(await confirmDialog(t("confirmDeleteTransfer")))) return;
+  const doDelete = async () => {
+    if (confirmDeleteId === null) return;
+    const id = confirmDeleteId;
+    setConfirmDeleteId(null);
     try {
       await api.deleteWarehouseTransfer(id);
       notify(t("transferDeleted"));
@@ -206,26 +209,26 @@ export function WarehouseTransfers() {
               </tr>
             </thead>
             <tbody>
-              {transfers.map((t, i) => (
-                <tr key={t.id}>
+              {transfers.map((tr, i) => (
+                <tr key={tr.id}>
                   <td>{i + 1}</td>
-                  <td className="strong">{t.transfer_no}</td>
-                  <td>{t.date}</td>
-                  <td>{t.from_warehouse ?? "—"}</td>
-                  <td>{t.to_warehouse ?? "—"}</td>
+                  <td className="strong">{tr.transfer_no}</td>
+                  <td>{tr.date}</td>
+                  <td>{tr.from_warehouse ?? "—"}</td>
+                  <td>{tr.to_warehouse ?? "—"}</td>
                   <td>
                     <span style={{
-                      background: t.transfer_type === "products" ? "#dbeafe" : "#fef3c7",
-                      color: t.transfer_type === "products" ? "#1d4ed8" : "#b45309",
+                      background: tr.transfer_type === "products" ? "#dbeafe" : "#fef3c7",
+                      color: tr.transfer_type === "products" ? "#1d4ed8" : "#b45309",
                       padding: "2px 8px", borderRadius: 10, fontSize: 11,
                     }}>
-                      {t.transfer_type === "products" ? t("goodsLabel") : t("financialLabel")}
+                      {tr.transfer_type === "products" ? t("goodsLabel") : t("financialLabel")}
                     </span>
                   </td>
-                  <td>{t.amount > 0 ? money(t.amount) : "—"}</td>
-                  <td style={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.notes ?? "—"}</td>
+                  <td>{tr.amount > 0 ? money(tr.amount) : "—"}</td>
+                  <td style={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tr.notes ?? "—"}</td>
                   <td>
-                    <button className="btn sm danger" onClick={() => remove(t.id)}>
+                    <button className="btn sm danger" onClick={() => setConfirmDeleteId(tr.id)}>
                       {t("delete")}
                     </button>
                   </td>
@@ -403,6 +406,16 @@ export function WarehouseTransfers() {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmDeleteId !== null && (
+        <Modal title={t("confirmDeleteTransfer")} onClose={() => setConfirmDeleteId(null)} width="380px">
+          <p style={{ marginBottom: 16, fontSize: 14, lineHeight: 1.6 }}>{t("confirmDeleteTransfer")}</p>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button className="btn danger" onClick={doDelete}>{t("delete")}</button>
+            <button className="btn" onClick={() => setConfirmDeleteId(null)}>{t("cancel")}</button>
+          </div>
+        </Modal>
       )}
     </div>
   );
