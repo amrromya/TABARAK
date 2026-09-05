@@ -4,6 +4,7 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ToastProvider } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useTheme } from "./hooks/useTheme";
+import { useColorTheme } from "./hooks/useColorTheme";
 import { initLang, setLang, getLang, t } from "./i18n";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { Dashboard } from "./pages/Dashboard";
@@ -460,6 +461,7 @@ function App() {
 
   // Initialize theme and language
   const [theme, toggleTheme] = useTheme();
+  useColorTheme();
   useEffect(() => { initLang(); }, []);
 
   // Start auto-backup from localStorage settings

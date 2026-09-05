@@ -7,6 +7,8 @@ import { isNotifEnabled, setNotifEnabled as saveNotifEnabled, getNotifSoundPath,
 import { getPrintSettings, savePrintSettings, type PrintSettings } from "../utils/directPrint";
 import type { Account, Branch, Permission, Settings, SyncConfig, SyncStatus, Warehouse } from "../types";
 import { t } from "../i18n";
+import { useColorTheme, THEME_PRESETS } from "../hooks/useColorTheme";
+import { useTheme } from "../hooks/useTheme";
 
 const ACCOUNTS_KEY = "tabarak_accounts";
 
@@ -87,7 +89,7 @@ function saveAccounts(accounts: Account[]) {
   localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
 }
 
-type SectionKey = "store" | "warehouses" | "sync" | "branches" | "notifications" | "attendance_url" | "printing" | "update" | "backup" | "reset" | "accounts" | "license";
+type SectionKey = "store" | "warehouses" | "sync" | "branches" | "notifications" | "attendance_url" | "printing" | "update" | "backup" | "reset" | "accounts" | "license" | "themes";
 
 const FEATURES_KEY = "tabarak_features";
 
@@ -126,6 +128,7 @@ const SECTIONS: { key: SectionKey; icon: string; title: string; color: string; g
   { key: "backup", icon: "💾", title: "backup", color: "#06b6d4", gradient: "linear-gradient(135deg, #06b6d4, #0891b2)" },
   { key: "reset", icon: "⚠️", title: "resetSystem", color: "#ef4444", gradient: "linear-gradient(135deg, #ef4444, #dc2626)" },
   { key: "accounts", icon: "👥", title: "manageAccounts", color: "#f97316", gradient: "linear-gradient(135deg, #f97316, #ea580c)" },
+  { key: "themes", icon: "🎨", title: "themesSettings", color: "#a855f7", gradient: "linear-gradient(135deg, #a855f7, #7c3aed)" },
 ];
 
 export function SettingsPage() {
@@ -300,6 +303,8 @@ export function SettingsPage() {
   };
 
   const notify = useToast();
+  const colorTheme = useColorTheme();
+  const [theme, toggleTheme] = useTheme();
 
   const loadWh = () => {
     api.listWarehouses().then(setWarehouses).catch((e) => notify(String(e), "error"));
@@ -1479,6 +1484,91 @@ export function SettingsPage() {
               </div>
             </form>
           </div>
+        );
+
+      case "themes":
+        return (
+          <>
+            <p className="settings-hint">{t("themesHint")}</p>
+
+            {/* Dark mode toggle */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>🌙 {t("darkMode")}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button
+                    onClick={toggleTheme}
+                    style={{
+                      width: 50, height: 28, borderRadius: 14, border: "none", cursor: "pointer", position: "relative",
+                      background: theme === "dark" ? "#10b981" : "#d1d5db",
+                      transition: "background 0.2s",
+                    }}
+                  >
+                    <span style={{
+                      position: "absolute", top: 2,
+                      left: theme === "dark" ? 24 : 2,
+                    width: 24, height: 24, borderRadius: 12, background: "#fff",
+                    transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                  }} />
+                </button>
+                <span style={{ fontSize: 13, color: "var(--text-dim)" }}>
+                  {theme === "dark" ? t("darkModeItem") : t("lightMode")}
+                </span>
+              </div>
+            </div>
+
+            {/* Predefined color themes */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>🎨 {t("colorThemes")}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 10 }}>
+                {THEME_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    onClick={() => colorTheme.selectPreset(preset.id)}
+                    style={{
+                      padding: 0, border: colorTheme.themeId === preset.id ? "3px solid var(--text)" : "3px solid transparent",
+                      borderRadius: 12, cursor: "pointer", overflow: "hidden", background: "var(--surface)",
+                      boxShadow: colorTheme.themeId === preset.id ? "0 0 0 2px var(--primary)" : "var(--shadow)",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    <div style={{ height: 50, background: preset.preview }} />
+                    <div style={{ padding: "8px 4px", textAlign: "center" }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{preset.name}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{preset.nameEn}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom color picker */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>🖌️ {t("customColor")}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 14px", borderRadius: 10, border: colorTheme.isCustom ? "2px solid var(--primary)" : "2px solid var(--border)", background: colorTheme.isCustom ? "var(--primary-light)" : "var(--surface)", transition: "all 0.2s" }}>
+                  <input
+                    type="color"
+                    value={colorTheme.customColor}
+                    onChange={(e) => colorTheme.setCustom(e.target.value)}
+                    style={{ width: 32, height: 32, border: "none", borderRadius: 8, cursor: "pointer", padding: 0 }}
+                  />
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{colorTheme.customColor}</span>
+                </label>
+                {colorTheme.isCustom && (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {[colorTheme.customColor, "#ffffff", "#000000"].map((c) => (
+                      <div key={c} style={{ width: 28, height: 28, borderRadius: 6, background: c, border: "1px solid var(--border)" }} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Reset button */}
+            <div style={{ marginTop: 12 }}>
+              <button className="btn" onClick={colorTheme.resetTheme}>{t("resetToDefault")}</button>
+            </div>
+          </>
         );
 
       default:
