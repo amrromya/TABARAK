@@ -4099,7 +4099,7 @@ pub fn get_dashboard(state: State<AppState>) -> Result<Dashboard, String> {
         .map_err(|e| e.to_string())?;
     let payments: f64 = conn
         .query_row(
-            "SELECT COALESCE(SUM(amount),0) FROM customer_payments",
+            "SELECT COALESCE(SUM(amount),0) FROM customer_payments WHERE notes NOT LIKE 'سند قبض%'",
             [],
             |r| r.get(0),
         )
