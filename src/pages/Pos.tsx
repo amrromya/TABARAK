@@ -96,6 +96,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
   const notify = useToast();
   const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
   const [activeAddonLine, setActiveAddonLine] = useState<number | null>(null);
+  const [quoteMode, setQuoteMode] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -418,6 +419,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
   };
 
   const save = async () => {
+    if (quoteMode) { printQuote(); return; }
     if (lines.length === 0) {
       notify(t("addItemError"), "error");
       return;
@@ -523,6 +525,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
     setEmployeeId("1");
     setDate(today());
     setSearch("");
+    setQuoteMode(false);
     searchRef.current?.focus();
   };
 
@@ -584,6 +587,107 @@ export function Pos({ onBack }: { onBack: () => void }) {
     setPrintSale(draft);
   };
 
+  const printQuote = () => {
+    if (lines.length === 0) {
+      notify(t("addItemError"), "error");
+      return;
+    }
+    const wh = warehouses.find((w) => w.id === Number(warehouseId));
+    const emp = employees.find((e) => e.id === Number(employeeId));
+    const custName =
+      paymentMethod === "credit"
+        ? customers.find((c) => c.id === Number(customerId))?.name ?? null
+        : (paymentMethod === "card" && cardSubType === "wallet" && walletPhone.trim() ? walletPhone.trim() : (cashCustomer.trim() || null));
+    const draft: Sale = {
+      id: 0,
+      invoice_no: `${t("priceQuote")} — ${date}`,
+      date,
+      total,
+      discount: discountAmount,
+      additional: additional || 0,
+      net_total: netTotal,
+      warehouse_id: warehouseId ? Number(warehouseId) : null,
+      warehouse_name: wh?.name ?? null,
+      customer_name: custName,
+      customer_id: customerId ? Number(customerId) : null,
+      payment_method: paymentMethod === "card" ? (cardSubType === "wallet" ? "card_wallet" : "card_visa") : paymentMethod,
+      employee_id: employeeId ? Number(employeeId) : null,
+      employee_name: emp?.name ?? null,
+      items: lines.map((l) => ({
+        product_id: l.product_id,
+        product_name: l.name,
+        quantity: l.quantity,
+        sell_price: l.sell_price,
+        total: l.quantity * l.sell_price,
+      })),
+    };
+    setPrintSale(draft);
+    notify(t("priceQuoteSaved"));
+  };
+
+  const exportQuotePdf = async () => {
+    if (lines.length === 0) {
+      notify(t("addItemError"), "error");
+      return;
+    }
+    try {
+      const { jsPDF } = await import("jspdf");
+      await import("jspdf-autotable");
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.setTextColor(15, 138, 95);
+      doc.text(settings?.store_name || "تبارك", 105, 20, { align: "center" });
+      doc.setFontSize(12);
+      doc.setTextColor(100);
+      doc.text(t("priceQuoteTitle"), 105, 28, { align: "center" });
+      doc.setFontSize(10);
+      doc.setTextColor(80);
+      const custName =
+        paymentMethod === "credit"
+          ? customers.find((c) => c.id === Number(customerId))?.name ?? ""
+          : (cashCustomer.trim() || "");
+      doc.text(`${date}${custName ? " — " + custName : ""}`, 105, 35, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(0);
+      (doc as any).autoTable({
+        startY: 42,
+        head: [[t("itemName"), t("quantity"), t("unitPrice"), t("total")]],
+        body: lines.map((l) => [l.name, String(l.quantity), money(l.sell_price), money(l.quantity * l.sell_price)]),
+        theme: "grid",
+        headStyles: { fillColor: [15, 138, 95], halign: "center" },
+        styles: { halign: "right", font: "helvetica", fontSize: 10 },
+        columnStyles: { 1: { halign: "center" }, 2: { halign: "center" }, 3: { halign: "center" } },
+      });
+      const finalY = (doc as any).lastAutoTable.finalY + 10;
+      doc.setFont("helvetica", "normal");
+      doc.text(`${t("total")}: ${money(total)}`, 14, finalY);
+      if (discountAmount > 0) doc.text(`${t("discount")}: ${money(discountAmount)}`, 14, finalY + 7);
+      if (additional > 0) doc.text(`${t("additional")}: ${money(additional)}`, 14, finalY + (discountAmount > 0 ? 14 : 7));
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(15, 138, 95);
+      doc.text(`${t("netTotal")}: ${money(netTotal)}`, 14, finalY + (discountAmount > 0 ? 21 : additional > 0 ? 14 : 7));
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(t("priceQuoteTitle") + " — " + (settings?.store_name || ""), 105, 290, { align: "center" });
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const path = await save({
+        title: t("priceQuoteTitle"),
+        defaultPath: `quote_${date}.pdf`,
+        filters: [{ name: "PDF", extensions: ["pdf"] }],
+      });
+      if (path) {
+        const bytes = doc.output("arraybuffer");
+        await api.writeBinaryFile(path, Array.from(new Uint8Array(bytes)));
+        notify(t("exportingPdf"));
+      }
+    } catch (e) {
+      notify(String(e), "error");
+    }
+  };
+
   const saveCustomer = async () => {
     if (!custForm.name.trim()) {
       notify(t("enterCustomerName"), "error");
@@ -618,61 +722,49 @@ export function Pos({ onBack }: { onBack: () => void }) {
           → {t("back")}
         </button>
         <div className="pos-title">
-          <h1>{t("saleInvoice")}</h1>
+          <h1>{quoteMode ? t("priceQuoteTitle") : t("saleInvoice")}</h1>
           <span>
-            {currentId != null
-              ? `${t("invoiceNumber")} ${currentId}`
-              : settings?.store_name || t("appTitle")}
+            {quoteMode
+              ? t("quoteModeOn")
+              : currentId != null
+                ? `${t("invoiceNumber")} ${currentId}`
+                : settings?.store_name || t("appTitle")}
           </span>
         </div>
         <div className="pos-head-actions">
+          {!quoteMode && (
+            <>
+              <button className="btn pos-nav-btn" onClick={goPrev} disabled={!hasPrev} title={t("previousInvoice")}>‹</button>
+              <button className="btn pos-nav-btn" onClick={goNext} disabled={!hasNext} title={t("nextInvoice")}>›</button>
+            </>
+          )}
+          <button className="btn pos-nav-btn" onClick={newInvoice} title={t("newInvoice")}>📄 {t("new")}</button>
+          {quoteMode ? (
+            <>
+              <button className="btn pos-nav-btn" onClick={printQuote} title={t("printQuote")}>🖨️ {t("printQuote")}</button>
+              <button className="btn pos-nav-btn" onClick={exportQuotePdf} title={t("exportPdf")}>📄 {t("exportPdf")}</button>
+            </>
+          ) : (
+            <button className="btn pos-nav-btn" onClick={printCurrent} title={t("printInvoice")}>🖨️</button>
+          )}
+          {!quoteMode && currentId != null && (
+            <button className="btn pos-nav-btn" onClick={save} title={t("saveChanges")}>✏️ {t("edit")}</button>
+          )}
+          {!quoteMode && currentId != null && (
+            <button className="btn pos-nav-btn danger" onClick={deleteCurrent} title={t("deleteInvoice")}>🗑️ {t("delete")}</button>
+          )}
           <button
-            className="btn pos-nav-btn"
-            onClick={goPrev}
-            disabled={!hasPrev}
-            title={t("previousInvoice")}
+            className={`btn pos-nav-btn ${quoteMode ? "primary" : ""}`}
+            onClick={() => setQuoteMode(!quoteMode)}
+            title={t("priceQuote")}
           >
-            ‹
+            📋 {t("priceQuote")}
           </button>
-          <button
-            className="btn pos-nav-btn"
-            onClick={goNext}
-            disabled={!hasNext}
-            title={t("nextInvoice")}
-          >
-            ›
-          </button>
-          <button
-            className="btn pos-nav-btn"
-            onClick={newInvoice}
-            title={t("newInvoice")}
-          >
-            📄 {t("new")}
-          </button>
-          <button
-            className="btn pos-nav-btn"
-            onClick={printCurrent}
-            title={t("printInvoice")}
-          >
-            🖨️
-          </button>
-          {currentId != null && (
-            <button className="btn pos-nav-btn" onClick={save} title={t("saveChanges")}>
-              ✏️ {t("edit")}
+          {!quoteMode && (
+            <button className="btn primary pos-save" onClick={save}>
+              {currentId == null ? `💾 ${t("saveInvoice")}` : `💾 ${t("saveChanges")}`}
             </button>
           )}
-          {currentId != null && (
-            <button
-              className="btn pos-nav-btn danger"
-              onClick={deleteCurrent}
-              title={t("deleteInvoice")}
-            >
-              🗑️ {t("delete")}
-            </button>
-          )}
-          <button className="btn primary pos-save" onClick={save}>
-            {currentId == null ? `💾 ${t("saveInvoice")}` : `💾 ${t("saveChanges")}`}
-          </button>
         </div>
       </header>
 
@@ -1035,9 +1127,15 @@ export function Pos({ onBack }: { onBack: () => void }) {
             </select>
           </div>
 
-          <button className="btn primary pos-panel-save" onClick={save}>
-            {currentId == null ? `💾 ${t("saveInvoice")}` : `💾 ${t("saveChanges")}`}
-          </button>
+          {quoteMode ? (
+            <button className="btn primary pos-panel-save" onClick={printQuote}>
+              🖨️ {t("printQuote")}
+            </button>
+          ) : (
+            <button className="btn primary pos-panel-save" onClick={save}>
+              {currentId == null ? `💾 ${t("saveInvoice")}` : `💾 ${t("saveChanges")}`}
+            </button>
+          )}
           <button className="btn pos-panel-clear" onClick={newInvoice}>
             📄 {t("newInvoice")}
           </button>

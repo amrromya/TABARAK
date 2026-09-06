@@ -271,6 +271,11 @@ const translations: Record<string, Record<Lang, string>> = {
   viewInvoiceNotAvailable: { ar: "عرض الفاتورة غير متاح من هنا", en: "Invoice view not available from here" },
   enterCustomerName: { ar: "أدخل اسم العميل", en: "Enter customer name" },
   debtor: { ar: "مدين", en: "Debtor" },
+  priceQuote: { ar: "عرض سعر", en: "Price Quote" },
+  priceQuoteTitle: { ar: "عرض أسعار", en: "Price Quote" },
+  priceQuoteSaved: { ar: "تم طباعة عرض السعر", en: "Price quote printed" },
+  printQuote: { ar: "طباعة عرض السعر", en: "Print Price Quote" },
+  quoteModeOn: { ar: "وضع عرض السعر — لن يتم خصم المخزون أو تسجيل البيع", en: "Price Quote mode — stock won't be deducted and sale won't be recorded" },
 
   // ===== Customers =====
   customerName: { ar: "اسم العميل", en: "Customer Name" },
