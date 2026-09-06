@@ -57,6 +57,9 @@ import type {
   SystemAuditLog,
   Vacation,
   Warehouse,
+  LanSyncStatus,
+  LanSyncConfig,
+  LanDevice,
   WarehouseStats,
 } from "./types";
 
@@ -473,4 +476,15 @@ export const api = {
     invoke<SystemAuditLog[]>("get_audit_logs", params),
   getAuditLogCount: (params: { entityType?: string; action?: string; search?: string }) =>
     invoke<number>("get_audit_log_count", params),
+
+  // ==================== LAN Sync ====================
+  startLanSync: (params: { deviceName: string; isPrimary: boolean; port: number; autoSync: boolean; syncIntervalSecs: number }) =>
+    invoke<LanSyncStatus>("start_lan_sync", params),
+  stopLanSync: () => invoke<void>("stop_lan_sync"),
+  getLanSyncStatus: () => invoke<LanSyncStatus>("get_lan_sync_status"),
+  lanSyncNow: (peerIp: string, peerPort: number) => invoke<[number, number]>("lan_sync_now", { peerIp, peerPort }),
+  lanDiscoverDevices: () => invoke<LanDevice[]>("lan_discover_devices"),
+  saveLanSyncConfig: (configJson: string) => invoke<void>("save_lan_sync_config", { configJson }),
+  loadLanSyncConfig: () => invoke<LanSyncConfig>("load_lan_sync_config"),
+  removeLanDevice: (deviceId: string) => invoke<void>("remove_lan_device", { deviceId }),
 };

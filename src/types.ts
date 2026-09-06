@@ -662,6 +662,41 @@ export interface Branch {
   is_active: boolean;
 }
 
+// ---------- LAN Sync ----------
+
+export interface LanDevice {
+  device_id: string;
+  device_name: string;
+  ip: string;
+  port: number;
+  is_online: boolean;
+  last_seen: string | null;
+  is_primary: boolean;
+}
+
+export interface LanSyncConfig {
+  device_name: string;
+  is_primary: boolean;
+  port: number;
+  auto_sync: boolean;
+  sync_interval_secs: number;
+  known_devices: LanDevice[];
+}
+
+export interface LanSyncStatus {
+  is_running: boolean;
+  device_id: string;
+  device_name: string;
+  is_primary: boolean;
+  port: number;
+  connected_devices: LanDevice[];
+  last_sync: string | null;
+  pending_push: number;
+  pending_pull: number;
+  auto_sync: boolean;
+  sync_interval_secs: number;
+}
+
 // ==================== Maintenance Types ====================
 
 export type MaintenanceStatus =

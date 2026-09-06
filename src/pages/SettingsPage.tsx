@@ -5,7 +5,7 @@ import { api } from "../api";
 import { Field, useToast } from "../components/ui";
 import { isNotifEnabled, setNotifEnabled as saveNotifEnabled, getNotifSoundPath, setNotifSoundPath as saveNotifSoundPath, playNotifSound, getSuccessSoundPath, setSuccessSoundPath as saveSuccessSoundPath, getErrorSoundPath, setErrorSoundPath as saveErrorSoundPath, playSuccessSound, playErrorSound } from "../utils/notifications";
 import { getPrintSettings, savePrintSettings, type PrintSettings } from "../utils/directPrint";
-import type { Account, Branch, Permission, Settings, SyncConfig, SyncStatus, Warehouse } from "../types";
+import type { Account, Branch, Permission, Settings, SyncConfig, SyncStatus, Warehouse, LanSyncStatus, LanSyncConfig } from "../types";
 import { t } from "../i18n";
 import { useColorTheme, THEME_PRESETS } from "../hooks/useColorTheme";
 import { useTheme } from "../hooks/useTheme";
@@ -89,19 +89,19 @@ function saveAccounts(accounts: Account[]) {
   localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
 }
 
-type SectionKey = "store" | "warehouses" | "sync" | "branches" | "notifications" | "attendance_url" | "printing" | "update" | "backup" | "reset" | "accounts" | "license" | "themes";
+type SectionKey = "store" | "warehouses" | "sync" | "branches" | "notifications" | "attendance_url" | "printing" | "update" | "backup" | "reset" | "accounts" | "license" | "themes" | "lan_sync";
 
 const FEATURES_KEY = "tabarak_features";
 
-function getFeatures(): { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean; sync: boolean; branches: boolean; attendance_url: boolean; notifications: boolean; cash_register: boolean; customer_turns: boolean } {
+function getFeatures(): { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean; sync: boolean; branches: boolean; attendance_url: boolean; notifications: boolean; cash_register: boolean; customer_turns: boolean; lan_sync: boolean } {
   try {
     const raw = localStorage.getItem(FEATURES_KEY);
-    if (raw) return { maintenance: false, attendance: false, dark_mode: false, language: false, sync: false, branches: false, attendance_url: false, notifications: false, cash_register: false, customer_turns: false, ...JSON.parse(raw) };
+    if (raw) return { maintenance: false, attendance: false, dark_mode: false, language: false, sync: false, branches: false, attendance_url: false, notifications: false, cash_register: false, customer_turns: false, lan_sync: false, ...JSON.parse(raw) };
   } catch {}
-  return { maintenance: false, attendance: false, dark_mode: false, language: false, sync: false, branches: false, attendance_url: false, notifications: false, cash_register: false, customer_turns: false };
+  return { maintenance: false, attendance: false, dark_mode: false, language: false, sync: false, branches: false, attendance_url: false, notifications: false, cash_register: false, customer_turns: false, lan_sync: false };
 }
 
-function saveFeatures(f: { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean; sync: boolean; branches: boolean; attendance_url: boolean; notifications: boolean; cash_register: boolean; customer_turns: boolean }) {
+function saveFeatures(f: { maintenance: boolean; attendance: boolean; dark_mode: boolean; language: boolean; sync: boolean; branches: boolean; attendance_url: boolean; notifications: boolean; cash_register: boolean; customer_turns: boolean; lan_sync: boolean }) {
   localStorage.setItem(FEATURES_KEY, JSON.stringify(f));
 }
 
@@ -120,6 +120,7 @@ const SECTIONS: { key: SectionKey; icon: string; title: string; color: string; g
   { key: "warehouses", icon: "📦", title: "warehouses", color: "#10b981", gradient: "linear-gradient(135deg, #10b981, #059669)" },
   { key: "sync", icon: "☁️", title: "syncSettings", color: "#8b5cf6", gradient: "linear-gradient(135deg, #8b5cf6, #7c3aed)", locked: true },
   { key: "branches", icon: "🏬", title: "branches", color: "#f59e0b", gradient: "linear-gradient(135deg, #f59e0b, #d97706)", locked: true },
+  { key: "lan_sync", icon: "🔗", title: "lanSyncDevices", color: "#06b6d4", gradient: "linear-gradient(135deg, #06b6d4, #0891b2)", locked: true },
   { key: "notifications", icon: "🔔", title: "attendanceNotifications", color: "#ec4899", gradient: "linear-gradient(135deg, #ec4899, #db2777)" },
   { key: "attendance_url", icon: "📍", title: "attendanceUrlLabel", color: "#14b8a6", gradient: "linear-gradient(135deg, #14b8a6, #0d9488)", locked: true },
   { key: "printing", icon: "🖨️", title: "printSettings", color: "#64748b", gradient: "linear-gradient(135deg, #64748b, #475569)" },
@@ -130,6 +131,219 @@ const SECTIONS: { key: SectionKey; icon: string; title: string; color: string; g
   { key: "accounts", icon: "👥", title: "manageAccounts", color: "#f97316", gradient: "linear-gradient(135deg, #f97316, #ea580c)" },
   { key: "themes", icon: "🎨", title: "themesSettings", color: "#a855f7", gradient: "linear-gradient(135deg, #a855f7, #7c3aed)" },
 ];
+
+// ─── LAN Sync Section Component ─────────────────────────────────────────────
+function LanSyncSection() {
+  const notify = useToast();
+  const [status, setStatus] = useState<LanSyncStatus | null>(null);
+  const [config, setConfig] = useState<LanSyncConfig>({ device_name: "", is_primary: false, port: 9527, auto_sync: false, sync_interval_secs: 15, known_devices: [] });
+  const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const loadStatus = useCallback(async () => {
+    try {
+      const s = await api.getLanSyncStatus();
+      setStatus(s);
+    } catch {}
+    try {
+      const c = await api.loadLanSyncConfig();
+      setConfig(c);
+    } catch {}
+  }, []);
+
+  useEffect(() => { loadStatus(); }, [loadStatus]);
+
+  const handleStart = async () => {
+    setLoading(true);
+    try {
+      const result = await api.startLanSync({
+        deviceName: config.device_name || "جهاز غير معروف",
+        isPrimary: config.is_primary,
+        port: config.port,
+        autoSync: config.auto_sync,
+        syncIntervalSecs: config.sync_interval_secs,
+      });
+      setStatus(result);
+      notify(t("lanSyncStarted"));
+    } catch (e) { notify(String(e), "error"); }
+    setLoading(false);
+  };
+
+  const handleStop = async () => {
+    try {
+      await api.stopLanSync();
+      setStatus(null);
+      notify(t("lanSyncStopped"));
+    } catch (e) { notify(String(e), "error"); }
+  };
+
+  const handleDiscover = async () => {
+    setLoading(true);
+    try {
+      const devices = await api.lanDiscoverDevices();
+      setConfig((c) => ({ ...c, known_devices: devices }));
+    } catch (e) { notify(String(e), "error"); }
+    setLoading(false);
+  };
+
+  const handleSyncNow = async (ip: string, port: number) => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const [pushed, pulled] = await api.lanSyncNow(ip, port);
+      setSyncResult(`تم رفع ${pushed} سجل وجلب ${pulled} سجل`);
+      notify(t("lanSyncCompleted"));
+      loadStatus();
+    } catch (e) { notify(String(e), "error"); }
+    setSyncing(false);
+  };
+
+  const handleRemoveDevice = async (deviceId: string) => {
+    try {
+      await api.removeLanDevice(deviceId);
+      setConfig((c) => ({ ...c, known_devices: c.known_devices.filter((d) => d.device_id !== deviceId) }));
+    } catch (e) { notify(String(e), "error"); }
+  };
+
+  const handleSaveConfig = async () => {
+    try {
+      await api.saveLanSyncConfig(JSON.stringify(config));
+      notify(t("settingsSaved"));
+    } catch (e) { notify(String(e), "error"); }
+  };
+
+  return (
+    <div className="print-settings">
+      {/* Status */}
+      <div className="print-section">
+        <h3>🔗 {t("lanSyncTitle")}</h3>
+        <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>{t("lanSyncDesc")}</p>
+
+        {/* Server status */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12,
+          background: status?.is_running ? "#ecfdf5" : "#f9fafb",
+          border: `1px solid ${status?.is_running ? "#86efac" : "#e5e7eb"}`,
+          marginBottom: 16,
+        }}>
+          <div style={{
+            width: 10, height: 10, borderRadius: "50%",
+            background: status?.is_running ? "#10b981" : "#d1d5db",
+          }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>
+              {status?.is_running ? t("lanSyncRunning") : t("lanSyncStopped")}
+            </div>
+            {status?.is_running && (
+              <div style={{ fontSize: 12, color: "#6b7280" }}>
+                IP: {status.device_name} | المنفذ: {status.port} | {(status.is_primary ? "رئيسي" : "فرعي")}
+              </div>
+            )}
+          </div>
+          {status?.is_running ? (
+            <button className="btn danger sm" onClick={handleStop} disabled={loading}>{t("stop")}</button>
+          ) : (
+            <button className="btn primary sm" onClick={handleStart} disabled={loading}>
+              {loading ? t("loading") : t("start")}
+            </button>
+          )}
+        </div>
+
+        {/* Config */}
+        <div className="print-fields">
+          <div className="print-field">
+            <label>{t("lanDeviceName")}</label>
+            <input value={config.device_name} onChange={(e) => setConfig((c) => ({ ...c, device_name: e.target.value }))} placeholder={t("lanDeviceNamePlaceholder")} />
+          </div>
+          <div className="print-field">
+            <label>{t("lanDeviceRole")}</label>
+            <select value={config.is_primary ? "primary" : "secondary"} onChange={(e) => setConfig((c) => ({ ...c, is_primary: e.target.value === "primary" }))}>
+              <option value="primary">{t("lanPrimary")}</option>
+              <option value="secondary">{t("lanSecondary")}</option>
+            </select>
+          </div>
+          <div className="print-field">
+            <label>{t("lanPort")}</label>
+            <input type="number" min={1024} max={65535} value={config.port} onChange={(e) => setConfig((c) => ({ ...c, port: Number(e.target.value) }))} />
+          </div>
+          <div className="print-field">
+            <label>{t("lanSyncInterval")}</label>
+            <input type="number" min={5} max={300} value={config.sync_interval_secs} onChange={(e) => setConfig((c) => ({ ...c, sync_interval_secs: Number(e.target.value) }))} />
+          </div>
+        </div>
+        <div className="print-toggles">
+          <label className="checkbox-label">
+            <input type="checkbox" checked={config.auto_sync} onChange={(e) => setConfig((c) => ({ ...c, auto_sync: e.target.checked }))} />
+            {t("lanAutoSync")}
+          </label>
+        </div>
+        <div className="form-actions" style={{ marginTop: 12 }}>
+          <button className="btn primary" onClick={handleSaveConfig}>{t("saveSettings")}</button>
+        </div>
+      </div>
+
+      {/* Devices */}
+      <div className="print-section" style={{ marginTop: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <h3 style={{ margin: 0 }}>{t("lanConnectedDevices")}</h3>
+          <button className="btn sm" onClick={handleDiscover} disabled={loading}>
+            🔍 {t("lanDiscover")}
+          </button>
+        </div>
+
+        {config.known_devices.length === 0 ? (
+          <div style={{ padding: 20, textAlign: "center", color: "#9ca3af", fontSize: 13, background: "#f9fafb", borderRadius: 12, border: "1px dashed #e5e7eb" }}>
+            {t("lanNoDevices")}
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {config.known_devices.map((device) => (
+              <div key={device.device_id} style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
+                borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff",
+              }}>
+                <div style={{
+                  width: 8, height: 8, borderRadius: "50%",
+                  background: device.is_online ? "#10b981" : "#ef4444",
+                }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{device.device_name}</div>
+                  <div style={{ fontSize: 11, color: "#6b7280" }}>
+                    {device.ip}:{device.port} | {device.is_primary ? "رئيسي" : "فرعي"}
+                  </div>
+                </div>
+                <button className="btn sm" onClick={() => handleSyncNow(device.ip, device.port)} disabled={syncing}>
+                  {syncing ? "..." : "🔄"} {t("lanSync")}
+                </button>
+                <button className="btn danger sm" onClick={() => handleRemoveDevice(device.device_id)}>
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {syncResult && (
+          <div style={{ marginTop: 8, padding: 8, borderRadius: 8, background: "#ecfdf5", color: "#065f46", fontSize: 13 }}>
+            ✓ {syncResult}
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="print-section" style={{ marginTop: 16 }}>
+        <h3>💡 {t("lanHowItWorks")}</h3>
+        <div style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.8 }}>
+          <div>1. {t("lanStep1")}</div>
+          <div>2. {t("lanStep2")}</div>
+          <div>3. {t("lanStep3")}</div>
+          <div>4. {t("lanStep4")}</div>
+          <div>5. {t("lanStep5")}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function SettingsPage() {
   const [form, setForm] = useState<Settings>({
@@ -243,7 +457,7 @@ export function SettingsPage() {
     }
   };
 
-  const toggleFeature = async (key: "maintenance" | "attendance" | "dark_mode" | "language" | "sync" | "branches" | "attendance_url" | "notifications" | "cash_register" | "customer_turns") => {
+  const toggleFeature = async (key: "maintenance" | "attendance" | "dark_mode" | "language" | "sync" | "branches" | "attendance_url" | "notifications" | "cash_register" | "customer_turns" | "lan_sync") => {
     const next = { ...features, [key]: !features[key] };
     setFeatures(next);
     saveFeatures(next);
@@ -1639,6 +1853,9 @@ export function SettingsPage() {
           </div>
         );
 
+      case "lan_sync":
+        return <LanSyncSection />;
+
       case "themes":
         return (
           <>
@@ -2290,6 +2507,50 @@ export function SettingsPage() {
                         position: "absolute",
                         top: 2,
                         left: features.customer_turns ? 24 : 2,
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        background: "#fff",
+                        transition: "left 0.2s",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                      }} />
+                    </button>
+                  </div>
+
+                  {/* LAN Sync Feature */}
+                  <div
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "14px 16px",
+                      borderRadius: 12,
+                      background: features.lan_sync ? "#ecfdf5" : "#f9fafb",
+                      border: `1px solid ${features.lan_sync ? "#86efac" : "#e5e7eb"}`,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 22 }}>🔗</span>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>{t("lanSyncItem")}</div>
+                        <div style={{ fontSize: 12, color: "#6b7280" }}>{t("lanSyncItemDesc")}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => toggleFeature("lan_sync")}
+                      style={{
+                        width: 50,
+                        height: 28,
+                        borderRadius: 14,
+                        border: "none",
+                        cursor: "pointer",
+                        position: "relative",
+                        background: features.lan_sync ? "#10b981" : "#d1d5db",
+                        transition: "background 0.2s",
+                      }}
+                    >
+                      <span style={{
+                        position: "absolute",
+                        top: 2,
+                        left: features.lan_sync ? 24 : 2,
                         width: 24,
                         height: 24,
                         borderRadius: 12,

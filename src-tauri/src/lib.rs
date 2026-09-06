@@ -6,6 +6,7 @@ mod maintenance_models;
 mod license;
 pub mod sync;
 mod sync_commands;
+pub mod lan_sync;
 pub mod utils;
 pub mod migrations;
 
@@ -234,6 +235,14 @@ pub fn run() {
             commands::get_audit_logs,
             commands::get_audit_log_count,
             commands::open_html_in_browser,
+            lan_sync::commands::start_lan_sync,
+            lan_sync::commands::stop_lan_sync,
+            lan_sync::commands::get_lan_sync_status,
+            lan_sync::commands::lan_sync_now,
+            lan_sync::commands::lan_discover_devices,
+            lan_sync::commands::save_lan_sync_config,
+            lan_sync::commands::load_lan_sync_config,
+            lan_sync::commands::remove_lan_device,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
