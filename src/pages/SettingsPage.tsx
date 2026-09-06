@@ -139,20 +139,30 @@ function LanSyncSection() {
   const [config, setConfig] = useState<LanSyncConfig>({ device_name: "", is_primary: false, port: 9527, auto_sync: false, sync_interval_secs: 15, known_devices: [] });
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [syncResult, setSyncResult] = useState<{ pushed: number; pulled: number } | null>(null);
 
   const loadStatus = useCallback(async () => {
     try {
       const s = await api.getLanSyncStatus();
       setStatus(s);
+      if (s.connected_devices.length > 0) {
+        setConfig((c) => ({ ...c, known_devices: s.connected_devices }));
+      }
     } catch {}
     try {
       const c = await api.loadLanSyncConfig();
-      setConfig(c);
+      setConfig((prev) => ({ ...prev, ...c, known_devices: c.known_devices?.length > 0 ? c.known_devices : prev.known_devices }));
     } catch {}
   }, []);
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
+
+  // Auto-refresh every 10s if running
+  useEffect(() => {
+    if (!status?.is_running) return;
+    const interval = setInterval(loadStatus, 10000);
+    return () => clearInterval(interval);
+  }, [status?.is_running, loadStatus]);
 
   const handleStart = async () => {
     setLoading(true);
@@ -165,6 +175,7 @@ function LanSyncSection() {
         syncIntervalSecs: config.sync_interval_secs,
       });
       setStatus(result);
+      setConfig((c) => ({ ...c, known_devices: result.connected_devices }));
       notify(t("lanSyncStarted"));
     } catch (e) { notify(String(e), "error"); }
     setLoading(false);
@@ -183,18 +194,20 @@ function LanSyncSection() {
     try {
       const devices = await api.lanDiscoverDevices();
       setConfig((c) => ({ ...c, known_devices: devices }));
+      notify(`تم العثور على ${devices.length} جهاز`);
     } catch (e) { notify(String(e), "error"); }
     setLoading(false);
   };
 
-  const handleSyncNow = async (ip: string, port: number) => {
+  const handleSyncNow = async (ip: string, port: number, _name: string) => {
     setSyncing(true);
     setSyncResult(null);
     try {
       const [pushed, pulled] = await api.lanSyncNow(ip, port);
-      setSyncResult(`تم رفع ${pushed} سجل وجلب ${pulled} سجل`);
-      notify(t("lanSyncCompleted"));
-      loadStatus();
+      setSyncResult({ pushed, pulled });
+      notify(`${t("lanSyncCompleted")} — رفع: ${pushed} | جلب: ${pulled}`);
+      // Reload status after sync
+      setTimeout(loadStatus, 500);
     } catch (e) { notify(String(e), "error"); }
     setSyncing(false);
   };
@@ -212,6 +225,8 @@ function LanSyncSection() {
       notify(t("settingsSaved"));
     } catch (e) { notify(String(e), "error"); }
   };
+
+  const allDevices = status?.connected_devices?.length ? status.connected_devices : config.known_devices;
 
   return (
     <div className="print-settings">
@@ -237,7 +252,7 @@ function LanSyncSection() {
             </div>
             {status?.is_running && (
               <div style={{ fontSize: 12, color: "#6b7280" }}>
-                IP: {status.device_name} | المنفذ: {status.port} | {(status.is_primary ? "رئيسي" : "فرعي")}
+                {status.device_name} | المنفذ: {status.port} | {(status.is_primary ? "رئيسي" : "فرعي")} | سجلات معلقة: {status.pending_push}
               </div>
             )}
           </div>
@@ -286,46 +301,75 @@ function LanSyncSection() {
       {/* Devices */}
       <div className="print-section" style={{ marginTop: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <h3 style={{ margin: 0 }}>{t("lanConnectedDevices")}</h3>
-          <button className="btn sm" onClick={handleDiscover} disabled={loading}>
-            🔍 {t("lanDiscover")}
-          </button>
+          <h3 style={{ margin: 0 }}>📱 {t("lanConnectedDevices")} ({allDevices.length})</h3>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn sm" onClick={handleDiscover} disabled={loading || !status?.is_running}>
+              🔍 {t("lanDiscover")}
+            </button>
+            <button className="btn sm" onClick={loadStatus} disabled={loading}>
+              🔄
+            </button>
+          </div>
         </div>
 
-        {config.known_devices.length === 0 ? (
-          <div style={{ padding: 20, textAlign: "center", color: "#9ca3af", fontSize: 13, background: "#f9fafb", borderRadius: 12, border: "1px dashed #e5e7eb" }}>
+        {allDevices.length === 0 ? (
+          <div style={{ padding: 24, textAlign: "center", color: "#9ca3af", fontSize: 13, background: "#f9fafb", borderRadius: 12, border: "1px dashed #e5e7eb" }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>📡</div>
             {t("lanNoDevices")}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {config.known_devices.map((device) => (
-              <div key={device.device_id} style={{
-                display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
-                borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff",
-              }}>
-                <div style={{
-                  width: 8, height: 8, borderRadius: "50%",
-                  background: device.is_online ? "#10b981" : "#ef4444",
-                }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{device.device_name}</div>
-                  <div style={{ fontSize: 11, color: "#6b7280" }}>
-                    {device.ip}:{device.port} | {device.is_primary ? "رئيسي" : "فرعي"}
+            {allDevices.map((device) => {
+              const isThisDevice = device.device_id === status?.device_id;
+              return (
+                <div key={device.device_id} style={{
+                  display: "flex", alignItems: "center", gap: 12, padding: "12px 16px",
+                  borderRadius: 10, border: `1px solid ${isThisDevice ? "#93c5fd" : "#e5e7eb"}`,
+                  background: isThisDevice ? "#eff6ff" : "#fff",
+                }}>
+                  <div style={{
+                    width: 10, height: 10, borderRadius: "50%",
+                    background: device.is_online ? "#10b981" : "#d1d5db",
+                    boxShadow: device.is_online ? "0 0 6px #10b981" : "none",
+                  }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>
+                      {device.device_name}
+                      {isThisDevice && <span style={{ fontSize: 11, color: "#3b82f6", marginRight: 6 }}>(هذا الجهاز)</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#6b7280", display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <span>🌐 {device.ip}:{device.port}</span>
+                      <span>{device.is_primary ? "👑 رئيسي" : "📱 فرعي"}</span>
+                      {device.last_seen && <span>🕐 {device.last_seen}</span>}
+                      <span style={{ color: device.is_online ? "#10b981" : "#ef4444", fontWeight: 600 }}>
+                        {device.is_online ? "● متصل" : "● غير متصل"}
+                      </span>
+                    </div>
                   </div>
+                  {!isThisDevice && (
+                    <>
+                      <button className="btn sm" onClick={() => handleSyncNow(device.ip, device.port, device.device_name)} disabled={syncing || !device.is_online}>
+                        {syncing ? "⏳" : "🔄"} {t("lanSync")}
+                      </button>
+                      <button className="btn danger sm" onClick={() => handleRemoveDevice(device.device_id)} style={{ padding: "4px 8px" }}>
+                        ✕
+                      </button>
+                    </>
+                  )}
                 </div>
-                <button className="btn sm" onClick={() => handleSyncNow(device.ip, device.port)} disabled={syncing}>
-                  {syncing ? "..." : "🔄"} {t("lanSync")}
-                </button>
-                <button className="btn danger sm" onClick={() => handleRemoveDevice(device.device_id)}>
-                  ✕
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
+
+        {/* Sync Result */}
         {syncResult && (
-          <div style={{ marginTop: 8, padding: 8, borderRadius: 8, background: "#ecfdf5", color: "#065f46", fontSize: 13 }}>
-            ✓ {syncResult}
+          <div style={{ marginTop: 12, padding: "12px 16px", borderRadius: 10, background: "#ecfdf5", border: "1px solid #86efac" }}>
+            <div style={{ fontWeight: 600, fontSize: 13, color: "#065f46", marginBottom: 4 }}>✓ {t("lanSyncCompleted")}</div>
+            <div style={{ fontSize: 12, color: "#047857", display: "flex", gap: 16 }}>
+              <span>📤 رفع: <b>{syncResult.pushed}</b> سجل</span>
+              <span>📥 جلب: <b>{syncResult.pulled}</b> سجل</span>
+            </div>
           </div>
         )}
       </div>
