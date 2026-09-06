@@ -41,6 +41,7 @@ export interface Supplier {
   address: string | null;
   credit_limit: number;
   notes: string | null;
+  balance: number;
 }
 
 export interface Customer {

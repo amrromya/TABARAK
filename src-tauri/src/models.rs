@@ -67,6 +67,7 @@ pub struct Supplier {
     pub address: Option<String>,
     pub credit_limit: f64,
     pub notes: Option<String>,
+    pub balance: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

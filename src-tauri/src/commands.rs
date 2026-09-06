@@ -692,7 +692,12 @@ pub fn get_product_movements(
 pub fn list_suppliers(state: State<AppState>) -> Result<Vec<Supplier>, String> {
     let conn = get_db(&state)?;
     let mut stmt = conn
-        .prepare("SELECT id, name, phone, address, credit_limit, notes FROM suppliers ORDER BY name COLLATE NOCASE")
+        .prepare("SELECT s.id, s.name, s.phone, s.address, s.credit_limit, s.notes,
+            COALESCE((SELECT SUM(total) FROM purchases WHERE supplier_id = s.id), 0)
+            - COALESCE((SELECT SUM(total) FROM purchase_returns WHERE supplier_id = s.id), 0)
+            - COALESCE((SELECT SUM(amount) FROM receipt_vouchers WHERE source_type = 'supplier' AND source_id = s.id), 0)
+            + COALESCE((SELECT SUM(amount) FROM payment_vouchers WHERE dest_type = 'supplier' AND dest_id = s.id), 0)
+            FROM suppliers s ORDER BY s.name COLLATE NOCASE")
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |r| {
@@ -703,6 +708,7 @@ pub fn list_suppliers(state: State<AppState>) -> Result<Vec<Supplier>, String> {
                 address: r.get(3)?,
                 credit_limit: r.get::<_, Option<f64>>(4)?.unwrap_or(0.0),
                 notes: r.get(5)?,
+                balance: r.get(6)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -729,6 +735,7 @@ pub fn create_supplier(state: State<AppState>, input: NewSupplier) -> Result<Sup
         address: input.address,
         credit_limit: input.credit_limit.unwrap_or(0.0),
         notes: input.notes,
+        balance: 0.0,
     })
 }
 
@@ -751,6 +758,7 @@ pub fn update_supplier(state: State<AppState>, id: i64, input: NewSupplier) -> R
         address: input.address,
         credit_limit: input.credit_limit.unwrap_or(0.0),
         notes: input.notes,
+        balance: 0.0,
     })
 }
 
@@ -4693,6 +4701,15 @@ pub fn create_receipt_voucher(state: State<AppState>, input: serde_json::Value) 
             ).map_err(|e| e.to_string())?;
         }
     }
+    // Update customer balance when collecting from a customer
+    if source_type == "customer" {
+        if let Some(cid) = source_id {
+            conn.execute(
+                "INSERT INTO customer_payments (customer_id, date, amount, notes) VALUES (?1, ?2, ?3, ?4)",
+                params![cid, date, amount, format!("سند قبض {}", voucher_no)],
+            ).map_err(|e| e.to_string())?;
+        }
+    }
     let row = conn.query_row("SELECT id, voucher_no, date, amount, source_type, source_id, source_name, payment_method, warehouse_id, notes, created_at FROM receipt_vouchers WHERE id=?1", params![id], |r| {
         Ok(serde_json::json!({
             "id": r.get::<_, i64>(0)?, "voucher_no": r.get::<_, String>(1)?, "date": r.get::<_, String>(2)?,
@@ -4707,9 +4724,86 @@ pub fn create_receipt_voucher(state: State<AppState>, input: serde_json::Value) 
 #[tauri::command]
 pub fn delete_receipt_voucher(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = get_db(&state)?;
+    // Reverse customer balance before deleting
+    let (source_type, source_id): (String, Option<i64>) = conn.query_row(
+        "SELECT source_type, source_id FROM receipt_vouchers WHERE id=?1", params![id],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    ).map_err(|e| e.to_string())?;
+    if source_type == "customer" {
+        if let Some(cid) = source_id {
+            let vno: String = conn.query_row("SELECT voucher_no FROM receipt_vouchers WHERE id=?1", params![id], |r| r.get(0)).unwrap_or_default();
+            conn.execute("DELETE FROM customer_payments WHERE customer_id = ?1 AND notes = ?2", params![cid, format!("سند قبض {}", vno)]).ok();
+        }
+    }
     conn.execute("DELETE FROM cash_register_movements WHERE reference_id = ?1 AND reference_type = 'receipt_voucher'", params![id]).map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM receipt_vouchers WHERE id=?1", params![id]).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn update_receipt_voucher(state: State<AppState>, id: i64, input: serde_json::Value) -> Result<serde_json::Value, String> {
+    let conn = get_db(&state)?;
+    let old: (String, Option<i64>, f64) = conn.query_row(
+        "SELECT source_type, source_id, amount FROM receipt_vouchers WHERE id=?1", params![id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    ).map_err(|e| format!("السند غير موجود: {}", e))?;
+    // Reverse old customer payment
+    if old.0 == "customer" {
+        if let Some(cid) = old.1 {
+            let vno: String = conn.query_row("SELECT voucher_no FROM receipt_vouchers WHERE id=?1", params![id], |r| r.get(0)).unwrap_or_default();
+            conn.execute("DELETE FROM customer_payments WHERE customer_id = ?1 AND notes = ?2", params![cid, format!("سند قبض {}", vno)]).ok();
+        }
+    }
+    // Reverse old cash register movement
+    conn.execute("DELETE FROM cash_register_movements WHERE reference_id = ?1 AND reference_type = 'receipt_voucher'", params![id]).map_err(|e| e.to_string())?;
+
+    let date = input["date"].as_str().unwrap_or("");
+    let amount = input["amount"].as_f64().unwrap_or(0.0);
+    let source_type = input["source_type"].as_str().unwrap_or("customer");
+    let source_id = input["source_id"].as_i64();
+    let source_name = input["source_name"].as_str();
+    let payment_method = input["payment_method"].as_str().unwrap_or("cash");
+    let warehouse_id = input["warehouse_id"].as_i64();
+    let notes = input["notes"].as_str();
+
+    conn.execute(
+        "UPDATE receipt_vouchers SET date=?1, amount=?2, source_type=?3, source_id=?4, source_name=?5, payment_method=?6, warehouse_id=?7, notes=?8 WHERE id=?9",
+        params![date, amount, source_type, source_id, source_name, payment_method, warehouse_id, notes, id],
+    ).map_err(|e| e.to_string())?;
+
+    // Apply new cash register movement
+    if payment_method == "cash" {
+        let has_session: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM cash_register_sessions WHERE status = 'open')", [], |r| r.get(0)
+        ).unwrap_or(false);
+        if has_session {
+            let vno: String = conn.query_row("SELECT voucher_no FROM receipt_vouchers WHERE id=?1", params![id], |r| r.get(0)).unwrap_or_default();
+            conn.execute(
+                "INSERT INTO cash_register_movements (session_id, type, amount, description, reference_id, reference_type) SELECT id, 'receipt_voucher', ?1, ?2, ?3, 'receipt_voucher' FROM cash_register_sessions WHERE status = 'open' ORDER BY id DESC LIMIT 1",
+                params![amount, format!("سند قبض {} — {}", vno, source_name.unwrap_or("")), id],
+            ).map_err(|e| e.to_string())?;
+        }
+    }
+    // Apply new customer payment
+    if source_type == "customer" {
+        if let Some(cid) = source_id {
+            let vno: String = conn.query_row("SELECT voucher_no FROM receipt_vouchers WHERE id=?1", params![id], |r| r.get(0)).unwrap_or_default();
+            conn.execute(
+                "INSERT INTO customer_payments (customer_id, date, amount, notes) VALUES (?1, ?2, ?3, ?4)",
+                params![cid, date, amount, format!("سند قبض {}", vno)],
+            ).map_err(|e| e.to_string())?;
+        }
+    }
+
+    let row = conn.query_row("SELECT id, voucher_no, date, amount, source_type, source_id, source_name, payment_method, warehouse_id, notes, created_at FROM receipt_vouchers WHERE id=?1", params![id], |r| {
+        Ok(serde_json::json!({
+            "id": r.get::<_, i64>(0)?, "voucher_no": r.get::<_, String>(1)?, "date": r.get::<_, String>(2)?,
+            "amount": r.get::<_, f64>(3)?, "source_type": r.get::<_, String>(4)?, "source_id": r.get::<_, Option<i64>>(5)?,
+            "source_name": r.get::<_, Option<String>>(6)?, "payment_method": r.get::<_, String>(7)?,
+            "warehouse_id": r.get::<_, Option<i64>>(8)?, "notes": r.get::<_, Option<String>>(9)?, "created_at": r.get::<_, Option<String>>(10)?,
+        }))
+    }).map_err(|e| e.to_string())?;
+    Ok(row)
 }
 
 // =============== ACCOUNTING: Payment Vouchers ===============
@@ -4769,6 +4863,15 @@ pub fn create_payment_voucher(state: State<AppState>, input: serde_json::Value) 
             ).map_err(|e| e.to_string())?;
         }
     }
+    // Update customer balance when paying a customer
+    if dest_type == "customer" {
+        if let Some(cid) = dest_id {
+            conn.execute(
+                "INSERT INTO customer_payments (customer_id, date, amount, notes) VALUES (?1, ?2, ?3, ?4)",
+                params![cid, date, amount, format!("سند صرف {}", voucher_no)],
+            ).map_err(|e| e.to_string())?;
+        }
+    }
     let row = conn.query_row("SELECT id, voucher_no, date, amount, dest_type, dest_id, dest_name, payment_method, warehouse_id, notes, created_at FROM payment_vouchers WHERE id=?1", params![id], |r| {
         Ok(serde_json::json!({
             "id": r.get::<_, i64>(0)?, "voucher_no": r.get::<_, String>(1)?, "date": r.get::<_, String>(2)?,
@@ -4783,9 +4886,86 @@ pub fn create_payment_voucher(state: State<AppState>, input: serde_json::Value) 
 #[tauri::command]
 pub fn delete_payment_voucher(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = get_db(&state)?;
+    // Reverse customer balance before deleting
+    let (dest_type, dest_id): (String, Option<i64>) = conn.query_row(
+        "SELECT dest_type, dest_id FROM payment_vouchers WHERE id=?1", params![id],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    ).map_err(|e| e.to_string())?;
+    if dest_type == "customer" {
+        if let Some(cid) = dest_id {
+            let vno: String = conn.query_row("SELECT voucher_no FROM payment_vouchers WHERE id=?1", params![id], |r| r.get(0)).unwrap_or_default();
+            conn.execute("DELETE FROM customer_payments WHERE customer_id = ?1 AND notes = ?2", params![cid, format!("سند صرف {}", vno)]).ok();
+        }
+    }
     conn.execute("DELETE FROM cash_register_movements WHERE reference_id = ?1 AND reference_type = 'payment_voucher'", params![id]).map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM payment_vouchers WHERE id=?1", params![id]).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn update_payment_voucher(state: State<AppState>, id: i64, input: serde_json::Value) -> Result<serde_json::Value, String> {
+    let conn = get_db(&state)?;
+    let old: (String, Option<i64>, f64) = conn.query_row(
+        "SELECT dest_type, dest_id, amount FROM payment_vouchers WHERE id=?1", params![id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    ).map_err(|e| format!("السند غير موجود: {}", e))?;
+    // Reverse old customer payment
+    if old.0 == "customer" {
+        if let Some(cid) = old.1 {
+            let vno: String = conn.query_row("SELECT voucher_no FROM payment_vouchers WHERE id=?1", params![id], |r| r.get(0)).unwrap_or_default();
+            conn.execute("DELETE FROM customer_payments WHERE customer_id = ?1 AND notes = ?2", params![cid, format!("سند صرف {}", vno)]).ok();
+        }
+    }
+    // Reverse old cash register movement
+    conn.execute("DELETE FROM cash_register_movements WHERE reference_id = ?1 AND reference_type = 'payment_voucher'", params![id]).map_err(|e| e.to_string())?;
+
+    let date = input["date"].as_str().unwrap_or("");
+    let amount = input["amount"].as_f64().unwrap_or(0.0);
+    let dest_type = input["dest_type"].as_str().unwrap_or("supplier");
+    let dest_id = input["dest_id"].as_i64();
+    let dest_name = input["dest_name"].as_str();
+    let payment_method = input["payment_method"].as_str().unwrap_or("cash");
+    let warehouse_id = input["warehouse_id"].as_i64();
+    let notes = input["notes"].as_str();
+
+    conn.execute(
+        "UPDATE payment_vouchers SET date=?1, amount=?2, dest_type=?3, dest_id=?4, dest_name=?5, payment_method=?6, warehouse_id=?7, notes=?8 WHERE id=?9",
+        params![date, amount, dest_type, dest_id, dest_name, payment_method, warehouse_id, notes, id],
+    ).map_err(|e| e.to_string())?;
+
+    // Apply new cash register movement
+    if payment_method == "cash" {
+        let has_session: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM cash_register_sessions WHERE status = 'open')", [], |r| r.get(0)
+        ).unwrap_or(false);
+        if has_session {
+            let vno: String = conn.query_row("SELECT voucher_no FROM payment_vouchers WHERE id=?1", params![id], |r| r.get(0)).unwrap_or_default();
+            conn.execute(
+                "INSERT INTO cash_register_movements (session_id, type, amount, description, reference_id, reference_type) SELECT id, 'payment_voucher', ?1, ?2, ?3, 'payment_voucher' FROM cash_register_sessions WHERE status = 'open' ORDER BY id DESC LIMIT 1",
+                params![-amount, format!("سند صرف {} — {}", vno, dest_name.unwrap_or("")), id],
+            ).map_err(|e| e.to_string())?;
+        }
+    }
+    // Apply new customer payment
+    if dest_type == "customer" {
+        if let Some(cid) = dest_id {
+            let vno: String = conn.query_row("SELECT voucher_no FROM payment_vouchers WHERE id=?1", params![id], |r| r.get(0)).unwrap_or_default();
+            conn.execute(
+                "INSERT INTO customer_payments (customer_id, date, amount, notes) VALUES (?1, ?2, ?3, ?4)",
+                params![cid, date, amount, format!("سند صرف {}", vno)],
+            ).map_err(|e| e.to_string())?;
+        }
+    }
+
+    let row = conn.query_row("SELECT id, voucher_no, date, amount, dest_type, dest_id, dest_name, payment_method, warehouse_id, notes, created_at FROM payment_vouchers WHERE id=?1", params![id], |r| {
+        Ok(serde_json::json!({
+            "id": r.get::<_, i64>(0)?, "voucher_no": r.get::<_, String>(1)?, "date": r.get::<_, String>(2)?,
+            "amount": r.get::<_, f64>(3)?, "dest_type": r.get::<_, String>(4)?, "dest_id": r.get::<_, Option<i64>>(5)?,
+            "dest_name": r.get::<_, Option<String>>(6)?, "payment_method": r.get::<_, String>(7)?,
+            "warehouse_id": r.get::<_, Option<i64>>(8)?, "notes": r.get::<_, Option<String>>(9)?, "created_at": r.get::<_, Option<String>>(10)?,
+        }))
+    }).map_err(|e| e.to_string())?;
+    Ok(row)
 }
 
 // =============== ACCOUNTING: Warehouse Transfers ===============

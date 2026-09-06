@@ -378,12 +378,16 @@ export const api = {
     invoke<any>("create_receipt_voucher", { input }),
   deleteReceiptVoucher: (id: number) =>
     invoke<void>("delete_receipt_voucher", { id }),
+  updateReceiptVoucher: (id: number, input: any) =>
+    invoke<any>("update_receipt_voucher", { id, input }),
   listPaymentVouchers: (search?: string) =>
     invoke<any[]>("list_payment_vouchers", { search: search ?? null }),
   createPaymentVoucher: (input: any) =>
     invoke<any>("create_payment_voucher", { input }),
   deletePaymentVoucher: (id: number) =>
     invoke<void>("delete_payment_voucher", { id }),
+  updatePaymentVoucher: (id: number, input: any) =>
+    invoke<any>("update_payment_voucher", { id, input }),
   listWarehouseTransfers: (search?: string) =>
     invoke<any[]>("list_warehouse_transfers", { search: search ?? null }),
   createWarehouseTransfer: (input: any) =>

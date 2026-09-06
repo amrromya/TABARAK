@@ -654,6 +654,8 @@ const translations: Record<string, Record<Lang, string>> = {
   paymentMethodField: { ar: "طريقة الصرف", en: "Payment Method" },
   paymentVoucherCreated: { ar: "تم إنشاء سند الصرف", en: "Payment voucher created" },
   confirmDeletePayment: { ar: "هل تريد حذف سند الصرف؟", en: "Delete this payment voucher?" },
+  editPaymentVoucher: { ar: "تعديل سند الصرف", en: "Edit Payment Voucher" },
+  editReceiptVoucher: { ar: "تعديل سند القبض", en: "Edit Receipt Voucher" },
 
   // ===== Stock Count Page =====
   stockCountTitle: { ar: "فاتورة جرد مؤقت", en: "Temporary Stock Count" },

@@ -3,7 +3,6 @@ import { api } from "../api";
 import {
   Field,
   Modal,
-  confirmDialog,
   money,
   today,
   useToast,
@@ -40,6 +39,9 @@ export function PaymentVouchers() {
   const [warehouseId, setWarehouseId] = useState("");
   const [notes, setNotes] = useState("");
 
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
   const notify = useToast();
 
   const load = useCallback(async () => {
@@ -75,6 +77,20 @@ export function PaymentVouchers() {
     setPaymentMethod("cash");
     setWarehouseId("");
     setNotes("");
+    setEditingId(null);
+  };
+
+  const startEdit = (v: any) => {
+    setEditingId(v.id);
+    setDate(v.date);
+    setAmount(v.amount);
+    setDestType(v.dest_type);
+    setDestId(v.dest_id ? String(v.dest_id) : "");
+    setDestName(v.dest_name || "");
+    setPaymentMethod(v.payment_method);
+    setWarehouseId(v.warehouse_id ? String(v.warehouse_id) : "");
+    setNotes(v.notes || "");
+    setShowForm(true);
   };
 
   const save = async (e: React.FormEvent) => {
@@ -84,7 +100,7 @@ export function PaymentVouchers() {
       return;
     }
     try {
-      await api.createPaymentVoucher({
+      const payload = {
         date,
         amount,
         dest_type: destType,
@@ -93,8 +109,14 @@ export function PaymentVouchers() {
         payment_method: paymentMethod,
         warehouse_id: warehouseId ? Number(warehouseId) : null,
         notes: notes.trim() || null,
-      });
-      notify(t("paymentVoucherCreated"));
+      };
+      if (editingId) {
+        await api.updatePaymentVoucher(editingId, payload);
+        notify(t("settingsSaved"));
+      } else {
+        await api.createPaymentVoucher(payload);
+        notify(t("paymentVoucherCreated"));
+      }
       setShowForm(false);
       resetForm();
       load();
@@ -103,8 +125,10 @@ export function PaymentVouchers() {
     }
   };
 
-  const remove = async (id: number) => {
-    if (!(await confirmDialog(t("confirmDeletePayment")))) return;
+  const doDelete = async () => {
+    if (confirmDeleteId === null) return;
+    const id = confirmDeleteId;
+    setConfirmDeleteId(null);
     try {
       await api.deletePaymentVoucher(id);
       notify(t("receiptDeleted"));
@@ -192,9 +216,10 @@ export function PaymentVouchers() {
                   <td>{t(PAYMENT_LABELS[v.payment_method] ?? "") || v.payment_method}</td>
                   <td style={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.notes ?? "—"}</td>
                   <td>
-                    <button className="btn sm danger" onClick={() => remove(v.id)}>
-                      {t("delete")}
-                    </button>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button className="btn sm" onClick={() => startEdit(v)}>{t("edit")}</button>
+                      <button className="btn sm danger" onClick={() => setConfirmDeleteId(v.id)}>{t("delete")}</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -203,8 +228,18 @@ export function PaymentVouchers() {
         </div>
       )}
 
+      {confirmDeleteId !== null && (
+        <Modal title={t("confirmDeletePayment")} onClose={() => setConfirmDeleteId(null)} width="380px">
+          <p style={{ marginBottom: 16, fontSize: 14, lineHeight: 1.6 }}>{t("confirmDeletePayment")}</p>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button className="btn danger" onClick={doDelete}>{t("delete")}</button>
+            <button className="btn" onClick={() => setConfirmDeleteId(null)}>{t("cancel")}</button>
+          </div>
+        </Modal>
+      )}
+
       {showForm && (
-        <Modal title={t("newPaymentVoucherTitle")} onClose={() => setShowForm(false)} width="500px">
+        <Modal title={editingId ? t("editPaymentVoucher") : t("newPaymentVoucherTitle")} onClose={() => { setShowForm(false); resetForm(); }} width="500px">
           <form onSubmit={save}>
             <div className="form-grid">
               <Field label={t("dateFieldRequired")}>
@@ -276,7 +311,7 @@ export function PaymentVouchers() {
             </div>
             <div className="form-actions">
               <button type="submit" className="btn primary">{t("saveBtn")}</button>
-              <button type="button" className="btn" onClick={() => setShowForm(false)}>{t("cancel")}</button>
+              <button type="button" className="btn" onClick={() => { setShowForm(false); resetForm(); }}>{t("cancel")}</button>
             </div>
           </form>
         </Modal>

@@ -194,19 +194,28 @@ export function SuppliersPage() {
               <th>{t("phone")}</th>
               <th>{t("address")}</th>
               <th>{t("creditLimit")}</th>
+              <th>{t("balanceLabel")}</th>
               <th>{t("notes")}</th>
               <th>{t("actions")}</th>
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={6} className="empty">{t("loading")}</td></tr>}
-            {!loading && filtered.length === 0 && <tr><td colSpan={6} className="empty">{t("noSuppliers")}</td></tr>}
+            {loading && <tr><td colSpan={7} className="empty">{t("loading")}</td></tr>}
+            {!loading && filtered.length === 0 && <tr><td colSpan={7} className="empty">{t("noSuppliers")}</td></tr>}
             {filtered.map((s) => (
               <tr key={s.id}>
                 <td className="strong">{s.name}</td>
                 <td>{s.phone ?? "—"}</td>
                 <td>{s.address ?? "—"}</td>
                 <td>{s.credit_limit > 0 ? money(s.credit_limit) : "—"}</td>
+                <td>
+                  <span style={{
+                    color: s.balance > 0 ? "#dc2626" : s.balance < 0 ? "#0f8a5f" : "#6b7280",
+                    fontWeight: 700, fontSize: 13,
+                  }}>
+                    {s.balance > 0 ? "−" : ""}{money(Math.abs(s.balance))}
+                  </span>
+                </td>
                 <td>{s.notes ?? "—"}</td>
                 <td className="actions">
                   <button className="btn sm" onClick={() => openAccountStatement(s)}>{t("statement")}</button>

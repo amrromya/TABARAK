@@ -3,7 +3,6 @@ import { api } from "../api";
 import {
   Field,
   Modal,
-  confirmDialog,
   money,
   today,
   useToast,
@@ -40,6 +39,9 @@ export function ReceiptVouchers() {
   const [warehouseId, setWarehouseId] = useState("");
   const [notes, setNotes] = useState("");
 
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
   const notify = useToast();
 
   const load = useCallback(async () => {
@@ -75,6 +77,20 @@ export function ReceiptVouchers() {
     setPaymentMethod("cash");
     setWarehouseId("");
     setNotes("");
+    setEditingId(null);
+  };
+
+  const startEdit = (v: any) => {
+    setEditingId(v.id);
+    setDate(v.date);
+    setAmount(v.amount);
+    setSourceType(v.source_type);
+    setSourceId(v.source_id ? String(v.source_id) : "");
+    setSourceName(v.source_name || "");
+    setPaymentMethod(v.payment_method);
+    setWarehouseId(v.warehouse_id ? String(v.warehouse_id) : "");
+    setNotes(v.notes || "");
+    setShowForm(true);
   };
 
   const save = async (e: React.FormEvent) => {
@@ -84,7 +100,7 @@ export function ReceiptVouchers() {
       return;
     }
     try {
-      await api.createReceiptVoucher({
+      const payload = {
         date,
         amount,
         source_type: sourceType,
@@ -93,8 +109,14 @@ export function ReceiptVouchers() {
         payment_method: paymentMethod,
         warehouse_id: warehouseId ? Number(warehouseId) : null,
         notes: notes.trim() || null,
-      });
-      notify(t("receiptVoucherCreated"));
+      };
+      if (editingId) {
+        await api.updateReceiptVoucher(editingId, payload);
+        notify(t("settingsSaved"));
+      } else {
+        await api.createReceiptVoucher(payload);
+        notify(t("receiptVoucherCreated"));
+      }
       setShowForm(false);
       resetForm();
       load();
@@ -103,8 +125,10 @@ export function ReceiptVouchers() {
     }
   };
 
-  const remove = async (id: number) => {
-    if (!(await confirmDialog(t("confirmDeleteReceipt")))) return;
+  const doDelete = async () => {
+    if (confirmDeleteId === null) return;
+    const id = confirmDeleteId;
+    setConfirmDeleteId(null);
     try {
       await api.deleteReceiptVoucher(id);
       notify(t("receiptDeleted"));
@@ -192,9 +216,10 @@ export function ReceiptVouchers() {
                   <td>{t(PAYMENT_LABELS[v.payment_method] ?? "") || v.payment_method}</td>
                   <td style={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.notes ?? "—"}</td>
                   <td>
-                    <button className="btn sm danger" onClick={() => remove(v.id)}>
-                      {t("delete")}
-                    </button>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button className="btn sm" onClick={() => startEdit(v)}>{t("edit")}</button>
+                      <button className="btn sm danger" onClick={() => setConfirmDeleteId(v.id)}>{t("delete")}</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -203,8 +228,18 @@ export function ReceiptVouchers() {
         </div>
       )}
 
+      {confirmDeleteId !== null && (
+        <Modal title={t("confirmDeleteReceipt")} onClose={() => setConfirmDeleteId(null)} width="380px">
+          <p style={{ marginBottom: 16, fontSize: 14, lineHeight: 1.6 }}>{t("confirmDeleteReceipt")}</p>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button className="btn danger" onClick={doDelete}>{t("delete")}</button>
+            <button className="btn" onClick={() => setConfirmDeleteId(null)}>{t("cancel")}</button>
+          </div>
+        </Modal>
+      )}
+
       {showForm && (
-        <Modal title={t("newReceiptVoucherTitle")} onClose={() => setShowForm(false)} width="500px">
+        <Modal title={editingId ? t("editReceiptVoucher") : t("newReceiptVoucherTitle")} onClose={() => { setShowForm(false); resetForm(); }} width="500px">
           <form onSubmit={save}>
             <div className="form-grid">
               <Field label={t("dateFieldRequired")}>
@@ -276,7 +311,7 @@ export function ReceiptVouchers() {
             </div>
             <div className="form-actions">
               <button type="submit" className="btn primary">{t("saveBtn")}</button>
-              <button type="button" className="btn" onClick={() => setShowForm(false)}>{t("cancel")}</button>
+              <button type="button" className="btn" onClick={() => { setShowForm(false); resetForm(); }}>{t("cancel")}</button>
             </div>
           </form>
         </Modal>
