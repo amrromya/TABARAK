@@ -109,7 +109,7 @@ export async function printSaleReceipt(params: {
   date: string; customerName: string; paymentMethod: string; employeeName: string;
   items: { name: string; qty: string; price: string; total: string }[];
   total: number; discount: number; additional: number;
-  netTotal: number; currency: string; footer: string;
+  netTotal: number; currency: string; footer: string; docType?: string;
 }) {
   const ps = getPrintSettings();
   const width = getReceiptWidth();
@@ -129,6 +129,7 @@ export async function printSaleReceipt(params: {
     printerWidth: width,
     printerName: getReceiptPrinter(),
     templateJson: template,
+    docType: params.docType || "SALE INVOICE",
   });
 }
 
@@ -156,6 +157,7 @@ export async function printSale(sale: {
   payment_method: string; employee_name: string | null;
   items: { product_name: string; item_name?: string | null; quantity: number; sell_price: number; total: number }[];
   total: number; discount: number; additional: number; net_total: number;
+  doc_type?: string;
 }, settings: Settings) {
   const ps = getPrintSettings();
   const items = sale.items
@@ -183,6 +185,7 @@ export async function printSale(sale: {
     netTotal: sale.net_total,
     currency: settings.currency || "ج.م",
     footer: ps.invoiceFooter ? (settings.invoice_footer || "") : "",
+    docType: sale.doc_type || "SALE INVOICE",
   });
 }
 

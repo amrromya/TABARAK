@@ -97,6 +97,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
   const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
   const [activeAddonLine, setActiveAddonLine] = useState<number | null>(null);
   const [quoteMode, setQuoteMode] = useState(false);
+  const printingRef = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -542,6 +543,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
   };
 
   const printCurrent = async () => {
+    if (printingRef.current) return;
     if (currentId != null) {
       try {
         const s = await api.getSale(currentId);
@@ -588,10 +590,13 @@ export function Pos({ onBack }: { onBack: () => void }) {
   };
 
   const printQuote = () => {
+    if (printingRef.current) return;
     if (lines.length === 0) {
       notify(t("addItemError"), "error");
       return;
     }
+    printingRef.current = true;
+    setTimeout(() => { printingRef.current = false; }, 3000);
     const wh = warehouses.find((w) => w.id === Number(warehouseId));
     const emp = employees.find((e) => e.id === Number(employeeId));
     const custName =
@@ -613,6 +618,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
       payment_method: paymentMethod === "card" ? (cardSubType === "wallet" ? "card_wallet" : "card_visa") : paymentMethod,
       employee_id: employeeId ? Number(employeeId) : null,
       employee_name: emp?.name ?? null,
+      doc_type: t("priceQuoteTitle"),
       items: lines.map((l) => ({
         product_id: l.product_id,
         product_name: l.name,

@@ -427,7 +427,7 @@ export const api = {
     date: string; customerName: string; paymentMethod: string; employeeName: string;
     itemsJson: string; total: number; discount: number; additional: number;
     netTotal: number; currency: string; footer: string; printerWidth: string;
-    printerName: string; templateJson: string;
+    printerName: string; templateJson: string; docType: string;
   }) => invoke<void>("print_sale_receipt", params),
   printBarcodeLabel: (params: {
     barcodeImageBase64: string; productName: string; barcodeValue: string;

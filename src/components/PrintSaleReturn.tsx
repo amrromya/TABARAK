@@ -40,6 +40,7 @@ export function PrintSaleReturn({
           netTotal: saleReturn.total - saleReturn.discount + (saleReturn.additional || 0),
           currency: settings.currency || "ج.م",
           footer: ps.invoiceFooter ? (settings.invoice_footer || "") : "",
+          docType: "SALE RETURN",
         });
       } catch (err) {
         console.error("PrintSaleReturn failed:", err);

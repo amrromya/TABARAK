@@ -40,6 +40,7 @@ export function PrintPurchaseReturn({
           netTotal: purchaseReturn.total - purchaseReturn.discount + (purchaseReturn.additional || 0),
           currency: settings.currency || "ج.م",
           footer: ps.invoiceFooter ? (settings.invoice_footer || "") : "",
+          docType: "PURCHASE RETURN",
         });
       } catch (err) {
         console.error("PrintPurchaseReturn failed:", err);

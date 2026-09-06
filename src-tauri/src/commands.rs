@@ -5407,6 +5407,7 @@ pub fn print_sale_receipt(
     printer_width: String,
     printer_name: String,
     template_json: String,
+    doc_type: String,
 ) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
@@ -5436,6 +5437,7 @@ pub fn print_sale_receipt(
         let currency_esc = currency.replace('\'', "''");
         let items_esc = items_json.replace('\'', "''");
         let printer_name_esc = printer_name.replace('\'', "''");
+        let doc_type_esc = doc_type.replace('\'', "''");
 
         let is_58mm = printer_width == "58mm";
         let width_px = if is_58mm { 300 } else { 400 };
@@ -5483,7 +5485,7 @@ pub fn print_sale_receipt(
                if ('{phone_esc}') {{ $g.DrawString('Tel: {phone_esc}', $smallFont, $brush, $cx, $y, $center); $y += 16 }}\n\
                if ('{address_esc}') {{ $g.DrawString('{address_esc}', $smallFont, $brush, $cx, $y, $center); $y += 16 }}\n\
                $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
-               $g.DrawString('SALE INVOICE', $boldFont, $brush, $cx, $y, $center); $y += 18\n\
+               $g.DrawString('{doc_type_esc}', $boldFont, $brush, $cx, $y, $center); $y += 18\n\
                $g.DrawString('#{invoice_esc}', $boldFont, $brush, $right, $y, $right2); $y += 18\n\
                if ({t_show_date_ps}) {{ $g.DrawString('Date: {date_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
                if ({t_show_customer_ps}) {{ $g.DrawString('Customer: {customer_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
@@ -5524,6 +5526,7 @@ pub fn print_sale_receipt(
             currency_esc = currency_esc,
             items_esc = items_esc,
             printer_name_esc = printer_name_esc,
+            doc_type_esc = doc_type_esc,
             width_px = width_px,
             font_size = font_size,
             title_size = title_size,

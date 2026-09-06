@@ -40,6 +40,7 @@ export function PrintPurchaseThermal({
           netTotal: purchase.total - purchase.discount + (purchase.additional || 0),
           currency: settings.currency || "ج.م",
           footer: ps.invoiceFooter ? (settings.invoice_footer || "") : "",
+          docType: "PURCHASE INVOICE",
         });
       } catch (err) {
         console.error("PrintPurchaseThermal failed:", err);

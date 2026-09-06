@@ -97,6 +97,7 @@ export interface Sale {
   employee_id: number | null;
   employee_name: string | null;
   items: SaleItem[];
+  doc_type?: string;
 }
 
 export interface PurchaseItem {
