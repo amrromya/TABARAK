@@ -1195,41 +1195,194 @@ export function SettingsPage() {
                   </label>
                 </div>
 
-                {/* Live Preview */}
+                {/* Live Preview — Paper-Size Aware */}
                 <div style={{ marginTop: 20 }}>
                   <h4 style={{ margin: "0 0 12px", fontSize: 15 }}>{t("receiptPreview")}</h4>
-                  <div style={{
-                    border: "1px solid #d1d5db", borderRadius: 8, padding: 16,
-                    maxWidth: 350, fontFamily: "'Courier New', monospace",
-                    fontSize: printSettings.receiptFontSize || 10, backgroundColor: "#fff",
-                    direction: "ltr", textAlign: (printSettings.receiptHeaderAlign || "center") as "center" | "right" | "left",
-                  }}>
-                    <div style={{ fontWeight: "bold", fontSize: (printSettings.receiptFontSize || 10) + 2, marginBottom: 4, color: printSettings.receiptPrimaryColor || "#000" }}>
-                      {form?.store_name || "تبارك"}
-                    </div>
-                    {form?.phone && <div style={{ fontSize: (printSettings.receiptFontSize || 10) - 1 }}>Tel: {form.phone}</div>}
-                    {form?.address && <div style={{ fontSize: (printSettings.receiptFontSize || 10) - 1 }}>{form.address}</div>}
-                    <hr style={{ margin: "6px 0", border: "none", borderTop: `1px dashed ${printSettings.receiptPrimaryColor || "#000"}` }} />
-                    <div style={{ fontWeight: "bold", marginBottom: 4, color: printSettings.receiptPrimaryColor || "#000" }}>SALE INVOICE</div>
-                    <div style={{ textAlign: "right" }}>
-                      <div>#12345</div>
-                      {printSettings.receiptShowDate !== false && <div>Date: {new Date().toLocaleDateString()}</div>}
-                      {printSettings.receiptShowCustomer !== false && <div>Customer: نقدي</div>}
-                      {printSettings.receiptShowPayment !== false && <div>Payment: نقدي</div>}
-                      {printSettings.receiptShowEmployee !== false && <div>Employee: موظف</div>}
-                    </div>
-                    <hr style={{ margin: "6px 0", border: "none", borderTop: `1px dashed ${printSettings.receiptPrimaryColor || "#000"}` }} />
-                    <div style={{ textAlign: "right" }}>
-                      <div>منتج Example 2 x 10.00 = 20.00</div>
-                    </div>
-                    <hr style={{ margin: "6px 0", border: "none", borderTop: `1px dashed ${printSettings.receiptPrimaryColor || "#000"}` }} />
-                    <div style={{ textAlign: "right", fontWeight: "bold", color: printSettings.receiptPrimaryColor || "#000" }}>
-                      <div>Total: 20.00</div>
-                      <div>NET: 20.00 {form?.currency || "ج.م"}</div>
-                    </div>
-                    <hr style={{ margin: "6px 0", border: "none", borderTop: `1px dashed ${printSettings.receiptPrimaryColor || "#000"}` }} />
-                    <div style={{ fontWeight: "bold", color: printSettings.receiptPrimaryColor || "#000" }}>{printSettings.receiptThankYouText || "شكراً لاختياركم!"}</div>
-                  </div>
+                  {(() => {
+                    const paper = printSettings.receiptPrinter || "A4";
+                    const isThermal = paper === "58mm" || paper === "80mm";
+                    const fs = printSettings.receiptFontSize || 10;
+                    const color = printSettings.receiptPrimaryColor || "#000";
+                    const align = (printSettings.receiptHeaderAlign || "center") as "center" | "right" | "left";
+                    const sampleItems = [
+                      { name: "スマートフォن Case", qty: 2, price: 15.5 },
+                      { name: "شاحن لاسلكي", qty: 1, price: 85.0 },
+                      { name: "سماعات بلوتوث", qty: 1, price: 120.0 },
+                    ];
+                    const subtotal = sampleItems.reduce((s, i) => s + i.qty * i.price, 0);
+                    const discount = 10;
+                    const net = subtotal - discount;
+
+                    /* ── Thermal preview (58mm / 80mm) ── */
+                    if (isThermal) {
+                      const previewW = paper === "58mm" ? 190 : 280;
+                      return (
+                        <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "flex-start" }}>
+                          {/* Actual-size paper strip */}
+                          <div style={{
+                            width: previewW, border: "1px solid #d1d5db", borderRadius: 8, padding: "12px 10px",
+                            fontFamily: "'Courier New', monospace", fontSize: fs, backgroundColor: "#fff",
+                            direction: "ltr", textAlign: align, lineHeight: 1.4, overflow: "hidden",
+                          }}>
+                            {printSettings.invoiceLogo && (
+                              <div style={{ textAlign: "center", marginBottom: 6 }}>
+                                <img src={printSettings.invoiceLogo} alt="" style={{ maxWidth: paper === "58mm" ? 80 : 120, maxHeight: 40 }} />
+                              </div>
+                            )}
+                            <div style={{ fontWeight: "bold", fontSize: fs + 2, marginBottom: 2, color }}>{form?.store_name || "تبارك"}</div>
+                            {form?.phone && <div style={{ fontSize: fs - 1 }}>Tel: {form.phone}</div>}
+                            {form?.address && <div style={{ fontSize: fs - 1 }}>{form.address}</div>}
+                            <hr style={{ margin: "5px 0", border: "none", borderTop: `1px dashed ${color}` }} />
+                            <div style={{ fontWeight: "bold", fontSize: fs + 1, marginBottom: 2, color }}>فاتورة بيع</div>
+                            <div style={{ textAlign: "right", fontSize: fs - 1 }}>
+                              <div>#12345</div>
+                              {printSettings.receiptShowDate !== false && <div>التاريخ: {new Date().toLocaleDateString("ar-EG")}</div>}
+                              {printSettings.receiptShowCustomer !== false && <div>العميل: نقدي</div>}
+                              {printSettings.receiptShowPayment !== false && <div>الدفع: نقدي</div>}
+                              {printSettings.receiptShowEmployee !== false && <div>الموظف: أحمد</div>}
+                            </div>
+                            <hr style={{ margin: "5px 0", border: "none", borderTop: `1px dashed ${color}` }} />
+                            <div style={{ textAlign: "right", fontSize: fs - 1 }}>
+                              {sampleItems.map((it, i) => (
+                                <div key={i} style={{ marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {it.name.slice(0, paper === "58mm" ? 16 : 22)} {it.qty}×{it.price.toFixed(2)} = {(it.qty * it.price).toFixed(2)}
+                                </div>
+                              ))}
+                            </div>
+                            <hr style={{ margin: "5px 0", border: "none", borderTop: `1px dashed ${color}` }} />
+                            <div style={{ textAlign: "right", fontSize: fs - 1 }}>
+                              <div>المجموع: {subtotal.toFixed(2)}</div>
+                              <div>الخصم: -{discount.toFixed(2)}</div>
+                            </div>
+                            <div style={{ textAlign: "right", fontWeight: "bold", fontSize: fs + 1, color, marginTop: 2 }}>
+                              الصافي: {net.toFixed(2)} {form?.currency || "ج.م"}
+                            </div>
+                            <hr style={{ margin: "5px 0", border: "none", borderTop: `1px dashed ${color}` }} />
+                            {printSettings.warrantyText && (
+                              <div style={{ fontSize: fs - 2, color: "#666", marginBottom: 4, textAlign: "center" }}>{printSettings.warrantyText}</div>
+                            )}
+                            <div style={{ fontWeight: "bold", fontSize: fs, color, textAlign: "center" }}>{printSettings.receiptThankYouText || "شكراً لاختياركم!"}</div>
+                          </div>
+                          {/* Info card */}
+                          <div style={{ flex: 1, minWidth: 200, fontSize: 13, color: "#64748b", lineHeight: 1.8 }}>
+                            <div style={{ fontWeight: 600, marginBottom: 6, color: "#1e293b" }}>مواصفات الطباعة</div>
+                            <div>📐 المقاس: <b>{paper}</b></div>
+                            <div>📏 العرض الفعلي: <b>{paper === "58mm" ? "48" : "72"} mm</b></div>
+                            <div>🔤 حجم الخط: <b>{fs} pt</b></div>
+                            <div>🎨 اللون: <b style={{ color }}>{color}</b></div>
+                            <div>📐 المحاذاة: <b>{align === "center" ? "وسط" : align === "right" ? "يمين" : "يسار"}</b></div>
+                            <div>🖼️ الشعار: <b>{printSettings.invoiceLogo ? "✓" : "—"}</b></div>
+                            <div>📦 العناصر: <b>{sampleItems.length}</b></div>
+                            <p style={{ marginTop: 8, fontSize: 11, color: "#94a3b8" }}>هذا هو المقاس الفعلي للإيصال عند الطباعة على ورق حراري {paper}</p>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    /* ── Standard paper preview (A4 / A5) ── */
+                    const isLandscape = printSettings.invoiceLandscape;
+                    const scale = paper === "A5" ? 0.55 : 0.7;
+                    const pageW = isLandscape ? (paper === "A5" ? 297 : 297) : (paper === "A5" ? 148 : 210);
+                    const pageH = isLandscape ? (paper === "A5" ? 148 : 210) : (paper === "A5" ? 210 : 297);
+                    const previewPxW = Math.round(pageW * scale);
+                    const previewPxH = Math.round(pageH * scale);
+                    const margin = printSettings.invoiceMargins || 10;
+                    return (
+                      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "flex-start" }}>
+                        {/* Page preview */}
+                        <div style={{
+                          width: previewPxW, height: previewPxH, border: "1px solid #d1d5db", borderRadius: 6,
+                          backgroundColor: "#fff", padding: Math.round(margin * scale * 1.2),
+                          fontFamily: "'Cairo', 'Tahoma', sans-serif", fontSize: Math.round(fs * scale * 1.1),
+                          direction: "rtl", textAlign: "right", overflow: "hidden", display: "flex", flexDirection: "column",
+                          boxShadow: "0 2px 8px rgba(0,0,0,.08)", position: "relative",
+                        }}>
+                          {/* Header */}
+                          {printSettings.invoiceHeader && (
+                            <div style={{ textAlign: align, marginBottom: Math.round(8 * scale), borderBottom: `2px solid ${color}`, paddingBottom: Math.round(6 * scale) }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: align === "center" ? "center" : align === "left" ? "flex-start" : "flex-end" }}>
+                                {printSettings.invoiceLogo && <img src={printSettings.invoiceLogo} alt="" style={{ maxHeight: Math.round(35 * scale), maxWidth: Math.round(80 * scale) }} />}
+                                <div>
+                                  <div style={{ fontWeight: "bold", fontSize: Math.round((fs + 5) * scale * 1.1), color }}>{form?.store_name || "تبارك"}</div>
+                                  {form?.phone && <div style={{ fontSize: Math.round((fs - 1) * scale) }}>📞 {form.phone}</div>}
+                                  {form?.address && <div style={{ fontSize: Math.round((fs - 1) * scale) }}>📍 {form.address}</div>}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {/* Invoice title + meta */}
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: Math.round(6 * scale), fontSize: Math.round((fs - 1) * scale) }}>
+                            <div style={{ fontWeight: "bold", fontSize: Math.round((fs + 3) * scale * 1.1), color }}>فاتورة بيع</div>
+                            <div style={{ textAlign: "left", fontSize: Math.round((fs - 2) * scale), color: "#555" }}>
+                              <div>#12345</div>
+                              {printSettings.receiptShowDate !== false && <div>{new Date().toLocaleDateString("ar-EG")}</div>}
+                            </div>
+                          </div>
+                          {/* Customer / payment info */}
+                          <div style={{ display: "flex", gap: Math.round(16 * scale), marginBottom: Math.round(6 * scale), fontSize: Math.round((fs - 2) * scale), color: "#444" }}>
+                            {printSettings.receiptShowCustomer !== false && <div>العميل: <b>نقدي</b></div>}
+                            {printSettings.receiptShowPayment !== false && <div>الدفع: <b>نقدي</b></div>}
+                            {printSettings.receiptShowEmployee !== false && <div>الموظف: <b>أحمد</b></div>}
+                          </div>
+                          {/* Items table */}
+                          <div style={{ flex: 1, border: `1px solid #e5e7eb`, borderRadius: 4, overflow: "hidden", fontSize: Math.round((fs - 2) * scale) }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                              <thead>
+                                <tr style={{ backgroundColor: color, color: "#fff", fontSize: Math.round((fs - 3) * scale) }}>
+                                  <th style={{ padding: `${Math.round(4 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "right" }}>المنتج</th>
+                                  <th style={{ padding: `${Math.round(4 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "center" }}>الكمية</th>
+                                  <th style={{ padding: `${Math.round(4 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "center" }}>السعر</th>
+                                  <th style={{ padding: `${Math.round(4 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "left" }}>الإجمالي</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {sampleItems.map((it, i) => (
+                                  <tr key={i} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                                    <td style={{ padding: `${Math.round(3 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "right" }}>{it.name}</td>
+                                    <td style={{ padding: `${Math.round(3 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "center" }}>{it.qty}</td>
+                                    <td style={{ padding: `${Math.round(3 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "center" }}>{it.price.toFixed(2)}</td>
+                                    <td style={{ padding: `${Math.round(3 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "left" }}>{(it.qty * it.price).toFixed(2)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          {/* Totals */}
+                          <div style={{ marginTop: Math.round(6 * scale), display: "flex", justifyContent: "flex-end" }}>
+                            <div style={{ fontSize: Math.round((fs - 2) * scale), lineHeight: 1.7, textAlign: "left" }}>
+                              <div>المجموع الفرعي: {subtotal.toFixed(2)}</div>
+                              <div>الخصم: -{discount.toFixed(2)}</div>
+                              <div style={{ fontWeight: "bold", fontSize: Math.round((fs + 2) * scale * 1.1), color, borderTop: `2px solid ${color}`, paddingTop: Math.round(3 * scale) }}>
+                                الصافي: {net.toFixed(2)} {form?.currency || "ج.م"}
+                              </div>
+                            </div>
+                          </div>
+                          {/* Footer */}
+                          {printSettings.invoiceFooter && (
+                            <div style={{ marginTop: "auto", paddingTop: Math.round(6 * scale), borderTop: `1px dashed ${color}`, textAlign: "center", fontSize: Math.round((fs - 3) * scale), color: "#666" }}>
+                              {printSettings.warrantyText && <div style={{ marginBottom: 3 }}>{printSettings.warrantyText}</div>}
+                              <div style={{ fontWeight: "bold", color }}>{printSettings.receiptThankYouText || "شكراً لاختياركم!"}</div>
+                            </div>
+                          )}
+                        </div>
+                        {/* Info card */}
+                        <div style={{ flex: 1, minWidth: 200, fontSize: 13, color: "#64748b", lineHeight: 1.8 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 6, color: "#1e293b" }}>مواصفات الطباعة</div>
+                          <div>📐 المقاس: <b>{paper}</b> {isLandscape ? "(أفقي)" : "(عمودي)"}</div>
+                          <div>📏 الأبعاد: <b>{pageW} × {pageH} mm</b></div>
+                          <div>🔤 حجم الخط: <b>{fs} pt</b></div>
+                          <div>🎨 اللون: <b style={{ color }}>{color}</b></div>
+                          <div>📐 المحاذاة: <b>{align === "center" ? "وسط" : align === "right" ? "يمين" : "يسار"}</b></div>
+                          <div>🖼️ الشعار: <b>{printSettings.invoiceLogo ? "✓" : "—"}</b></div>
+                          <div>📄 الهوامش: <b>{margin} mm</b></div>
+                          <div>📦 العناصر: <b>{sampleItems.length}</b></div>
+                          <div>📋 الترويسة: <b>{printSettings.invoiceHeader ? "✓" : "—"}</b></div>
+                          <div>📋 التذييل: <b>{printSettings.invoiceFooter ? "✓" : "—"}</b></div>
+                          <p style={{ marginTop: 8, fontSize: 11, color: "#94a3b8" }}>معاينة تقريبية — النتيجة الفعلية تعتمد على إعدادات الطابعة والنظام</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
