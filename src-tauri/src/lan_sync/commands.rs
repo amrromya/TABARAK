@@ -1,6 +1,6 @@
 use tauri::State;
 use crate::AppState;
-use super::{LanSyncConfig, LanSyncStatus, LanDevice, start_lan_server, stop_lan_server, get_status, sync_with_device, discover_devices, save_config, load_config, remove_device};
+use super::{LanSyncConfig, LanSyncStatus, LanDevice, start_lan_server, stop_lan_server, get_status, sync_with_device, discover_devices, save_config, load_config, remove_device, SERVER_STATE};
 
 #[tauri::command]
 pub fn start_lan_sync(
@@ -37,20 +37,27 @@ pub fn get_lan_sync_status(
         let mut stmt = conn.prepare("SELECT value FROM sync_meta WHERE key = 'device_id'").map_err(|e| e.to_string())?;
         stmt.query_row([], |row| row.get::<_, String>(0)).unwrap_or_default()
     };
-    
-    // Build a minimal state for status
-    use super::ServerState;
-    use std::sync::{Arc, atomic::AtomicBool};
-    let state_obj = Arc::new(ServerState {
-        running: Arc::new(AtomicBool::new(false)),
-        device_id,
-        device_name: config.device_name.clone(),
-        is_primary: config.is_primary,
-        known_devices: std::sync::Arc::new(std::sync::Mutex::new(config.known_devices.clone())),
-        last_sync: std::sync::Arc::new(std::sync::Mutex::new(None)),
-    });
-    
-    Ok(get_status(&conn, &state_obj))
+
+    // Check if server is actually running
+    let global = SERVER_STATE.lock().map_err(|e| e.to_string())?;
+    if let Some(server_state) = global.as_ref() {
+        Ok(get_status(&conn, server_state))
+    } else {
+        // Server not running, return offline status
+        Ok(LanSyncStatus {
+            is_running: false,
+            device_id,
+            device_name: config.device_name,
+            is_primary: config.is_primary,
+            port: config.port,
+            connected_devices: config.known_devices,
+            last_sync: None,
+            pending_push: 0,
+            pending_pull: 0,
+            auto_sync: config.auto_sync,
+            sync_interval_secs: config.sync_interval_secs,
+        })
+    }
 }
 
 #[tauri::command]

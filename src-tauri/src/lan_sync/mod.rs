@@ -104,23 +104,23 @@ pub struct LanSyncStatus {
     pub sync_interval_secs: u64,
 }
 
-struct ServerState {
-    running: Arc<AtomicBool>,
-    device_id: String,
-    device_name: String,
-    is_primary: bool,
-    known_devices: Arc<Mutex<Vec<LanDevice>>>,
-    last_sync: Arc<Mutex<Option<String>>>,
+pub(crate) struct ServerState {
+    pub(crate) running: Arc<AtomicBool>,
+    pub(crate) device_id: String,
+    pub(crate) device_name: String,
+    pub(crate) is_primary: bool,
+    pub(crate) known_devices: Arc<Mutex<Vec<LanDevice>>>,
+    pub(crate) last_sync: Arc<Mutex<Option<String>>>,
 }
 
 fn read_message(stream: &mut TcpStream) -> Result<SyncMessage, String> {
     let mut length_buf = String::new();
     let mut reader = BufReader::new(stream.try_clone().map_err(|e| e.to_string())?);
-    reader.read_line(&mut length_buf).map_err(|e| format!("读取长度失败: {e}"))?;
-    let length: usize = length_buf.trim().parse().map_err(|e| format!("无效长度: {e}"))?;
+    reader.read_line(&mut length_buf).map_err(|e| format!("read length: {e}"))?;
+    let length: usize = length_buf.trim().parse().map_err(|e| format!("parse length: {e}"))?;
     let mut buf = vec![0u8; length];
-    reader.read_exact(&mut buf).map_err(|e| format!("读取数据失败: {e}"))?;
-    serde_json::from_slice(&buf).map_err(|e| format!("解析消息失败: {e}"))
+    reader.read_exact(&mut buf).map_err(|e| format!("read data: {e}"))?;
+    serde_json::from_slice(&buf).map_err(|e| format!("parse json: {e}"))
 }
 
 fn write_message(stream: &mut TcpStream, msg: &SyncMessage) -> Result<(), String> {
@@ -132,7 +132,6 @@ fn write_message(stream: &mut TcpStream, msg: &SyncMessage) -> Result<(), String
     Ok(())
 }
 
-/// Get ALL records from a table (for full sync) or only changes since timestamp
 fn get_table_records(conn: &Connection, table: &str, since: &Option<String>) -> Result<Vec<serde_json::Value>, String> {
     let sql = if let Some(ref ts) = since {
         format!(
@@ -143,7 +142,7 @@ fn get_table_records(conn: &Connection, table: &str, since: &Option<String>) -> 
         format!("SELECT * FROM {} LIMIT 1000", table)
     };
 
-    let mut stmt = conn.prepare(&sql).map_err(|e| format!("Failed to prepare query for {table}: {e}"))?;
+    let mut stmt = conn.prepare(&sql).map_err(|e| format!("prepare {table}: {e}"))?;
     let columns: Vec<String> = stmt.column_names().iter().map(|c| c.to_string()).collect();
 
     let rows: Vec<serde_json::Value> = stmt
@@ -179,7 +178,6 @@ fn get_table_records(conn: &Connection, table: &str, since: &Option<String>) -> 
     Ok(rows)
 }
 
-/// Get all pending changes (full data for first sync, changes for subsequent)
 fn get_pending_changes(conn: &Connection, since: &Option<String>) -> Result<Vec<TableChanges>, String> {
     let mut result = Vec::new();
     for table in SYNC_TABLES {
@@ -191,7 +189,6 @@ fn get_pending_changes(conn: &Connection, since: &Option<String>) -> Result<Vec<
     Ok(result)
 }
 
-/// Apply incoming changes to the local database
 fn apply_changes(conn: &Connection, tables: &[TableChanges]) -> Result<i64, String> {
     let mut count = 0i64;
     for tc in tables {
@@ -208,21 +205,18 @@ fn handle_client(mut stream: TcpStream, conn: &Arc<Mutex<Connection>>, state: &A
         SyncMessage::Discover { device_id, device_name, is_primary, port } => {
             let mut devices = state.known_devices.lock().map_err(|e| e.to_string())?;
             let ip = stream.peer_addr().map(|a| a.ip().to_string()).unwrap_or_default();
-
-            // Update or add device
+            let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
             if let Some(d) = devices.iter_mut().find(|d| d.device_id == device_id) {
                 d.ip = ip;
                 d.port = port;
                 d.is_online = true;
                 d.device_name = device_name;
                 d.is_primary = is_primary;
-                d.last_seen = Some(chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
+                d.last_seen = Some(now);
             } else {
                 devices.push(LanDevice {
                     device_id, device_name, ip, port,
-                    is_online: true,
-                    last_seen: Some(chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()),
-                    is_primary,
+                    is_online: true, last_seen: Some(now), is_primary,
                 });
             }
             drop(devices);
@@ -236,25 +230,21 @@ fn handle_client(mut stream: TcpStream, conn: &Arc<Mutex<Connection>>, state: &A
             write_message(&mut stream, &reply)?;
         }
         SyncMessage::SyncRequest { device_id, device_name, is_primary, since, pending_tables } => {
-            // Apply incoming changes
             let applied = {
                 let conn = conn.lock().map_err(|e| e.to_string())?;
                 apply_changes(&conn, &pending_tables).unwrap_or(0)
             };
 
-            // Get our changes to send back
             let our_pending = {
                 let conn = conn.lock().map_err(|e| e.to_string())?;
                 get_pending_changes(&conn, &since).unwrap_or_default()
             };
 
-            // Update last sync time
             let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
             if let Ok(mut ls) = state.last_sync.lock() {
                 *ls = Some(now.clone());
             }
 
-            // Update known devices
             {
                 let mut devices = state.known_devices.lock().map_err(|e| e.to_string())?;
                 let ip = stream.peer_addr().map(|a| a.ip().to_string()).unwrap_or_default();
@@ -281,80 +271,114 @@ fn handle_client(mut stream: TcpStream, conn: &Arc<Mutex<Connection>>, state: &A
         }
         _ => {
             write_message(&mut stream, &SyncMessage::SyncComplete {
-                success: false,
-                message: "Invalid message".to_string(),
+                success: false, message: "Invalid".to_string(),
             })?;
         }
     }
     Ok(())
 }
 
-fn run_server(conn: Arc<Mutex<Connection>>, state: Arc<ServerState>) -> Result<(), String> {
-    let listener = TcpListener::bind(format!("0.0.0.0:{}", SYNC_PORT))
-        .map_err(|e| format!("فشل بدء الخادم على المنفذ {SYNC_PORT}: {e}"))?;
-    listener.set_nonblocking(false).map_err(|e| e.to_string())?;
-
-    while state.running.load(Ordering::Relaxed) {
-        match listener.accept() {
-            Ok((stream, _)) => {
-                let conn = Arc::clone(&conn);
-                let state = Arc::clone(&state);
-                let _ = thread::spawn(move || {
-                    let _ = handle_client(stream, &conn, &state);
-                });
-            }
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {}
-            Err(_) => {}
+fn run_server(db_path: PathBuf, state: Arc<ServerState>) {
+    loop {
+        if !state.running.load(Ordering::Relaxed) {
+            break;
         }
+        // Try to open connection each time (handles DB locks)
+        let conn = match Connection::open(&db_path) {
+            Ok(c) => c,
+            Err(_) => {
+                thread::sleep(Duration::from_secs(2));
+                continue;
+            }
+        };
+        let _ = conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;");
+        let conn = Arc::new(Mutex::new(conn));
+
+        let listener = match TcpListener::bind(format!("0.0.0.0:{}", SYNC_PORT)) {
+            Ok(l) => l,
+            Err(_) => {
+                thread::sleep(Duration::from_secs(2));
+                continue;
+            }
+        };
+        listener.set_nonblocking(false).ok();
+
+        while state.running.load(Ordering::Relaxed) {
+            match listener.accept() {
+                Ok((stream, _)) => {
+                    let conn = Arc::clone(&conn);
+                    let state = Arc::clone(&state);
+                    let _ = thread::spawn(move || {
+                        let _ = handle_client(stream, &conn, &state);
+                    });
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {}
+                Err(_) => {
+                    thread::sleep(Duration::from_millis(100));
+                }
+            }
+        }
+        break;
     }
-    Ok(())
 }
 
-fn run_discovery(state: Arc<ServerState>) -> Result<(), String> {
-    let socket = UdpSocket::bind(format!("0.0.0.0:{DISCOVERY_PORT}"))
-        .map_err(|e| format!("فشل بدء الاكتشاف: {e}"))?;
-    socket.set_read_timeout(Some(Duration::from_secs(1))).map_err(|e| e.to_string())?;
-    socket.set_broadcast(true).map_err(|e| e.to_string())?;
+fn run_discovery(state: Arc<ServerState>) {
+    loop {
+        if !state.running.load(Ordering::Relaxed) {
+            break;
+        }
+        let socket = match UdpSocket::bind(format!("0.0.0.0:{DISCOVERY_PORT}")) {
+            Ok(s) => s,
+            Err(_) => {
+                thread::sleep(Duration::from_secs(2));
+                continue;
+            }
+        };
+        socket.set_read_timeout(Some(Duration::from_secs(1))).ok();
+        socket.set_broadcast(true).ok();
 
-    let mut buf = [0u8; 2048];
-    while state.running.load(Ordering::Relaxed) {
-        match socket.recv_from(&mut buf) {
-            Ok((len, addr)) => {
-                if let Ok(msg) = serde_json::from_slice::<SyncMessage>(&buf[..len]) {
-                    if let SyncMessage::Discover { device_id, device_name, is_primary, port } = msg {
-                        if device_id != state.device_id {
-                            let mut devices = state.known_devices.lock().map_err(|e| e.to_string())?;
-                            let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-                            if let Some(d) = devices.iter_mut().find(|d| d.device_id == device_id) {
-                                d.ip = addr.ip().to_string();
-                                d.port = port;
-                                d.is_online = true;
-                                d.last_seen = Some(now);
-                            } else {
-                                devices.push(LanDevice {
-                                    device_id, device_name,
-                                    ip: addr.ip().to_string(), port,
-                                    is_online: true, last_seen: Some(now), is_primary,
-                                });
+        let mut buf = [0u8; 2048];
+        while state.running.load(Ordering::Relaxed) {
+            match socket.recv_from(&mut buf) {
+                Ok((len, addr)) => {
+                    if let Ok(msg) = serde_json::from_slice::<SyncMessage>(&buf[..len]) {
+                        if let SyncMessage::Discover { device_id, device_name, is_primary, port } = msg {
+                            if device_id != state.device_id {
+                                let mut devices = state.known_devices.lock().unwrap();
+                                let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                                if let Some(d) = devices.iter_mut().find(|d| d.device_id == device_id) {
+                                    d.ip = addr.ip().to_string();
+                                    d.port = port;
+                                    d.is_online = true;
+                                    d.last_seen = Some(now);
+                                } else {
+                                    devices.push(LanDevice {
+                                        device_id, device_name,
+                                        ip: addr.ip().to_string(), port,
+                                        is_online: true, last_seen: Some(now), is_primary,
+                                    });
+                                }
+                                drop(devices);
+
+                                let reply = SyncMessage::DiscoverReply {
+                                    device_id: state.device_id.clone(),
+                                    device_name: state.device_name.clone(),
+                                    is_primary: state.is_primary,
+                                    port: SYNC_PORT,
+                                };
+                                let _ = socket.send_to(&serde_json::to_vec(&reply).unwrap_or_default(), addr);
                             }
-                            drop(devices);
-
-                            let reply = SyncMessage::DiscoverReply {
-                                device_id: state.device_id.clone(),
-                                device_name: state.device_name.clone(),
-                                is_primary: state.is_primary,
-                                port: SYNC_PORT,
-                            };
-                            let _ = socket.send_to(&serde_json::to_vec(&reply).unwrap_or_default(), addr);
                         }
                     }
                 }
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {}
+                Err(_) => {
+                    thread::sleep(Duration::from_millis(100));
+                }
             }
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {}
-            Err(_) => {}
         }
+        break;
     }
-    Ok(())
 }
 
 fn sync_with_peer(peer_ip: &str, peer_port: u16, conn: &Connection, state: &ServerState) -> Result<(i64, i64), String> {
@@ -369,7 +393,7 @@ fn sync_with_peer(peer_ip: &str, peer_port: u16, conn: &Connection, state: &Serv
         device_id: state.device_id.clone(),
         device_name: state.device_name.clone(),
         is_primary: state.is_primary,
-        since: last_sync.clone(),
+        since: last_sync,
         pending_tables: pending,
     };
 
@@ -378,14 +402,10 @@ fn sync_with_peer(peer_ip: &str, peer_port: u16, conn: &Connection, state: &Serv
 
     match response {
         SyncMessage::SyncResponse { applied_count, pending_tables, .. } => {
-            let pulled = {
-                apply_changes(conn, &pending_tables)?
-            };
-
+            let pulled = apply_changes(conn, &pending_tables)?;
             if let Ok(mut ls) = state.last_sync.lock() {
                 *ls = Some(chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
             }
-
             Ok((applied_count, pulled))
         }
         _ => Err("رد غير متوقع".to_string()),
@@ -403,7 +423,11 @@ fn broadcast_discovery(state: &ServerState) -> Result<(), String> {
         port: SYNC_PORT,
     };
     let json = serde_json::to_vec(&msg).map_err(|e| e.to_string())?;
-    socket.send_to(&json, format!("255.255.255.255:{DISCOVERY_PORT}")).map_err(|e| e.to_string())?;
+    // Broadcast multiple times for reliability
+    for _ in 0..3 {
+        let _ = socket.send_to(&json, format!("255.255.255.255:{DISCOVERY_PORT}"));
+        thread::sleep(Duration::from_millis(100));
+    }
     Ok(())
 }
 
@@ -412,9 +436,13 @@ fn broadcast_discovery(state: &ServerState) -> Result<(), String> {
 lazy_static::lazy_static! {
     static ref SERVER_STATE: Arc<Mutex<Option<Arc<ServerState>>>> = Arc::new(Mutex::new(None));
     static ref SERVER_THREAD: Arc<Mutex<Option<thread::JoinHandle<()>>>> = Arc::new(Mutex::new(None));
+    static ref DISCOVERY_THREAD: Arc<Mutex<Option<thread::JoinHandle<()>>>> = Arc::new(Mutex::new(None));
 }
 
 pub fn start_lan_server(conn: &Connection, db_path: PathBuf, config: LanSyncConfig) -> Result<LanSyncStatus, String> {
+    // Stop any existing server first
+    let _ = stop_lan_server();
+
     let device_id = {
         let mut stmt = conn.prepare("SELECT value FROM sync_meta WHERE key = 'device_id'").map_err(|e| e.to_string())?;
         stmt.query_row([], |row| row.get::<_, String>(0)).map_err(|e| e.to_string())?
@@ -434,16 +462,12 @@ pub fn start_lan_server(conn: &Connection, db_path: PathBuf, config: LanSyncConf
         *global = Some(Arc::clone(&state));
     }
 
-    // Server thread — opens its own connection
+    // Server thread
     {
         let server_db_path = db_path.clone();
         let server_state = Arc::clone(&state);
         let handle = thread::spawn(move || {
-            let Ok(server_conn) = Connection::open(&server_db_path) else { return };
-            // Enable WAL for better concurrency
-            let _ = server_conn.execute_batch("PRAGMA journal_mode=WAL;");
-            let conn = Arc::new(Mutex::new(server_conn));
-            let _ = run_server(conn, server_state);
+            run_server(server_db_path, server_state);
         });
         let mut th = SERVER_THREAD.lock().map_err(|e| e.to_string())?;
         *th = Some(handle);
@@ -452,13 +476,19 @@ pub fn start_lan_server(conn: &Connection, db_path: PathBuf, config: LanSyncConf
     // Discovery thread
     {
         let disc_state = Arc::clone(&state);
-        thread::spawn(move || { let _ = run_discovery(disc_state); });
+        let handle = thread::spawn(move || {
+            run_discovery(disc_state);
+        });
+        let mut dh = DISCOVERY_THREAD.lock().map_err(|e| e.to_string())?;
+        *dh = Some(handle);
     }
 
-    // Initial broadcast
+    // Wait a moment for threads to start
+    thread::sleep(Duration::from_millis(300));
+
+    // Initial broadcast (multiple times)
     let _ = broadcast_discovery(&state);
 
-    // Return status
     Ok(get_status(conn, &state))
 }
 
@@ -502,7 +532,7 @@ pub fn get_status(conn: &Connection, state: &ServerState) -> LanSyncStatus {
 
 pub fn sync_with_device(peer_ip: &str, peer_port: u16, conn: &Connection) -> Result<(i64, i64), String> {
     let global = SERVER_STATE.lock().map_err(|e| e.to_string())?;
-    let state = global.as_ref().ok_or("الخادم غير يعمل — ابدأ المزامنة أولاً")?;
+    let state = global.as_ref().ok_or("الخادم غير يعمل")?;
     sync_with_peer(peer_ip, peer_port, conn, state)
 }
 
@@ -511,8 +541,11 @@ pub fn discover_devices() -> Result<Vec<LanDevice>, String> {
         let global = SERVER_STATE.lock().map_err(|e| e.to_string())?;
         global.as_ref().ok_or("الخادم غير يعمل")?.clone()
     };
-    broadcast_discovery(&state)?;
-    thread::sleep(Duration::from_millis(800));
+    // Broadcast multiple times
+    for _ in 0..5 {
+        let _ = broadcast_discovery(&state);
+        thread::sleep(Duration::from_millis(200));
+    }
     let devices = state.known_devices.lock().map_err(|e| e.to_string())?;
     Ok(devices.clone())
 }
