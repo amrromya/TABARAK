@@ -6237,3 +6237,25 @@ pub fn get_audit_log_count(state: State<AppState>, entity_type: Option<String>, 
     let count: i64 = conn.query_row(&query, param_refs.as_slice(), |row| row.get(0)).map_err(|e| e.to_string())?;
     Ok(count)
 }
+
+#[tauri::command]
+pub fn open_html_in_browser(html_content: String, filename: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        let temp_dir = std::env::temp_dir();
+        let file_path = temp_dir.join(&filename);
+        std::fs::write(&file_path, &html_content).map_err(|e| e.to_string())?;
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &file_path.to_string_lossy()])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("open_html_in_browser is only supported on Windows".into())
+    }
+}

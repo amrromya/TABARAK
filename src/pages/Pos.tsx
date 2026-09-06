@@ -630,59 +630,47 @@ export function Pos({ onBack }: { onBack: () => void }) {
       notify(t("addItemError"), "error");
       return;
     }
+    const custName =
+      paymentMethod === "credit"
+        ? customers.find((c) => c.id === Number(customerId))?.name ?? ""
+        : (cashCustomer.trim() || "");
+    const rowsHtml = lines.map((l) =>
+      `<tr><td>${l.name}</td><td style="text-align:center">${l.quantity}</td><td style="text-align:center">${money(l.sell_price)}</td><td style="text-align:center">${money(l.quantity * l.sell_price)}</td></tr>`
+    ).join("");
+    const html = `<!DOCTYPE html>
+<html dir="rtl"><head><meta charset="utf-8"><title>${t("priceQuoteTitle")}</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{font-family:'Cairo',Arial,sans-serif;padding:30px;color:#222;margin:0}
+  h1{text-align:center;margin:0 0 4px;font-size:22px;color:#0f8a5f}
+  h2{text-align:center;margin:0 0 16px;font-size:14px;color:#666}
+  .meta{text-align:center;font-size:13px;color:#555;margin-bottom:12px}
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th{background:#0f8a5f;color:#fff;padding:8px 10px;font-size:13px}
+  td{border:1px solid #ddd;padding:7px 10px;font-size:13px}
+  .totals{margin-top:14px;font-size:14px}
+  .totals div{margin:4px 0}
+  .totals .net{font-weight:700;font-size:16px;color:#0f8a5f;border-top:2px solid #0f8a5f;padding-top:6px}
+  .footer{text-align:center;margin-top:24px;color:#888;font-size:12px}
+  @media print{body{padding:10px}}
+</style></head><body>
+<h1>${settings?.store_name || "تبارك"}</h1>
+<h2>${t("priceQuoteTitle")}</h2>
+<div class="meta">التاريخ: ${date}${custName ? ` — العميل: ${custName}` : ""}</div>
+<table><thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+<tbody>${rowsHtml}</tbody></table>
+<div class="totals">
+  <div>الإجمالي: ${money(total)}</div>
+  ${discountAmount > 0 ? `<div>الخصم: ${money(discountAmount)}</div>` : ""}
+  ${additional > 0 ? `<div>إضافات: ${money(additional)}</div>` : ""}
+  <div class="net">الصافي: ${money(netTotal)}</div>
+</div>
+<div class="footer">هذا عرض أسعار فقط وليس فاتورة مبيعات — ${settings?.store_name || ""}</div>
+</body></html>`;
     try {
-      const { jsPDF } = await import("jspdf");
-      await import("jspdf-autotable");
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(18);
-      doc.setTextColor(15, 138, 95);
-      doc.text(settings?.store_name || "تبارك", 105, 20, { align: "center" });
-      doc.setFontSize(12);
-      doc.setTextColor(100);
-      doc.text(t("priceQuoteTitle"), 105, 28, { align: "center" });
-      doc.setFontSize(10);
-      doc.setTextColor(80);
-      const custName =
-        paymentMethod === "credit"
-          ? customers.find((c) => c.id === Number(customerId))?.name ?? ""
-          : (cashCustomer.trim() || "");
-      doc.text(`${date}${custName ? " — " + custName : ""}`, 105, 35, { align: "center" });
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(0);
-      (doc as any).autoTable({
-        startY: 42,
-        head: [[t("itemName"), t("quantity"), t("unitPrice"), t("total")]],
-        body: lines.map((l) => [l.name, String(l.quantity), money(l.sell_price), money(l.quantity * l.sell_price)]),
-        theme: "grid",
-        headStyles: { fillColor: [15, 138, 95], halign: "center" },
-        styles: { halign: "right", font: "helvetica", fontSize: 10 },
-        columnStyles: { 1: { halign: "center" }, 2: { halign: "center" }, 3: { halign: "center" } },
-      });
-      const finalY = (doc as any).lastAutoTable.finalY + 10;
-      doc.setFont("helvetica", "normal");
-      doc.text(`${t("total")}: ${money(total)}`, 14, finalY);
-      if (discountAmount > 0) doc.text(`${t("discount")}: ${money(discountAmount)}`, 14, finalY + 7);
-      if (additional > 0) doc.text(`${t("additional")}: ${money(additional)}`, 14, finalY + (discountAmount > 0 ? 14 : 7));
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.setTextColor(15, 138, 95);
-      doc.text(`${t("netTotal")}: ${money(netTotal)}`, 14, finalY + (discountAmount > 0 ? 21 : additional > 0 ? 14 : 7));
-      doc.setFontSize(8);
-      doc.setTextColor(150);
-      doc.text(t("priceQuoteTitle") + " — " + (settings?.store_name || ""), 105, 290, { align: "center" });
-      const { save } = await import("@tauri-apps/plugin-dialog");
-      const path = await save({
-        title: t("priceQuoteTitle"),
-        defaultPath: `quote_${date}.pdf`,
-        filters: [{ name: "PDF", extensions: ["pdf"] }],
-      });
-      if (path) {
-        const bytes = doc.output("arraybuffer");
-        await api.writeBinaryFile(path, Array.from(new Uint8Array(bytes)));
-        notify(t("exportingPdf"));
-      }
+      await api.openHtmlInBrowser(html, `quote_${date}.html`);
+      notify(t("exportingPdf"));
     } catch (e) {
       notify(String(e), "error");
     }

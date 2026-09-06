@@ -303,6 +303,8 @@ export const api = {
     invoke<void>("write_text_file", { path, content }),
   writeBinaryFile: (path: string, data: number[]) =>
     invoke<void>("write_binary_file", { path, data }),
+  openHtmlInBrowser: (htmlContent: string, filename: string) =>
+    invoke<void>("open_html_in_browser", { htmlContent, filename }),
 
   copySoundFile: (sourcePath: string, soundType: string) =>
     invoke<string>("copy_sound_file", { sourcePath, soundType }),
