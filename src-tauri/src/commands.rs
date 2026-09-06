@@ -4863,15 +4863,6 @@ pub fn create_payment_voucher(state: State<AppState>, input: serde_json::Value) 
             ).map_err(|e| e.to_string())?;
         }
     }
-    // Update customer balance when paying a customer
-    if dest_type == "customer" {
-        if let Some(cid) = dest_id {
-            conn.execute(
-                "INSERT INTO customer_payments (customer_id, date, amount, notes) VALUES (?1, ?2, ?3, ?4)",
-                params![cid, date, amount, format!("سند صرف {}", voucher_no)],
-            ).map_err(|e| e.to_string())?;
-        }
-    }
     let row = conn.query_row("SELECT id, voucher_no, date, amount, dest_type, dest_id, dest_name, payment_method, warehouse_id, notes, created_at FROM payment_vouchers WHERE id=?1", params![id], |r| {
         Ok(serde_json::json!({
             "id": r.get::<_, i64>(0)?, "voucher_no": r.get::<_, String>(1)?, "date": r.get::<_, String>(2)?,
@@ -4886,17 +4877,6 @@ pub fn create_payment_voucher(state: State<AppState>, input: serde_json::Value) 
 #[tauri::command]
 pub fn delete_payment_voucher(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = get_db(&state)?;
-    // Reverse customer balance before deleting
-    let (dest_type, dest_id): (String, Option<i64>) = conn.query_row(
-        "SELECT dest_type, dest_id FROM payment_vouchers WHERE id=?1", params![id],
-        |r| Ok((r.get(0)?, r.get(1)?)),
-    ).map_err(|e| e.to_string())?;
-    if dest_type == "customer" {
-        if let Some(cid) = dest_id {
-            let vno: String = conn.query_row("SELECT voucher_no FROM payment_vouchers WHERE id=?1", params![id], |r| r.get(0)).unwrap_or_default();
-            conn.execute("DELETE FROM customer_payments WHERE customer_id = ?1 AND notes = ?2", params![cid, format!("سند صرف {}", vno)]).ok();
-        }
-    }
     conn.execute("DELETE FROM cash_register_movements WHERE reference_id = ?1 AND reference_type = 'payment_voucher'", params![id]).map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM payment_vouchers WHERE id=?1", params![id]).map_err(|e| e.to_string())?;
     Ok(())
@@ -4905,17 +4885,6 @@ pub fn delete_payment_voucher(state: State<AppState>, id: i64) -> Result<(), Str
 #[tauri::command]
 pub fn update_payment_voucher(state: State<AppState>, id: i64, input: serde_json::Value) -> Result<serde_json::Value, String> {
     let conn = get_db(&state)?;
-    let old: (String, Option<i64>, f64) = conn.query_row(
-        "SELECT dest_type, dest_id, amount FROM payment_vouchers WHERE id=?1", params![id],
-        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-    ).map_err(|e| format!("السند غير موجود: {}", e))?;
-    // Reverse old customer payment
-    if old.0 == "customer" {
-        if let Some(cid) = old.1 {
-            let vno: String = conn.query_row("SELECT voucher_no FROM payment_vouchers WHERE id=?1", params![id], |r| r.get(0)).unwrap_or_default();
-            conn.execute("DELETE FROM customer_payments WHERE customer_id = ?1 AND notes = ?2", params![cid, format!("سند صرف {}", vno)]).ok();
-        }
-    }
     // Reverse old cash register movement
     conn.execute("DELETE FROM cash_register_movements WHERE reference_id = ?1 AND reference_type = 'payment_voucher'", params![id]).map_err(|e| e.to_string())?;
 
@@ -4943,16 +4912,6 @@ pub fn update_payment_voucher(state: State<AppState>, id: i64, input: serde_json
             conn.execute(
                 "INSERT INTO cash_register_movements (session_id, type, amount, description, reference_id, reference_type) SELECT id, 'payment_voucher', ?1, ?2, ?3, 'payment_voucher' FROM cash_register_sessions WHERE status = 'open' ORDER BY id DESC LIMIT 1",
                 params![-amount, format!("سند صرف {} — {}", vno, dest_name.unwrap_or("")), id],
-            ).map_err(|e| e.to_string())?;
-        }
-    }
-    // Apply new customer payment
-    if dest_type == "customer" {
-        if let Some(cid) = dest_id {
-            let vno: String = conn.query_row("SELECT voucher_no FROM payment_vouchers WHERE id=?1", params![id], |r| r.get(0)).unwrap_or_default();
-            conn.execute(
-                "INSERT INTO customer_payments (customer_id, date, amount, notes) VALUES (?1, ?2, ?3, ?4)",
-                params![cid, date, amount, format!("سند صرف {}", vno)],
             ).map_err(|e| e.to_string())?;
         }
     }
