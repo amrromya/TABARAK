@@ -1,5 +1,5 @@
-import JsBarcode from "jsbarcode";
 import { api } from "../api";
+import { getPrintSettings, generateBarcodeImage, getActiveBarcodeTemplate, getStoreName } from "./directPrint";
 
 export interface BarcodePrintSettings {
   barcodePrinter: string;
@@ -12,23 +12,19 @@ export interface BarcodePrintSettings {
   barcodeShowStoreName: boolean;
 }
 
-const DEFAULT_SETTINGS: BarcodePrintSettings = {
-  barcodePrinter: "",
-  barcodeWidth: 50,
-  barcodeHeight: 25,
-  barcodeFontSize: 10,
-  barcodeShowName: true,
-  barcodeShowPrice: true,
-  barcodeShowBarcode: true,
-  barcodeShowStoreName: true,
-};
-
 export function getBarcodeSettings(): BarcodePrintSettings {
-  try {
-    const raw = localStorage.getItem("tabarak_print_settings");
-    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
-  } catch {}
-  return DEFAULT_SETTINGS;
+  const ps = getPrintSettings();
+  const template = getActiveBarcodeTemplate();
+  return {
+    barcodePrinter: ps.barcodePrinter,
+    barcodeWidth: template.widthMm,
+    barcodeHeight: template.heightMm,
+    barcodeFontSize: template.fontSize,
+    barcodeShowName: template.showName,
+    barcodeShowPrice: template.showPrice,
+    barcodeShowBarcode: template.showBarcode,
+    barcodeShowStoreName: template.showStoreName,
+  };
 }
 
 export async function printMaintenanceBarcode({
@@ -51,23 +47,9 @@ export async function printMaintenanceBarcode({
   date: string;
   storeName?: string;
 }) {
-  const ps = getBarcodeSettings();
-
-  let svgData = "";
-  try {
-    const canvas = document.createElement("canvas");
-    JsBarcode(canvas, barcodeValue, {
-      format: "CODE128",
-      width: Math.max(1, Math.floor(ps.barcodeWidth / 15)),
-      height: Math.min(ps.barcodeHeight * 2, 60),
-      displayValue: false,
-      margin: 0,
-    });
-    svgData = canvas.toDataURL("image/png");
-  } catch {
-    return;
-  }
-
+  const ps = getPrintSettings();
+  const template = getActiveBarcodeTemplate();
+  const svgData = await generateBarcodeImage(barcodeValue);
   const label = `Order: ${orderNo} | ${customerName} | ${deviceType}${deviceModel ? " " + deviceModel : ""}`;
 
   try {
@@ -76,15 +58,15 @@ export async function printMaintenanceBarcode({
       productName: label,
       barcodeValue,
       price: total,
-      storeName: storeName || "تبارك",
+      storeName: storeName || (await getStoreName()),
       quantity: 1,
-      widthMm: ps.barcodeWidth,
-      heightMm: ps.barcodeHeight + 20,
+      widthMm: template.widthMm,
+      heightMm: template.heightMm + 20,
       showName: true,
       showPrice: true,
-      showBarcode: ps.barcodeShowBarcode,
-      showStore: ps.barcodeShowStoreName && !!storeName,
-      printerName: "",
+      showBarcode: template.showBarcode,
+      showStore: template.showStoreName && !!storeName,
+      printerName: ps.barcodePrinter || "",
     });
   } catch {
     // fallback: ignore

@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { api } from "../api";
 import { Field, useToast } from "../components/ui";
 import { isNotifEnabled, setNotifEnabled as saveNotifEnabled, getNotifSoundPath, setNotifSoundPath as saveNotifSoundPath, playNotifSound, getSuccessSoundPath, setSuccessSoundPath as saveSuccessSoundPath, getErrorSoundPath, setErrorSoundPath as saveErrorSoundPath, playSuccessSound, playErrorSound } from "../utils/notifications";
-import { getPrintSettings, savePrintSettings, type PrintSettings } from "../utils/directPrint";
+import { getPrintSettings, savePrintSettings, type PrintSettings, listPrinters, testPrint, saveBarcodeTemplate, deleteBarcodeTemplate, generateBarcodePreview, type BarcodeType } from "../utils/directPrint";
 import type { Account, Branch, Permission, Settings, SyncConfig, SyncStatus, Warehouse, LanSyncStatus, LanSyncConfig } from "../types";
 import { t } from "../i18n";
 import { useColorTheme, THEME_PRESETS } from "../hooks/useColorTheme";
@@ -443,17 +443,15 @@ export function SettingsPage() {
   const [newLicenseKey, setNewLicenseKey] = useState("");
 
   const [activeSection, setActiveSection] = useState<SectionKey | null>(null);
-  const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
 
   // Print settings
   const [printSettings, setPrintSettings] = useState<PrintSettings>(getPrintSettings);
-  const [barcodeCustomSizes, setBarcodeCustomSizes] = useState<{ name: string; width: number; height: number }[]>(() => {
-    try {
-      const raw = localStorage.getItem("tabarak_barcode_custom_sizes");
-      if (raw) return JSON.parse(raw);
-    } catch {}
-    return [];
-  });
+  const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
+  const [printTestLoading, setPrintTestLoading] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState("sales_invoice");
+  const [barcodePreviewValue, setBarcodePreviewValue] = useState("1234567890");
+  const [barcodePreviewImg, setBarcodePreviewImg] = useState("");
+  const [newTemplateName, setNewTemplateName] = useState("");
 
   const updatePrintSettings = (patch: Partial<PrintSettings>) => {
     setPrintSettings((prev) => {
@@ -462,10 +460,6 @@ export function SettingsPage() {
       return next;
     });
   };
-  const [selectedBarcodeSize, setSelectedBarcodeSize] = useState<string>("default");
-  const [newSizeName, setNewSizeName] = useState("");
-  const [newSizeW, setNewSizeW] = useState(50);
-  const [newSizeH, setNewSizeH] = useState(25);
 
   const [passModal, setPassModal] = useState<{ section: SectionKey } | null>(null);
   const [passInput, setPassInput] = useState("");
@@ -591,7 +585,8 @@ export function SettingsPage() {
     loadBranches();
     api.getAppVersion().then(setAppVersion).catch(() => {});
     api.getLicenseInfo().then(setLicenseInfo).catch(() => {});
-    api.listPrinters().then(setAvailablePrinters).catch(() => {});
+    listPrinters().then(setAvailablePrinters).catch(() => {});
+    setPrintSettings(getPrintSettings());
   }, [notify, loadSync, loadBranches]);
 
   const openSection = (s: SectionKey) => {
@@ -1302,471 +1297,361 @@ export function SettingsPage() {
         );
 
       case "printing":
-        const allBarcodeSizes = [
-          { name: "افتراضي", width: printSettings.barcodeWidth, height: printSettings.barcodeHeight },
-          ...barcodeCustomSizes,
-        ];
-        const activeSize = allBarcodeSizes.find((s) => s.name === selectedBarcodeSize) || allBarcodeSizes[0];
+        const currentProfile = printSettings.profiles[selectedProfile];
         return (
-          <div className="print-settings">
-            {/* Invoice print settings */}
-            <div className="print-section">
-              <h3>{t("invoicePrinterSettings")}</h3>
-              <div className="print-fields">
-                <div className="print-field">
-                  <label>{t("receiptPrinterType")}</label>
-                  <select value={printSettings.receiptPrinter || "A4"} onChange={(e) => updatePrintSettings({ receiptPrinter: e.target.value })}>
-                    <option value="A4">A4 — {t("standardA4")}</option>
-                    <option value="A5">A5 — {t("standardA5")}</option>
-                    <option value="80mm">80mm — {t("thermal80")}</option>
-                    <option value="58mm">58mm — {t("thermal58")}</option>
-                  </select>
-                </div>
-                <div className="print-field">
-                  <label>{t("invoiceDefaultPrinter")}</label>
-                  <select value={printSettings.invoicePrinter || ""} onChange={(e) => updatePrintSettings({ invoicePrinter: e.target.value })}>
-                    <option value="">{t("systemDefaultPrinter")}</option>
-                    {availablePrinters.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="print-field">
-                  <label>{t("paperSize")}</label>
-                  <select value={printSettings.invoicePaper} onChange={(e) => updatePrintSettings({ invoicePaper: e.target.value })}>
-                    <option value="A4">A4</option>
-                    <option value="A5">A5</option>
-                    <option value="80mm">80mm (termal)</option>
-                    <option value="58mm">58mm (termal)</option>
-                  </select>
-                </div>
-                <div className="print-field">
-                  <label>{t("orientationLabel")}</label>
-                  <select value={printSettings.invoiceLandscape ? "landscape" : "portrait"} onChange={(e) => updatePrintSettings({ invoiceLandscape: e.target.value === "landscape" })}>
-                    <option value="portrait">{t("portrait")}</option>
-                    <option value="landscape">{t("landscape")}</option>
-                  </select>
-                </div>
-                <div className="print-field">
-                  <label>{t("margins")}</label>
-                  <input type="number" min={0} max={30} value={printSettings.invoiceMargins} onChange={(e) => updatePrintSettings({ invoiceMargins: Number(e.target.value) })} />
-                </div>
+          <div>
+            {/* === Section 1: Printers === */}
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600, color: "#1e293b" }}>🖨️ {t("defaultPrinter")}</h3>
+              <div className="settings-row">
+                <label>{t("defaultPrinter")}</label>
+                <select value={printSettings.defaultPrinter} onChange={(e) => updatePrintSettings({ defaultPrinter: e.target.value })}
+                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", minWidth: 200 }}>
+                  <option value="">{t("choosePrinter")}</option>
+                  {availablePrinters.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
               </div>
-              <div className="print-toggles">
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={printSettings.invoiceHeader} onChange={(e) => updatePrintSettings({ invoiceHeader: e.target.checked })} />
-                  {t("showHeader")}
-                </label>
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={printSettings.invoiceFooter} onChange={(e) => updatePrintSettings({ invoiceFooter: e.target.checked })} />
-                  {t("showFooter")}
-                </label>
+              <div className="settings-row" style={{ marginTop: 8 }}>
+                <label>{t("receiptPrinter")}</label>
+                <select value={printSettings.invoicePrinter} onChange={(e) => updatePrintSettings({ invoicePrinter: e.target.value })}
+                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", minWidth: 200 }}>
+                  <option value="">{t("choosePrinter")}</option>
+                  {availablePrinters.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
               </div>
+              <div className="settings-row" style={{ marginTop: 8 }}>
+                <label>{t("barcodePrinter")}</label>
+                <select value={printSettings.barcodePrinter} onChange={(e) => updatePrintSettings({ barcodePrinter: e.target.value })}
+                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", minWidth: 200 }}>
+                  <option value="">{t("choosePrinter")}</option>
+                  {availablePrinters.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div className="settings-row" style={{ marginTop: 8 }}>
+                <label>{t("reportPrinter")}</label>
+                <select value={printSettings.reportPrinter || ""} onChange={(e) => updatePrintSettings({ reportPrinter: e.target.value })}
+                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", minWidth: 200 }}>
+                  <option value="">{t("choosePrinter")}</option>
+                  {availablePrinters.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div className="settings-row" style={{ marginTop: 8 }}>
+                <label>{t("receiptPrinterType")}</label>
+                <select value={printSettings.receiptPrinter} onChange={(e) => updatePrintSettings({ receiptPrinter: e.target.value })}
+                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", minWidth: 200 }}>
+                  <option value="A4">A4</option>
+                  <option value="80mm">80mm — {t("thermal80")}</option>
+                  <option value="58mm">58mm — {t("thermal58")}</option>
+                </select>
+              </div>
+              <div className="settings-row" style={{ marginTop: 8 }}>
+                <label>{t("showPrintPreviewLabel")}</label>
+                <input type="checkbox" checked={printSettings.showPrintPreview} onChange={(e) => updatePrintSettings({ showPrintPreview: e.target.checked })} />
+              </div>
+              <div className="settings-row" style={{ marginTop: 8 }}>
+                <label>{t("defaultCopiesLabel")}</label>
+                <input type="number" min={1} max={99} value={printSettings.defaultCopies} onChange={(e) => updatePrintSettings({ defaultCopies: parseInt(e.target.value) || 1 })}
+                  style={{ width: 60, padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
+              </div>
+              <button className="btn primary" onClick={async () => {
+                setPrintTestLoading(true);
+                try {
+                  await testPrint(printSettings.defaultPrinter || "", printSettings.receiptPrinter);
+                  notify(t("testPrintSuccess"), "success");
+                } catch (e: any) {
+                  notify(t("testPrintFailed") + ": " + String(e), "error");
+                }
+                setPrintTestLoading(false);
+              }} style={{ marginTop: 12 }} disabled={printTestLoading}>
+                {printTestLoading ? "..." : "🖨️ " + t("testPrintBtn")}
+              </button>
+            </div>
 
-              {/* Logo upload */}
-              <div className="print-section" style={{ marginTop: 16 }}>
-                <h3>{t("invoiceLogo")}</h3>
-                <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-                  <div style={{ position: "relative" }}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      id="logoUpload"
-                      style={{ display: "none" }}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        if (file.size > 500 * 1024) { notify(t("logoTooLarge"), "error"); return; }
-                        const reader = new FileReader();
-                        reader.onload = () => updatePrintSettings({ invoiceLogo: reader.result as string });
-                        reader.readAsDataURL(file);
-                      }}
-                    />
-                    <button className="btn" onClick={() => document.getElementById("logoUpload")?.click()}>
-                      📷 {t("uploadLogo")}
-                    </button>
-                  </div>
-                  {printSettings.invoiceLogo && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <img src={printSettings.invoiceLogo} alt="logo" style={{ maxWidth: 120, maxHeight: 60, border: "1px solid #e5e7eb", borderRadius: 8, padding: 4, background: "#fff" }} />
-                      <button className="btn danger sm" onClick={() => updatePrintSettings({ invoiceLogo: "" })}>{t("removeLogo")}</button>
+            <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "16px 0" }} />
+
+            {/* === Section 2: Print Profiles === */}
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600, color: "#1e293b" }}>📋 {t("printProfiles")}</h3>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                {Object.keys(printSettings.profiles).map((pid) => (
+                  <button key={pid} className={`btn ${selectedProfile === pid ? "primary" : ""}`}
+                    onClick={() => setSelectedProfile(pid)} style={{ fontSize: 12 }}>
+                    {printSettings.profiles[pid].name}
+                  </button>
+                ))}
+              </div>
+              {currentProfile && (
+                <div style={{ background: "#f8fafc", borderRadius: 12, padding: 16, border: "1px solid #e2e8f0" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div className="settings-row">
+                      <label>{t("profilePrinter")}</label>
+                      <select value={currentProfile.printer} onChange={(e) => {
+                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, printer: e.target.value } };
+                        updatePrintSettings({ profiles });
+                      }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0", width: "100%" }}>
+                        <option value="">{t("defaultPrinter")}</option>
+                        {availablePrinters.map((p) => <option key={p} value={p}>{p}</option>)}
+                      </select>
                     </div>
-                  )}
+                    <div className="settings-row">
+                      <label>{t("paperSize")}</label>
+                      <select value={currentProfile.paperSize} onChange={(e) => {
+                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, paperSize: e.target.value as any } };
+                        updatePrintSettings({ profiles });
+                      }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0", width: "100%" }}>
+                        <option value="58mm">58mm</option>
+                        <option value="80mm">80mm</option>
+                        <option value="A5">A5</option>
+                        <option value="A4">A4</option>
+                        <option value="custom">{t("customPaperSize")}</option>
+                      </select>
+                    </div>
+                    <div className="settings-row">
+                      <label>{t("orientationLabel")}</label>
+                      <select value={currentProfile.orientation} onChange={(e) => {
+                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, orientation: e.target.value as any } };
+                        updatePrintSettings({ profiles });
+                      }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0", width: "100%" }}>
+                        <option value="portrait">{t("portrait")}</option>
+                        <option value="landscape">{t("landscape")}</option>
+                      </select>
+                    </div>
+                    <div className="settings-row">
+                      <label>{t("margins")}</label>
+                      <input type="number" min={0} max={50} value={currentProfile.margins} onChange={(e) => {
+                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, margins: parseInt(e.target.value) || 0 } };
+                        updatePrintSettings({ profiles });
+                      }} style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                    </div>
+                    <div className="settings-row">
+                      <label>{t("profileCopies")}</label>
+                      <input type="number" min={1} max={99} value={currentProfile.copies} onChange={(e) => {
+                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, copies: parseInt(e.target.value) || 1 } };
+                        updatePrintSettings({ profiles });
+                      }} style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                    </div>
+                    <div className="settings-row">
+                      <label>{t("profileDirectPrint")}</label>
+                      <input type="checkbox" checked={currentProfile.directPrint} onChange={(e) => {
+                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, directPrint: e.target.checked } };
+                        updatePrintSettings({ profiles });
+                      }} />
+                    </div>
+                    <div className="settings-row">
+                      <label>{t("profileShowPreview")}</label>
+                      <input type="checkbox" checked={currentProfile.preview} onChange={(e) => {
+                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, preview: e.target.checked } };
+                        updatePrintSettings({ profiles });
+                      }} />
+                    </div>
+                    <div className="settings-row">
+                      <label>{t("showHeader")}</label>
+                      <input type="checkbox" checked={currentProfile.showHeader} onChange={(e) => {
+                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, showHeader: e.target.checked } };
+                        updatePrintSettings({ profiles });
+                      }} />
+                    </div>
+                    <div className="settings-row">
+                      <label>{t("showFooter")}</label>
+                      <input type="checkbox" checked={currentProfile.showFooter} onChange={(e) => {
+                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, showFooter: e.target.checked } };
+                        updatePrintSettings({ profiles });
+                      }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "16px 0" }} />
+
+            {/* === Section 3: Receipt Template === */}
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600, color: "#1e293b" }}>🧾 {t("receiptTemplate")}</h3>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div className="settings-row">
+                  <label>{t("receiptFontSize")}</label>
+                  <input type="number" min={6} max={20} value={printSettings.receiptFontSize} onChange={(e) => updatePrintSettings({ receiptFontSize: parseInt(e.target.value) || 10 })}
+                    style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                </div>
+                <div className="settings-row">
+                  <label>{t("receiptPrimaryColor")}</label>
+                  <input type="color" value={printSettings.receiptPrimaryColor} onChange={(e) => updatePrintSettings({ receiptPrimaryColor: e.target.value })}
+                    style={{ width: "100%", height: 36, borderRadius: 8, border: "1px solid #e2e8f0", cursor: "pointer" }} />
+                </div>
+                <div className="settings-row">
+                  <label>{t("receiptHeaderAlign")}</label>
+                  <select value={printSettings.receiptHeaderAlign} onChange={(e) => updatePrintSettings({ receiptHeaderAlign: e.target.value })}
+                    style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0", width: "100%" }}>
+                    <option value="center">{t("alignCenter")}</option>
+                    <option value="right">{t("alignRight")}</option>
+                    <option value="left">{t("alignLeft")}</option>
+                  </select>
+                </div>
+                <div className="settings-row">
+                  <label>{t("receiptThankYouText")}</label>
+                  <input type="text" value={printSettings.receiptThankYouText} onChange={(e) => updatePrintSettings({ receiptThankYouText: e.target.value })}
+                    style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                </div>
+                <div className="settings-row">
+                  <label>{t("receiptShowEmployee")}</label>
+                  <input type="checkbox" checked={printSettings.receiptShowEmployee} onChange={(e) => updatePrintSettings({ receiptShowEmployee: e.target.checked })} />
+                </div>
+                <div className="settings-row">
+                  <label>{t("receiptShowPayment")}</label>
+                  <input type="checkbox" checked={printSettings.receiptShowPayment} onChange={(e) => updatePrintSettings({ receiptShowPayment: e.target.checked })} />
+                </div>
+                <div className="settings-row">
+                  <label>{t("receiptShowDate")}</label>
+                  <input type="checkbox" checked={printSettings.receiptShowDate} onChange={(e) => updatePrintSettings({ receiptShowDate: e.target.checked })} />
+                </div>
+                <div className="settings-row">
+                  <label>{t("receiptShowCustomer")}</label>
+                  <input type="checkbox" checked={printSettings.receiptShowCustomer} onChange={(e) => updatePrintSettings({ receiptShowCustomer: e.target.checked })} />
                 </div>
               </div>
+            </div>
 
-              {/* Warranty text */}
-              <div className="print-section" style={{ marginTop: 16 }}>
-                <h3>{t("warrantyTitle")}</h3>
-                <textarea
-                  value={printSettings.warrantyText}
-                  onChange={(e) => updatePrintSettings({ warrantyText: e.target.value })}
-                  placeholder={t("warrantyPlaceholder")}
-                  rows={4}
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 13, resize: "vertical", fontFamily: "inherit", direction: "rtl" }}
-                />
+            <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "16px 0" }} />
+
+            {/* === Section 4: Barcode Templates === */}
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600, color: "#1e293b" }}>🏷️ {t("barcodeTemplates")}</h3>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                {printSettings.barcodeTemplates.map((tpl) => (
+                  <button key={tpl.id}
+                    className={`btn ${printSettings.activeBarcodeTemplate === tpl.id ? "primary" : ""}`}
+                    onClick={() => updatePrintSettings({ activeBarcodeTemplate: tpl.id })}
+                    style={{ fontSize: 12 }}>
+                    {tpl.name}
+                    {printSettings.activeBarcodeTemplate === tpl.id && " ✓"}
+                  </button>
+                ))}
               </div>
 
-              {/* Receipt Template Settings */}
-              <div className="print-section" style={{ marginTop: 16 }}>
-                <h3>{t("receiptTemplate")}</h3>
-                <div className="print-fields">
-                  <div className="print-field">
-                    <label>{t("receiptFontSize")}</label>
-                    <input type="number" min={8} max={16} value={printSettings.receiptFontSize || 10} onChange={(e) => updatePrintSettings({ receiptFontSize: Number(e.target.value) })} />
-                  </div>
-                  <div className="print-field">
-                    <label>{t("receiptPrimaryColor")}</label>
-                    <input type="color" value={printSettings.receiptPrimaryColor || "#000000"} onChange={(e) => updatePrintSettings({ receiptPrimaryColor: e.target.value })} style={{ width: 50, height: 34, padding: 2, cursor: "pointer" }} />
-                  </div>
-                  <div className="print-field" style={{ minWidth: 150 }}>
-                    <label>{t("receiptHeaderAlign")}</label>
-                    <select value={printSettings.receiptHeaderAlign || "center"} onChange={(e) => updatePrintSettings({ receiptHeaderAlign: e.target.value })}>
-                      <option value="center">{t("alignCenter")}</option>
-                      <option value="right">{t("alignRight")}</option>
-                      <option value="left">{t("alignLeft")}</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="print-fields">
-                  <div className="print-field" style={{ minWidth: 250 }}>
-                    <label>{t("receiptThankYouText")}</label>
-                    <input type="text" value={printSettings.receiptThankYouText || "شكراً لاختياركم!"} onChange={(e) => updatePrintSettings({ receiptThankYouText: e.target.value })} style={{ width: "100%" }} />
-                  </div>
-                </div>
-                <div className="print-toggles">
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={printSettings.receiptShowEmployee !== false} onChange={(e) => updatePrintSettings({ receiptShowEmployee: e.target.checked })} />
-                    {t("receiptShowEmployee")}
-                  </label>
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={printSettings.receiptShowPayment !== false} onChange={(e) => updatePrintSettings({ receiptShowPayment: e.target.checked })} />
-                    {t("receiptShowPayment")}
-                  </label>
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={printSettings.receiptShowDate !== false} onChange={(e) => updatePrintSettings({ receiptShowDate: e.target.checked })} />
-                    {t("receiptShowDate")}
-                  </label>
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={printSettings.receiptShowCustomer !== false} onChange={(e) => updatePrintSettings({ receiptShowCustomer: e.target.checked })} />
-                    {t("receiptShowCustomer")}
-                  </label>
-                </div>
-
-                {/* Live Preview — Paper-Size Aware */}
-                <div style={{ marginTop: 20 }}>
-                  <h4 style={{ margin: "0 0 12px", fontSize: 15 }}>{t("receiptPreview")}</h4>
-                  {(() => {
-                    const paper = printSettings.receiptPrinter || "A4";
-                    const isThermal = paper === "58mm" || paper === "80mm";
-                    const fs = printSettings.receiptFontSize || 10;
-                    const color = printSettings.receiptPrimaryColor || "#000";
-                    const align = (printSettings.receiptHeaderAlign || "center") as "center" | "right" | "left";
-                    const sampleItems = [
-                      { name: "スマートフォن Case", qty: 2, price: 15.5 },
-                      { name: "شاحن لاسلكي", qty: 1, price: 85.0 },
-                      { name: "سماعات بلوتوث", qty: 1, price: 120.0 },
-                    ];
-                    const subtotal = sampleItems.reduce((s, i) => s + i.qty * i.price, 0);
-                    const discount = 10;
-                    const net = subtotal - discount;
-
-                    /* ── Thermal preview (58mm / 80mm) ── */
-                    if (isThermal) {
-                      const previewW = paper === "58mm" ? 190 : 280;
-                      return (
-                        <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "flex-start" }}>
-                          {/* Actual-size paper strip */}
-                          <div style={{
-                            width: previewW, border: "1px solid #d1d5db", borderRadius: 8, padding: "12px 10px",
-                            fontFamily: "'Courier New', monospace", fontSize: fs, backgroundColor: "#fff",
-                            direction: "ltr", textAlign: align, lineHeight: 1.4, overflow: "hidden",
-                          }}>
-                            {printSettings.invoiceLogo && (
-                              <div style={{ textAlign: "center", marginBottom: 6 }}>
-                                <img src={printSettings.invoiceLogo} alt="" style={{ maxWidth: paper === "58mm" ? 80 : 120, maxHeight: 40 }} />
-                              </div>
-                            )}
-                            <div style={{ fontWeight: "bold", fontSize: fs + 2, marginBottom: 2, color }}>{form?.store_name || "تبارك"}</div>
-                            {form?.phone && <div style={{ fontSize: fs - 1 }}>Tel: {form.phone}</div>}
-                            {form?.address && <div style={{ fontSize: fs - 1 }}>{form.address}</div>}
-                            <hr style={{ margin: "5px 0", border: "none", borderTop: `1px dashed ${color}` }} />
-                            <div style={{ fontWeight: "bold", fontSize: fs + 1, marginBottom: 2, color }}>فاتورة بيع</div>
-                            <div style={{ textAlign: "right", fontSize: fs - 1 }}>
-                              <div>#12345</div>
-                              {printSettings.receiptShowDate !== false && <div>التاريخ: {new Date().toLocaleDateString("ar-EG")}</div>}
-                              {printSettings.receiptShowCustomer !== false && <div>العميل: نقدي</div>}
-                              {printSettings.receiptShowPayment !== false && <div>الدفع: نقدي</div>}
-                              {printSettings.receiptShowEmployee !== false && <div>الموظف: أحمد</div>}
-                            </div>
-                            <hr style={{ margin: "5px 0", border: "none", borderTop: `1px dashed ${color}` }} />
-                            <div style={{ textAlign: "right", fontSize: fs - 1 }}>
-                              {sampleItems.map((it, i) => (
-                                <div key={i} style={{ marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                  {it.name.slice(0, paper === "58mm" ? 16 : 22)} {it.qty}×{it.price.toFixed(2)} = {(it.qty * it.price).toFixed(2)}
-                                </div>
-                              ))}
-                            </div>
-                            <hr style={{ margin: "5px 0", border: "none", borderTop: `1px dashed ${color}` }} />
-                            <div style={{ textAlign: "right", fontSize: fs - 1 }}>
-                              <div>المجموع: {subtotal.toFixed(2)}</div>
-                              <div>الخصم: -{discount.toFixed(2)}</div>
-                            </div>
-                            <div style={{ textAlign: "right", fontWeight: "bold", fontSize: fs + 1, color, marginTop: 2 }}>
-                              الصافي: {net.toFixed(2)} {form?.currency || "ج.م"}
-                            </div>
-                            <hr style={{ margin: "5px 0", border: "none", borderTop: `1px dashed ${color}` }} />
-                            {printSettings.warrantyText && (
-                              <div style={{ fontSize: fs - 2, color: "#666", marginBottom: 4, textAlign: "center" }}>{printSettings.warrantyText}</div>
-                            )}
-                            <div style={{ fontWeight: "bold", fontSize: fs, color, textAlign: "center" }}>{printSettings.receiptThankYouText || "شكراً لاختياركم!"}</div>
-                          </div>
-                          {/* Info card */}
-                          <div style={{ flex: 1, minWidth: 200, fontSize: 13, color: "#64748b", lineHeight: 1.8 }}>
-                            <div style={{ fontWeight: 600, marginBottom: 6, color: "#1e293b" }}>مواصفات الطباعة</div>
-                            <div>📐 المقاس: <b>{paper}</b></div>
-                            <div>📏 العرض الفعلي: <b>{paper === "58mm" ? "48" : "72"} mm</b></div>
-                            <div>🔤 حجم الخط: <b>{fs} pt</b></div>
-                            <div>🎨 اللون: <b style={{ color }}>{color}</b></div>
-                            <div>📐 المحاذاة: <b>{align === "center" ? "وسط" : align === "right" ? "يمين" : "يسار"}</b></div>
-                            <div>🖼️ الشعار: <b>{printSettings.invoiceLogo ? "✓" : "—"}</b></div>
-                            <div>📦 العناصر: <b>{sampleItems.length}</b></div>
-                            <p style={{ marginTop: 8, fontSize: 11, color: "#94a3b8" }}>هذا هو المقاس الفعلي للإيصال عند الطباعة على ورق حراري {paper}</p>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    /* ── Standard paper preview (A4 / A5) ── */
-                    const isLandscape = printSettings.invoiceLandscape;
-                    const scale = paper === "A5" ? 0.55 : 0.7;
-                    const pageW = isLandscape ? (paper === "A5" ? 297 : 297) : (paper === "A5" ? 148 : 210);
-                    const pageH = isLandscape ? (paper === "A5" ? 148 : 210) : (paper === "A5" ? 210 : 297);
-                    const previewPxW = Math.round(pageW * scale);
-                    const previewPxH = Math.round(pageH * scale);
-                    const margin = printSettings.invoiceMargins || 10;
-                    return (
-                      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "flex-start" }}>
-                        {/* Page preview */}
-                        <div style={{
-                          width: previewPxW, height: previewPxH, border: "1px solid #d1d5db", borderRadius: 6,
-                          backgroundColor: "#fff", padding: Math.round(margin * scale * 1.2),
-                          fontFamily: "'Cairo', 'Tahoma', sans-serif", fontSize: Math.round(fs * scale * 1.1),
-                          direction: "rtl", textAlign: "right", overflow: "hidden", display: "flex", flexDirection: "column",
-                          boxShadow: "0 2px 8px rgba(0,0,0,.08)", position: "relative",
-                        }}>
-                          {/* Header */}
-                          {printSettings.invoiceHeader && (
-                            <div style={{ textAlign: align, marginBottom: Math.round(8 * scale), borderBottom: `2px solid ${color}`, paddingBottom: Math.round(6 * scale) }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: align === "center" ? "center" : align === "left" ? "flex-start" : "flex-end" }}>
-                                {printSettings.invoiceLogo && <img src={printSettings.invoiceLogo} alt="" style={{ maxHeight: Math.round(35 * scale), maxWidth: Math.round(80 * scale) }} />}
-                                <div>
-                                  <div style={{ fontWeight: "bold", fontSize: Math.round((fs + 5) * scale * 1.1), color }}>{form?.store_name || "تبارك"}</div>
-                                  {form?.phone && <div style={{ fontSize: Math.round((fs - 1) * scale) }}>📞 {form.phone}</div>}
-                                  {form?.address && <div style={{ fontSize: Math.round((fs - 1) * scale) }}>📍 {form.address}</div>}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          {/* Invoice title + meta */}
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: Math.round(6 * scale), fontSize: Math.round((fs - 1) * scale) }}>
-                            <div style={{ fontWeight: "bold", fontSize: Math.round((fs + 3) * scale * 1.1), color }}>فاتورة بيع</div>
-                            <div style={{ textAlign: "left", fontSize: Math.round((fs - 2) * scale), color: "#555" }}>
-                              <div>#12345</div>
-                              {printSettings.receiptShowDate !== false && <div>{new Date().toLocaleDateString("ar-EG")}</div>}
-                            </div>
-                          </div>
-                          {/* Customer / payment info */}
-                          <div style={{ display: "flex", gap: Math.round(16 * scale), marginBottom: Math.round(6 * scale), fontSize: Math.round((fs - 2) * scale), color: "#444" }}>
-                            {printSettings.receiptShowCustomer !== false && <div>العميل: <b>نقدي</b></div>}
-                            {printSettings.receiptShowPayment !== false && <div>الدفع: <b>نقدي</b></div>}
-                            {printSettings.receiptShowEmployee !== false && <div>الموظف: <b>أحمد</b></div>}
-                          </div>
-                          {/* Items table */}
-                          <div style={{ flex: 1, border: `1px solid #e5e7eb`, borderRadius: 4, overflow: "hidden", fontSize: Math.round((fs - 2) * scale) }}>
-                            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                              <thead>
-                                <tr style={{ backgroundColor: color, color: "#fff", fontSize: Math.round((fs - 3) * scale) }}>
-                                  <th style={{ padding: `${Math.round(4 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "right" }}>المنتج</th>
-                                  <th style={{ padding: `${Math.round(4 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "center" }}>الكمية</th>
-                                  <th style={{ padding: `${Math.round(4 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "center" }}>السعر</th>
-                                  <th style={{ padding: `${Math.round(4 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "left" }}>الإجمالي</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {sampleItems.map((it, i) => (
-                                  <tr key={i} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                                    <td style={{ padding: `${Math.round(3 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "right" }}>{it.name}</td>
-                                    <td style={{ padding: `${Math.round(3 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "center" }}>{it.qty}</td>
-                                    <td style={{ padding: `${Math.round(3 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "center" }}>{it.price.toFixed(2)}</td>
-                                    <td style={{ padding: `${Math.round(3 * scale)}px ${Math.round(6 * scale)}px`, textAlign: "left" }}>{(it.qty * it.price).toFixed(2)}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                          {/* Totals */}
-                          <div style={{ marginTop: Math.round(6 * scale), display: "flex", justifyContent: "flex-end" }}>
-                            <div style={{ fontSize: Math.round((fs - 2) * scale), lineHeight: 1.7, textAlign: "left" }}>
-                              <div>المجموع الفرعي: {subtotal.toFixed(2)}</div>
-                              <div>الخصم: -{discount.toFixed(2)}</div>
-                              <div style={{ fontWeight: "bold", fontSize: Math.round((fs + 2) * scale * 1.1), color, borderTop: `2px solid ${color}`, paddingTop: Math.round(3 * scale) }}>
-                                الصافي: {net.toFixed(2)} {form?.currency || "ج.م"}
-                              </div>
-                            </div>
-                          </div>
-                          {/* Footer */}
-                          {printSettings.invoiceFooter && (
-                            <div style={{ marginTop: "auto", paddingTop: Math.round(6 * scale), borderTop: `1px dashed ${color}`, textAlign: "center", fontSize: Math.round((fs - 3) * scale), color: "#666" }}>
-                              {printSettings.warrantyText && <div style={{ marginBottom: 3 }}>{printSettings.warrantyText}</div>}
-                              <div style={{ fontWeight: "bold", color }}>{printSettings.receiptThankYouText || "شكراً لاختياركم!"}</div>
-                            </div>
-                          )}
-                        </div>
-                        {/* Info card */}
-                        <div style={{ flex: 1, minWidth: 200, fontSize: 13, color: "#64748b", lineHeight: 1.8 }}>
-                          <div style={{ fontWeight: 600, marginBottom: 6, color: "#1e293b" }}>مواصفات الطباعة</div>
-                          <div>📐 المقاس: <b>{paper}</b> {isLandscape ? "(أفقي)" : "(عمودي)"}</div>
-                          <div>📏 الأبعاد: <b>{pageW} × {pageH} mm</b></div>
-                          <div>🔤 حجم الخط: <b>{fs} pt</b></div>
-                          <div>🎨 اللون: <b style={{ color }}>{color}</b></div>
-                          <div>📐 المحاذاة: <b>{align === "center" ? "وسط" : align === "right" ? "يمين" : "يسار"}</b></div>
-                          <div>🖼️ الشعار: <b>{printSettings.invoiceLogo ? "✓" : "—"}</b></div>
-                          <div>📄 الهوامش: <b>{margin} mm</b></div>
-                          <div>📦 العناصر: <b>{sampleItems.length}</b></div>
-                          <div>📋 الترويسة: <b>{printSettings.invoiceHeader ? "✓" : "—"}</b></div>
-                          <div>📋 التذييل: <b>{printSettings.invoiceFooter ? "✓" : "—"}</b></div>
-                          <p style={{ marginTop: 8, fontSize: 11, color: "#94a3b8" }}>معاينة تقريبية — النتيجة الفعلية تعتمد على إعدادات الطابعة والنظام</p>
-                        </div>
+              {/* Active template settings */}
+              {(() => {
+                const tpl = printSettings.barcodeTemplates.find((t) => t.id === printSettings.activeBarcodeTemplate) || printSettings.barcodeTemplates[0];
+                if (!tpl) return null;
+                const updateTemplate = (patch: Partial<typeof tpl>) => {
+                  const updated = printSettings.barcodeTemplates.map((t) => t.id === tpl.id ? { ...t, ...patch } : t);
+                  updatePrintSettings({ barcodeTemplates: updated });
+                };
+                return (
+                  <div style={{ background: "#f8fafc", borderRadius: 12, padding: 16, border: "1px solid #e2e8f0" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <div className="settings-row">
+                        <label>{t("barcodeType")}</label>
+                        <select value={tpl.barcodeType} onChange={(e) => updateTemplate({ barcodeType: e.target.value as BarcodeType })}
+                          style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0", width: "100%" }}>
+                          <option value="CODE128">CODE128</option>
+                          <option value="EAN13">EAN-13</option>
+                          <option value="EAN8">EAN-8</option>
+                          <option value="UPC_A">UPC-A</option>
+                          <option value="QR_CODE">QR Code</option>
+                        </select>
                       </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
-
-            {/* Barcode print settings */}
-            <div className="print-section">
-              <h3>{t("barcodePrinterSettings")}</h3>
-              <div className="print-fields">
-                <div className="print-field" style={{ minWidth: 200 }}>
-                  <label>{t("defaultPrinter")}</label>
-                  <select value={printSettings.barcodePrinter} onChange={(e) => updatePrintSettings({ barcodePrinter: e.target.value })}>
-                    <option value="">{t("choosePrinter")}</option>
-                    {availablePrinters.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="print-fields">
-                <div className="print-field">
-                  <label>{t("widthLabel")}</label>
-                  <input type="number" min={20} max={150} value={activeSize.width} onChange={(e) => {
-                    const v = Number(e.target.value);
-                    if (selectedBarcodeSize === "افتراضي") updatePrintSettings({ barcodeWidth: v });
-                    else setBarcodeCustomSizes(barcodeCustomSizes.map((sz) => sz.name === selectedBarcodeSize ? { ...sz, width: v } : sz));
-                  }} />
-                </div>
-                <div className="print-field">
-                  <label>{t("heightLabel")}</label>
-                  <input type="number" min={10} max={100} value={activeSize.height} onChange={(e) => {
-                    const v = Number(e.target.value);
-                    if (selectedBarcodeSize === "افتراضي") updatePrintSettings({ barcodeHeight: v });
-                    else setBarcodeCustomSizes(barcodeCustomSizes.map((sz) => sz.name === selectedBarcodeSize ? { ...sz, height: v } : sz));
-                  }} />
-                </div>
-                <div className="print-field">
-                  <label>{t("fontSize")}</label>
-                  <input type="number" min={6} max={18} value={printSettings.barcodeFontSize} onChange={(e) => updatePrintSettings({ barcodeFontSize: Number(e.target.value) })} />
-                </div>
-              </div>
-              <div className="print-toggles">
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={printSettings.barcodeShowName} onChange={(e) => updatePrintSettings({ barcodeShowName: e.target.checked })} />
-                  {t("showItemName")}
-                </label>
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={printSettings.barcodeShowPrice} onChange={(e) => updatePrintSettings({ barcodeShowPrice: e.target.checked })} />
-                  {t("showPriceLabel")}
-                </label>
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={printSettings.barcodeShowBarcode} onChange={(e) => updatePrintSettings({ barcodeShowBarcode: e.target.checked })} />
-                  {t("showBarcodeLabel")}
-                </label>
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={printSettings.barcodeShowStoreName ?? true} onChange={(e) => updatePrintSettings({ barcodeShowStoreName: e.target.checked })} />
-                  {t("showStoreNameLabel")}
-                </label>
-              </div>
-
-              {/* Size selector */}
-              <div className="print-sizes">
-                <label>{t("savedSizes")}</label>
-                <div className="print-size-chips">
-                  {allBarcodeSizes.map((s) => (
-                    <button key={s.name} type="button" className={`print-size-chip ${selectedBarcodeSize === s.name ? "active" : ""}`} onClick={() => setSelectedBarcodeSize(s.name)}>
-                      {s.name} ({s.width}×{s.height})
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Add new size */}
-              <div className="print-add-size">
-                <input value={newSizeName} onChange={(e) => setNewSizeName(e.target.value)} placeholder={t("sizeName")} style={{ flex: 1 }} />
-                <input type="number" min={20} max={150} value={newSizeW} onChange={(e) => setNewSizeW(Number(e.target.value))} style={{ width: 70 }} placeholder={t("widthLabel")} />
-                <span>×</span>
-                <input type="number" min={10} max={100} value={newSizeH} onChange={(e) => setNewSizeH(Number(e.target.value))} style={{ width: 70 }} placeholder={t("heightLabel")} />
-                <button type="button" className="btn primary sm" onClick={() => {
-                  if (!newSizeName.trim()) { notify(t("enterSizeName"), "error"); return; }
-                  if (barcodeCustomSizes.some((sz) => sz.name === newSizeName.trim())) { notify(t("sizeExists"), "error"); return; }
-                  setBarcodeCustomSizes([...barcodeCustomSizes, { name: newSizeName.trim(), width: newSizeW, height: newSizeH }]);
-                  setSelectedBarcodeSize(newSizeName.trim());
-                  setNewSizeName("");
-                  notify(t("sizeAdded"));
-                }}>{t("addSizeBtn")}</button>
-                {selectedBarcodeSize !== "افتراضي" && (
-                  <button type="button" className="btn danger sm" onClick={() => {
-                    setBarcodeCustomSizes(barcodeCustomSizes.filter((sz) => sz.name !== selectedBarcodeSize));
-                    setSelectedBarcodeSize("افتراضي");
-                    notify(t("sizeDeleted"));
-                  }}>{t("deleteSizeBtn")}</button>
-                )}
-              </div>
-
-              {/* Preview */}
-              <div className="print-preview">
-                <h4>{t("barcodePreview")}</h4>
-                <div className="barcode-preview-box" style={{ width: Math.min(activeSize.width * 2.5, 300), minHeight: activeSize.height * 2.5, border: "2px dashed #cbd5e1", borderRadius: 8, padding: 10, background: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                  {printSettings.barcodeShowName && (
-                    <div style={{ fontSize: printSettings.barcodeFontSize + 2, fontWeight: 700, color: "#1e293b" }}>{t("itemName")}</div>
-                  )}
-                  {printSettings.barcodeShowBarcode && (
-                    <div style={{ display: "flex", gap: 1, alignItems: "flex-end", height: 30 }}>
-                      {Array.from({ length: 30 }).map((_, i) => (
-                        <div key={i} style={{ width: Math.max(1, Math.floor(activeSize.width / 30)), height: `${50 + Math.random() * 50}%`, background: "#1e293b", borderRadius: 1 }} />
-                      ))}
+                      <div className="settings-row">
+                        <label>{t("barcodeDefaultCopies")}</label>
+                        <input type="number" min={1} max={99} value={printSettings.barcodeDefaultCopies} onChange={(e) => updatePrintSettings({ barcodeDefaultCopies: parseInt(e.target.value) || 1 })}
+                          style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                      </div>
+                      <div className="settings-row">
+                        <label>{t("widthLabel")} (mm)</label>
+                        <input type="number" min={10} max={150} value={tpl.widthMm} onChange={(e) => updateTemplate({ widthMm: parseInt(e.target.value) || 50 })}
+                          style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                      </div>
+                      <div className="settings-row">
+                        <label>{t("heightLabel")} (mm)</label>
+                        <input type="number" min={10} max={100} value={tpl.heightMm} onChange={(e) => updateTemplate({ heightMm: parseInt(e.target.value) || 25 })}
+                          style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                      </div>
+                      <div className="settings-row">
+                        <label>{t("fontSize")}</label>
+                        <input type="number" min={6} max={20} value={tpl.fontSize} onChange={(e) => updateTemplate({ fontSize: parseInt(e.target.value) || 10 })}
+                          style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                      </div>
+                      <div className="settings-row">
+                        <label>{t("showItemName")}</label>
+                        <input type="checkbox" checked={tpl.showName} onChange={(e) => updateTemplate({ showName: e.target.checked })} />
+                      </div>
+                      <div className="settings-row">
+                        <label>{t("showPriceLabel")}</label>
+                        <input type="checkbox" checked={tpl.showPrice} onChange={(e) => updateTemplate({ showPrice: e.target.checked })} />
+                      </div>
+                      <div className="settings-row">
+                        <label>{t("showBarcodeLabel")}</label>
+                        <input type="checkbox" checked={tpl.showBarcode} onChange={(e) => updateTemplate({ showBarcode: e.target.checked })} />
+                      </div>
+                      <div className="settings-row">
+                        <label>{t("showStoreNameLabel")}</label>
+                        <input type="checkbox" checked={tpl.showStoreName} onChange={(e) => updateTemplate({ showStoreName: e.target.checked })} />
+                      </div>
+                      <div className="settings-row">
+                        <label>{t("showSkuLabel")}</label>
+                        <input type="checkbox" checked={tpl.showSku} onChange={(e) => updateTemplate({ showSku: e.target.checked })} />
+                      </div>
+                      <div className="settings-row">
+                        <label>{t("horizontalGap")} (mm)</label>
+                        <input type="number" min={0} max={10} value={tpl.hGap} onChange={(e) => updateTemplate({ hGap: parseInt(e.target.value) || 0 })}
+                          style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                      </div>
+                      <div className="settings-row">
+                        <label>{t("verticalGap")} (mm)</label>
+                        <input type="number" min={0} max={10} value={tpl.vGap} onChange={(e) => updateTemplate({ vGap: parseInt(e.target.value) || 0 })}
+                          style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                      </div>
                     </div>
-                  )}
-                  {printSettings.barcodeShowBarcode && (
-                    <div style={{ fontSize: 9, color: "#64748b", letterSpacing: 2 }}>1234567890</div>
-                  )}
-                  {printSettings.barcodeShowPrice && (
-                    <div style={{ fontSize: printSettings.barcodeFontSize, fontWeight: 700, color: "#0f8a5f" }}>150.00 ج.م</div>
-                  )}
-                </div>
-                <p className="settings-note" style={{ marginTop: 6 }}>{t("actualSize")} {activeSize.width}mm × {activeSize.height}mm</p>
-              </div>
+                    {/* Add new template */}
+                    <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+                      <input type="text" placeholder={t("templateName")} value={newTemplateName} onChange={(e) => setNewTemplateName(e.target.value)}
+                        style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0", flex: 1 }} />
+                      <button className="btn primary" onClick={() => {
+                        if (!newTemplateName.trim()) return;
+                        const id = newTemplateName.trim().toLowerCase().replace(/\s+/g, "_");
+                        const newTpl = { ...tpl, id, name: newTemplateName.trim() };
+                        saveBarcodeTemplate(newTpl);
+                        updatePrintSettings({ activeBarcodeTemplate: id, barcodeTemplates: [...printSettings.barcodeTemplates, newTpl] });
+                        setNewTemplateName("");
+                        notify(t("templateAdded"), "success");
+                      }}>{t("addTemplateBtn")}</button>
+                      {tpl.id !== "default" && (
+                        <button className="btn danger" onClick={() => {
+                          deleteBarcodeTemplate(tpl.id);
+                          updatePrintSettings({ activeBarcodeTemplate: "default" });
+                          notify(t("templateDeleted"), "success");
+                        }}>{t("deleteTemplateBtn")}</button>
+                      )}
+                    </div>
+
+                    {/* Barcode preview */}
+                    <div style={{ marginTop: 16 }}>
+                      <h4 style={{ margin: "0 0 8px", fontSize: 13, color: "#475569" }}>{t("barcodePreview")}</h4>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                        <input type="text" placeholder="Barcode value" value={barcodePreviewValue} onChange={(e) => setBarcodePreviewValue(e.target.value)}
+                          style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0", flex: 1 }} />
+                        <button className="btn" onClick={async () => {
+                          try {
+                            const img = await generateBarcodePreview(barcodePreviewValue, tpl.barcodeType);
+                            setBarcodePreviewImg(img);
+                          } catch { setBarcodePreviewImg(""); }
+                        }}>{t("barcodeScanTest")}</button>
+                      </div>
+                      {barcodePreviewImg && (
+                        <div style={{ textAlign: "center", padding: 12, background: "#fff", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                          <img src={barcodePreviewImg} alt="preview" style={{ maxWidth: 200, height: "auto" }} />
+                          <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>{tpl.widthMm}×{tpl.heightMm}mm · {tpl.barcodeType}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
-            <div className="form-actions" style={{ marginTop: 8 }}>
-              <button type="button" className="btn primary" onClick={() => {
-                savePrintSettings(printSettings);
-                localStorage.setItem("tabarak_barcode_custom_sizes", JSON.stringify(barcodeCustomSizes));
-                notify(t("syncSettingsSaved"));
-              }}>{t("savePrintSettings")}</button>
-            </div>
+            <button className="btn primary" onClick={() => {
+              notify(t("savePrintSettings"), "success");
+            }} style={{ marginTop: 8 }}>{t("savePrintSettings")}</button>
           </div>
         );
 

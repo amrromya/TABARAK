@@ -1,0 +1,174 @@
+import { useState, useEffect, useRef } from "react";
+import { listPrinters } from "../utils/directPrint";
+
+interface PrintPreviewProps {
+  html: string;
+  title?: string;
+  onClose: () => void;
+  onPrint?: (printer: string, copies: number) => void;
+  paperSize?: string;
+}
+
+export default function PrintPreview({ html, title, onClose, onPrint, paperSize }: PrintPreviewProps) {
+  const [printers, setPrinters] = useState<string[]>([]);
+  const [selectedPrinter, setSelectedPrinter] = useState("");
+  const [copies, setCopies] = useState(1);
+  const [zoom, setZoom] = useState(100);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    listPrinters().then(setPrinters).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (iframeRef.current) {
+      const doc = iframeRef.current.contentDocument;
+      if (doc) {
+        doc.open();
+        doc.write(html);
+        doc.close();
+      }
+    }
+  }, [html]);
+
+  const handlePrint = () => {
+    if (onPrint) {
+      onPrint(selectedPrinter, copies);
+    } else {
+      iframeRef.current?.contentWindow?.print();
+    }
+  };
+
+  const pageWidth = paperSize === "58mm" ? 58 : paperSize === "80mm" ? 80 : paperSize === "A5" ? 148 : 210;
+  const pageHeight = paperSize === "58mm" ? 200 : paperSize === "80mm" ? 250 : paperSize === "A5" ? 210 : 297;
+  const displayScale = zoom / 100;
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 9999,
+      background: "rgba(0,0,0,0.6)", display: "flex",
+      alignItems: "center", justifyContent: "center",
+    }}>
+      <div style={{
+        background: "#fff", borderRadius: 16, width: "90vw", height: "90vh",
+        display: "flex", flexDirection: "column", overflow: "hidden",
+        boxShadow: "0 25px 60px rgba(0,0,0,0.3)",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "12px 20px", borderBottom: "1px solid #e2e8f0",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          background: "#f8fafc",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#1e293b" }}>
+              {title || "معاينة الطباعة"}
+            </h3>
+            {paperSize && (
+              <span style={{
+                background: "#e0e7ff", color: "#3730a3",
+                padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+              }}>
+                {paperSize}
+              </span>
+            )}
+          </div>
+          <button onClick={onClose} style={{
+            background: "none", border: "none", fontSize: 22, cursor: "pointer",
+            color: "#64748b", padding: 4,
+          }}>✕</button>
+        </div>
+
+        {/* Toolbar */}
+        <div style={{
+          padding: "8px 20px", borderBottom: "1px solid #e2e8f0",
+          display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+          background: "#f1f5f9",
+        }}>
+          <label style={{ fontSize: 12, color: "#475569" }}>الطابعة:</label>
+          <select
+            value={selectedPrinter}
+            onChange={(e) => setSelectedPrinter(e.target.value)}
+            style={{
+              padding: "4px 8px", borderRadius: 6, border: "1px solid #cbd5e1",
+              fontSize: 12, minWidth: 150,
+            }}
+          >
+            <option value="">الافتراضية</option>
+            {printers.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+
+          <label style={{ fontSize: 12, color: "#475569" }}>النسخ:</label>
+          <input
+            type="number"
+            min={1}
+            max={99}
+            value={copies}
+            onChange={(e) => setCopies(Math.max(1, parseInt(e.target.value) || 1))}
+            style={{
+              width: 50, padding: "4px 6px", borderRadius: 6,
+              border: "1px solid #cbd5e1", fontSize: 12, textAlign: "center",
+            }}
+          />
+
+          <div style={{ flex: 1 }} />
+
+          <label style={{ fontSize: 12, color: "#475569" }}>التكبير:</label>
+          <button
+            onClick={() => setZoom(Math.max(25, zoom - 25))}
+            style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid #cbd5e1", cursor: "pointer", fontSize: 12, background: "#fff" }}
+          >−</button>
+          <span style={{ fontSize: 12, color: "#475569", minWidth: 40, textAlign: "center" }}>{zoom}%</span>
+          <button
+            onClick={() => setZoom(Math.min(200, zoom + 25))}
+            style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid #cbd5e1", cursor: "pointer", fontSize: 12, background: "#fff" }}
+          >+</button>
+        </div>
+
+        {/* Preview Area */}
+        <div style={{
+          flex: 1, overflow: "auto", background: "#94a3b8",
+          display: "flex", justifyContent: "center", padding: 24,
+        }}>
+          <div style={{
+            background: "#fff", boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            borderRadius: 4, overflow: "hidden",
+            width: pageWidth * 3.78 * displayScale,
+            minHeight: pageHeight * 3.78 * displayScale,
+            transform: `scale(${displayScale})`,
+            transformOrigin: "top center",
+          }}>
+            <iframe
+              ref={iframeRef}
+              title="print-preview"
+              style={{
+                width: "100%", height: pageHeight * 3.78,
+                border: "none",
+              }}
+              sandbox="allow-same-origin"
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: "10px 20px", borderTop: "1px solid #e2e8f0",
+          display: "flex", gap: 8, justifyContent: "flex-end",
+          background: "#f8fafc",
+        }}>
+          <button onClick={onClose} style={{
+            padding: "8px 16px", borderRadius: 8, border: "1px solid #cbd5e1",
+            background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 500,
+          }}>إلغاء</button>
+          <button onClick={handlePrint} style={{
+            padding: "8px 20px", borderRadius: 8, border: "none",
+            background: "linear-gradient(135deg, #2563eb, #1d4ed8)", color: "#fff",
+            cursor: "pointer", fontSize: 13, fontWeight: 600,
+          }}>🖨️ طباعة</button>
+        </div>
+      </div>
+    </div>
+  );
+}

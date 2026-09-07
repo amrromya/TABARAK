@@ -439,6 +439,8 @@ export const api = {
     showName: boolean; showPrice: boolean; showBarcode: boolean; showStore: boolean;
     printerName: string;
   }) => invoke<void>("print_barcode_label", params),
+  testPrint: (printerName: string, paperSize: string) =>
+    invoke<void>("test_print", { printerName, paperSize }),
 
   // البحث في الصيانة
   searchServiceOrders: (query: string) =>

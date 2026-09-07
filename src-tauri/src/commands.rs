@@ -5292,410 +5292,6 @@ fn compare_versions(latest: &str, current: &str) -> bool {
     false
 }
 
-// =============== الطابعات ===============
-
-#[tauri::command]
-pub fn list_printers() -> Result<Vec<String>, String> {
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        let output = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-Command", "Get-Printer | Select-Object -ExpandProperty Name"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-            .map_err(|e| e.to_string())?;
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let printers: Vec<String> = stdout
-            .lines()
-            .map(|l| l.trim().to_string())
-            .filter(|l| !l.is_empty())
-            .collect();
-        Ok(printers)
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        Ok(vec![])
-    }
-}
-
-#[tauri::command]
-pub fn print_turn_number(number: i32, store_name: String, created_at: String, printer_name: String) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-        let store_esc = store_name.replace('\'', "''");
-        let time_esc = created_at.replace('\'', "''");
-        let printer_name_esc = printer_name.replace('\'', "''");
-
-        let ps_script = format!(
-            "Add-Type -AssemblyName System.Drawing\n\
-             Add-Type -AssemblyName System.Drawing.Printing\n\
-             $doc = New-Object System.Drawing.Printing.PrintDocument\n\
-             $doc.DocumentName = 'Tabarak Turn #{number}'\n\
-             $doc.OriginAtMargins = $false\n\
-             $doc.DefaultPageSettings.Margins = (New-Object System.Drawing.Printing.Margins(0,0,0,0))\n\
-             $doc.DefaultPageSettings.PaperSize = $doc.PrinterSettings.PaperSizes[0]\n\
-             if ('{printer_name_esc}') {{ try {{ $doc.PrinterSettings.PrinterName = '{printer_name_esc}' }} catch {{}} }}\n\
-             $w = $doc.DefaultPageSettings.PaperSize.Width\n\
-             $h = $doc.DefaultPageSettings.PaperSize.Height\n\
-             $doc.Add_PrintPage({{ param($sender, $e)\n\
-               $g = $e.Graphics\n\
-               $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit\n\
-               $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality\n\
-               $center = [System.Drawing.StringAlignment]::Center\n\
-               $far = [System.Drawing.StringAlignment]::Far\n\
-               $storeFont = New-Object System.Drawing.Font('Arial', 10, [System.Drawing.FontStyle]::Bold)\n\
-               $labelFont = New-Object System.Drawing.Font('Arial', 7)\n\
-               $numFont = New-Object System.Drawing.Font('Arial', 36, [System.Drawing.FontStyle]::Bold)\n\
-               $timeFont = New-Object System.Drawing.Font('Arial', 6)\n\
-               $brush = [System.Drawing.Brushes]::Black\n\
-               $cx = $w / 2\n\
-               $g.DrawString('{store_esc}', $storeFont, $brush, $cx, 10, (New-Object System.Drawing.StringFormat {{ Alignment = $center }}))\n\
-               $g.DrawString('رقم الدور', $labelFont, $brush, $cx, 30, (New-Object System.Drawing.StringFormat {{ Alignment = $center }}))\n\
-               $numText = '#{number}'\n\
-               $numSize = $g.MeasureString($numText, $numFont)\n\
-               $g.DrawString($numText, $numFont, $brush, $cx - ($numSize.Width / 2), 45)\n\
-               $g.DrawString('{time_esc}', $timeFont, $brush, $cx, 110, (New-Object System.Drawing.StringFormat {{ Alignment = $center }}))\n\
-             }})\n\
-             $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController\n\
-             $doc.Print()\n\
-             $doc.Dispose()",
-            number = number,
-            store_esc = store_esc,
-            time_esc = time_esc,
-            printer_name_esc = printer_name_esc
-        );
-
-        let output = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-Command", &ps_script])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-            .map_err(|e| e.to_string())?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("Print failed: {}", stderr));
-        }
-        Ok(())
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        Err("Direct printing is only supported on Windows".into())
-    }
-}
-
-#[tauri::command]
-pub fn print_sale_receipt(
-    store_name: String,
-    phone: String,
-    address: String,
-    invoice_no: String,
-    date: String,
-    customer_name: String,
-    payment_method: String,
-    employee_name: String,
-    items_json: String,
-    total: f64,
-    discount: f64,
-    additional: f64,
-    net_total: f64,
-    currency: String,
-    footer: String,
-    printer_width: String,
-    printer_name: String,
-    template_json: String,
-    doc_type: String,
-) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-        let tmpl: serde_json::Value = serde_json::from_str(&template_json).unwrap_or(serde_json::json!({}));
-        let t_font_size = tmpl.get("fontSize").and_then(|v| v.as_i64()).unwrap_or(if printer_width == "58mm" { 9 } else { 10 }) as u32;
-        let t_primary_color = tmpl.get("primaryColor").and_then(|v| v.as_str()).unwrap_or("0,0,0");
-        let t_show_employee = tmpl.get("showEmployee").and_then(|v| v.as_bool()).unwrap_or(true);
-        let t_show_payment = tmpl.get("showPayment").and_then(|v| v.as_bool()).unwrap_or(true);
-        let t_show_date = tmpl.get("showDate").and_then(|v| v.as_bool()).unwrap_or(true);
-        let t_show_customer = tmpl.get("showCustomer").and_then(|v| v.as_bool()).unwrap_or(true);
-        let t_thank_you = tmpl.get("thankYouText").and_then(|v| v.as_str()).unwrap_or("شكراً لاختياركم!");
-        let t_thank_you_esc = t_thank_you.replace('\'', "''");
-        let t_header_align = tmpl.get("headerAlign").and_then(|v| v.as_str()).unwrap_or("center");
-
-        let store_esc = store_name.replace('\'', "''");
-        let phone_esc = phone.replace('\'', "''");
-        let address_esc = address.replace('\'', "''");
-        let invoice_esc = invoice_no.replace('\'', "''");
-        let date_esc = date.replace('\'', "''");
-        let customer_esc = customer_name.replace('\'', "''");
-        let payment_esc = payment_method.replace('\'', "''");
-        let employee_esc = employee_name.replace('\'', "''");
-        let footer_esc = footer.replace('\'', "''");
-        let currency_esc = currency.replace('\'', "''");
-        let items_esc = items_json.replace('\'', "''");
-        let printer_name_esc = printer_name.replace('\'', "''");
-        let doc_type_esc = doc_type.replace('\'', "''");
-
-        let is_58mm = printer_width == "58mm";
-        let width_px = if is_58mm { 300 } else { 400 };
-        let font_size = t_font_size;
-        let title_size = if is_58mm { 11 } else { 12 };
-
-        let ps_script = format!(
-            "Add-Type -AssemblyName System.Drawing\n\
-             Add-Type -AssemblyName System.Drawing.Printing\n\
-             $doc = New-Object System.Drawing.Printing.PrintDocument\n\
-             $doc.DocumentName = 'Sale Invoice {invoice_esc}'\n\
-             $doc.OriginAtMargins = $false\n\
-             $doc.DefaultPageSettings.Margins = (New-Object System.Drawing.Printing.Margins(10,10,10,10))\n\
-             $items = ConvertFrom-Json -InputObject '{items_esc}'\n\
-             if ('{printer_name_esc}') {{ try {{ $doc.PrinterSettings.PrinterName = '{printer_name_esc}' }} catch {{}} }}\n\
-             $doc.Add_PrintPage({{ param($sender, $e)\n\
-               $g = $e.Graphics\n\
-               $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit\n\
-               $y = 10\n\
-               $cx = {width_px} / 2\n\
-               $right = {width_px} - 10\n\
-               $font = New-Object System.Drawing.Font('Courier New', {font_size})\n\
-               $boldFont = New-Object System.Drawing.Font('Courier New', {font_size}, [System.Drawing.FontStyle]::Bold)\n\
-               $titleFont = New-Object System.Drawing.Font('Courier New', {title_size}, [System.Drawing.FontStyle]::Bold)\n\
-               $smallFont = New-Object System.Drawing.Font('Courier New', {font_size} - 1)\n\
-               $hexColor = '{t_primary_color_hex}'\n\
-               $brush = [System.Drawing.Brushes]::Black\n\
-               if ($hexColor.Length -ge 7) {{ try {{\n\
-                 $cr = [Convert]::ToInt32($hexColor.Substring(1,2), 16)\n\
-                 $cg = [Convert]::ToInt32($hexColor.Substring(3,2), 16)\n\
-                 $cb = [Convert]::ToInt32($hexColor.Substring(5,2), 16)\n\
-                 $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb($cr, $cg, $cb))\n\
-               }} catch {{}} }}\n\
-               $alignVal = '{t_header_align}'\n\
-               $alignEnum = [System.Drawing.StringAlignment]::Center\n\
-               if ($alignVal -eq 'right') {{ $alignEnum = [System.Drawing.StringAlignment]::Far }}\n\
-               if ($alignVal -eq 'left') {{ $alignEnum = [System.Drawing.StringAlignment]::Near }}\n\
-               $center = New-Object System.Drawing.StringFormat {{ Alignment = $alignEnum }}\n\
-               $right2 = New-Object System.Drawing.StringFormat {{ Alignment = [System.Drawing.StringAlignment]::Far }}\n\
-               $pen = New-Object System.Drawing.Pen($brush, 1)\n\
-               $pen.DashStyle = [System.Drawing.Drawing2D.DashStyle]::Dash\n\
-               \n\
-               $g.DrawString('{store_esc}', $titleFont, $brush, $cx, $y, $center)\n\
-               $y += 22\n\
-               if ('{phone_esc}') {{ $g.DrawString('Tel: {phone_esc}', $smallFont, $brush, $cx, $y, $center); $y += 16 }}\n\
-               if ('{address_esc}') {{ $g.DrawString('{address_esc}', $smallFont, $brush, $cx, $y, $center); $y += 16 }}\n\
-               $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
-               $g.DrawString('{doc_type_esc}', $boldFont, $brush, $cx, $y, $center); $y += 18\n\
-               $g.DrawString('#{invoice_esc}', $boldFont, $brush, $right, $y, $right2); $y += 18\n\
-               if ({t_show_date_ps}) {{ $g.DrawString('Date: {date_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
-               if ({t_show_customer_ps}) {{ $g.DrawString('Customer: {customer_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
-               if ({t_show_payment_ps}) {{ $g.DrawString('Payment: {payment_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
-               if ('{employee_esc}' -and {t_show_employee_ps}) {{ $g.DrawString('Employee: {employee_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
-               $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
-               \n\
-               foreach ($item in $items) {{\n\
-                 $name = $item.name\n\
-                 if ($name.Length -gt 20) {{ $name = $name.Substring(0, 18) + '..' }}\n\
-                 $line = $name + ' ' + $item.qty + ' x ' + $item.price + ' = ' + $item.total\n\
-                 $g.DrawString($line, $font, $brush, $right, $y, $right2)\n\
-                 $y += 16\n\
-               }}\n\
-               \n\
-               $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
-               $g.DrawString('Total: ' + [math]::Round({total}, 2).ToString('F2'), $font, $brush, $right, $y, $right2); $y += 16\n\
-               $g.DrawString('Discount: ' + [math]::Round({discount}, 2).ToString('F2'), $font, $brush, $right, $y, $right2); $y += 16\n\
-               if ({additional} -gt 0) {{ $g.DrawString('Additional: ' + [math]::Round({additional}, 2).ToString('F2'), $font, $brush, $right, $y, $right2); $y += 16 }}\n\
-               $g.DrawString('NET: ' + [math]::Round({net_total}, 2).ToString('F2') + ' {currency_esc}', $boldFont, $brush, $right, $y, $right2); $y += 20\n\
-               \n\
-               $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
-               if ('{footer_esc}') {{ $g.DrawString('{footer_esc}', $smallFont, $brush, $cx, $y, $center); $y += 16 }}\n\
-               $g.DrawString('{t_thank_you}', $boldFont, $brush, $cx, $y, $center)\n\
-             }})\n\
-             $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController\n\
-             $doc.Print()\n\
-             $doc.Dispose()",
-            store_esc = store_esc,
-            phone_esc = phone_esc,
-            address_esc = address_esc,
-            invoice_esc = invoice_esc,
-            date_esc = date_esc,
-            customer_esc = customer_esc,
-            payment_esc = payment_esc,
-            employee_esc = employee_esc,
-            footer_esc = footer_esc,
-            currency_esc = currency_esc,
-            items_esc = items_esc,
-            printer_name_esc = printer_name_esc,
-            doc_type_esc = doc_type_esc,
-            width_px = width_px,
-            font_size = font_size,
-            title_size = title_size,
-            total = total,
-            discount = discount,
-            additional = additional,
-            net_total = net_total,
-            t_primary_color_hex = t_primary_color.trim_start_matches('#'),
-            t_header_align = t_header_align,
-            t_show_date_ps = if t_show_date { "$true" } else { "$false" },
-            t_show_customer_ps = if t_show_customer { "$true" } else { "$false" },
-            t_show_payment_ps = if t_show_payment { "$true" } else { "$false" },
-            t_show_employee_ps = if t_show_employee { "$true" } else { "$false" },
-            t_thank_you = t_thank_you_esc,
-        );
-
-        let output = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-Command", &ps_script])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-            .map_err(|e| e.to_string())?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("Print failed: {}", stderr));
-        }
-        Ok(())
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        Err("Direct printing is only supported on Windows".into())
-    }
-}
-
-#[tauri::command]
-pub fn print_barcode_label(
-    barcode_image_base64: String,
-    product_name: String,
-    barcode_value: String,
-    price: f64,
-    store_name: String,
-    quantity: i32,
-    width_mm: f64,
-    height_mm: f64,
-    show_name: bool,
-    show_price: bool,
-    show_barcode: bool,
-    show_store: bool,
-    printer_name: String,
-) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        use std::io::Write;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-        let temp_dir = std::env::temp_dir();
-        let uid = uuid::Uuid::new_v4().to_string();
-        let img_path = temp_dir.join(format!("tabarak_bc_{}.png", uid));
-        let img_path_esc = img_path.to_string_lossy().replace('\\', "\\\\");
-
-        let b64_data = barcode_image_base64
-            .trim_start_matches("data:image/png;base64,")
-            .trim_start_matches("data:image/jpeg;base64,");
-
-        if let Ok(bytes) = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
-            b64_data,
-        ) {
-            std::fs::write(&img_path, &bytes).map_err(|e| e.to_string())?;
-        } else {
-            return Err("Failed to decode barcode image".into());
-        }
-
-        let name_esc = product_name.replace('\'', "''");
-        let bc_esc = barcode_value.replace('\'', "''");
-        let store_esc = store_name.replace('\'', "''");
-        let printer_name_esc = printer_name.replace('\'', "''");
-
-        let show_name_i32 = if show_name { 1 } else { 0 };
-        let show_price_i32 = if show_price { 1 } else { 0 };
-        let show_bc_i32 = if show_barcode { 1 } else { 0 };
-        let show_store_i32 = if show_store { 1 } else { 0 };
-        let qty_i32 = quantity.max(1);
-
-        let ps_script = format!(
-            "Add-Type -AssemblyName System.Drawing\n\
-             Add-Type -AssemblyName System.Drawing.Printing\n\
-             $doc = New-Object System.Drawing.Printing.PrintDocument\n\
-             $doc.DocumentName = 'Barcode {bc_esc}'\n\
-             $doc.OriginAtMargins = $false\n\
-             $doc.DefaultPageSettings.Margins = (New-Object System.Drawing.Printing.Margins(5,5,5,5))\n\
-             if ('{printer_name_esc}') {{ try {{ $doc.PrinterSettings.PrinterName = '{printer_name_esc}' }} catch {{}} }}\n\
-             $copiesLeft = {qty_i32}\n\
-             $doc.Add_PrintPage({{ param($sender, $e)\n\
-               $g = $e.Graphics\n\
-               $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit\n\
-               $pw = $e.PageBounds.Width\n\
-               $cx = [float]($pw / 2)\n\
-               $y = [float]8\n\
-               $brush = [System.Drawing.Brushes]::Black\n\
-               $font = New-Object System.Drawing.Font('Arial', 8)\n\
-               $nameFont = New-Object System.Drawing.Font('Arial', 9, [System.Drawing.FontStyle]::Bold)\n\
-               $bcFont = New-Object System.Drawing.Font('Courier New', 7)\n\
-               $fmt = New-Object System.Drawing.StringFormat\n\
-               $fmt.Alignment = [System.Drawing.StringAlignment]::Center\n\
-               $fmt.LineAlignment = [System.Drawing.StringAlignment]::Near\n\
-               $fmt.FormatFlags = [System.Drawing.StringFormatFlags]::DirectionRightToLeft\n\
-               \n\
-               if ({show_store_i32} -eq 1) {{\n\
-                 $g.DrawString(\"{store_esc}\", $font, $brush, $cx, $y, $fmt)\n\
-                 $y += 16\n\
-               }}\n\
-               if ({show_name_i32} -eq 1) {{\n\
-                 $g.DrawString(\"{name_esc}\", $nameFont, $brush, $cx, $y, $fmt)\n\
-                 $y += 20\n\
-               }}\n\
-               $img = [System.Drawing.Image]::FromFile(\"{img_path_esc}\")\n\
-               $iw = $pw - 16\n\
-               $ih = [int]([float]$iw * [float]$img.Height / [float]$img.Width)\n\
-               $g.DrawImage($img, [float](($pw - $iw) / 2), $y, [float]$iw, [float]$ih)\n\
-               $img.Dispose()\n\
-               $y += $ih + 4\n\
-               if ({show_bc_i32} -eq 1) {{\n\
-                 $g.DrawString(\"{bc_esc}\", $bcFont, $brush, $cx, $y, $fmt)\n\
-                 $y += 14\n\
-               }}\n\
-               if ({show_price_i32} -eq 1) {{\n\
-                 $priceStr = [math]::Round({price}, 2).ToString('F2') + ' EGP'\n\
-                 $g.DrawString($priceStr, $font, $brush, $cx, $y, $fmt)\n\
-               }}\n\
-               $copiesLeft -= 1\n\
-               if ($copiesLeft -gt 0) {{ $e.HasMorePages = $true }} else {{ $e.HasMorePages = $false }}\n\
-             }})\n\
-             $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController\n\
-             $doc.Print()\n\
-             $doc.Dispose()\n\
-             Remove-Item \"{img_path_esc}\" -ErrorAction SilentlyContinue",
-            img_path_esc = img_path_esc,
-            bc_esc = bc_esc,
-            name_esc = name_esc,
-            store_esc = store_esc,
-            printer_name_esc = printer_name_esc,
-            qty_i32 = qty_i32,
-            show_name_i32 = show_name_i32,
-            show_price_i32 = show_price_i32,
-            show_bc_i32 = show_bc_i32,
-            show_store_i32 = show_store_i32,
-            price = price,
-        );
-
-        let output = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-Command", &ps_script])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-            .map_err(|e| e.to_string())?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("Barcode print failed: {}", stderr));
-        }
-        Ok(())
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        Err("Direct printing is only supported on Windows".into())
-    }
-}
-
 // =============== أول تشغيل ===============
 
 #[tauri::command]
@@ -6260,5 +5856,452 @@ pub fn open_html_in_browser(html_content: String, filename: String) -> Result<()
     #[cfg(not(target_os = "windows"))]
     {
         Err("open_html_in_browser is only supported on Windows".into())
+    }
+}
+
+
+// =============== الطابعات ===============
+
+#[tauri::command]
+pub fn list_printers() -> Result<Vec<String>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", "Get-Printer | Select-Object -ExpandProperty Name"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| e.to_string())?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let printers: Vec<String> = stdout
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+        Ok(printers)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(vec![])
+    }
+}
+
+#[tauri::command]
+pub fn print_turn_number(number: i32, store_name: String, created_at: String, printer_name: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        let store_esc = store_name.replace('\'', "''");
+        let time_esc = created_at.replace('\'', "''");
+        let printer_name_esc = printer_name.replace('\'', "''");
+        let ps_script = format!(
+            "Add-Type -AssemblyName System.Drawing\n\
+             Add-Type -AssemblyName System.Drawing.Printing\n\
+             $doc = New-Object System.Drawing.Printing.PrintDocument\n\
+             $doc.DocumentName = 'Tabarak Turn #{number}'\n\
+             $doc.OriginAtMargins = $false\n\
+             $doc.DefaultPageSettings.Margins = (New-Object System.Drawing.Printing.Margins(0,0,0,0))\n\
+             $doc.DefaultPageSettings.PaperSize = $doc.PrinterSettings.PaperSizes[0]\n\
+             if ('{printer_name_esc}') {{ try {{ $doc.PrinterSettings.PrinterName = '{printer_name_esc}' }} catch {{}} }}\n\
+             $w = $doc.DefaultPageSettings.PaperSize.Width\n\
+             $h = $doc.DefaultPageSettings.PaperSize.Height\n\
+             $doc.Add_PrintPage({{ param($sender, $e)\n\
+               $g = $e.Graphics\n\
+               $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit\n\
+               $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality\n\
+               $center = [System.Drawing.StringAlignment]::Center\n\
+               $storeFont = New-Object System.Drawing.Font('Arial', 10, [System.Drawing.FontStyle]::Bold)\n\
+               $labelFont = New-Object System.Drawing.Font('Arial', 7)\n\
+               $numFont = New-Object System.Drawing.Font('Arial', 36, [System.Drawing.FontStyle]::Bold)\n\
+               $timeFont = New-Object System.Drawing.Font('Arial', 6)\n\
+               $brush = [System.Drawing.Brushes]::Black\n\
+               $cx = $w / 2\n\
+               $g.DrawString('{store_esc}', $storeFont, $brush, $cx, 10, (New-Object System.Drawing.StringFormat {{ Alignment = $center }}))\n\
+                $g.DrawString('رقم الدور', $labelFont, $brush, $cx, 30, (New-Object System.Drawing.StringFormat {{ Alignment = $center }}))\n\
+               $numText = '#{number}'\n\
+               $numSize = $g.MeasureString($numText, $numFont)\n\
+               $g.DrawString($numText, $numFont, $brush, $cx - ($numSize.Width / 2), 45)\n\
+               $g.DrawString('{time_esc}', $timeFont, $brush, $cx, 110, (New-Object System.Drawing.StringFormat {{ Alignment = $center }}))\n\
+             }})\n\
+             $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController\n\
+             $doc.Print()\n\
+             $doc.Dispose()",
+            number = number,
+            store_esc = store_esc,
+            time_esc = time_esc,
+            printer_name_esc = printer_name_esc
+        );
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &ps_script])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Print failed: {}", stderr));
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Direct printing is only supported on Windows".into())
+    }
+}
+
+#[tauri::command]
+pub fn print_sale_receipt(
+    store_name: String,
+    phone: String,
+    address: String,
+    invoice_no: String,
+    date: String,
+    customer_name: String,
+    payment_method: String,
+    employee_name: String,
+    items_json: String,
+    total: f64,
+    discount: f64,
+    additional: f64,
+    net_total: f64,
+    currency: String,
+    footer: String,
+    printer_width: String,
+    printer_name: String,
+    template_json: String,
+    doc_type: String,
+) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        let tmpl: serde_json::Value = serde_json::from_str(&template_json).unwrap_or(serde_json::json!({}));
+        let t_font_size = tmpl.get("fontSize").and_then(|v| v.as_i64()).unwrap_or(if printer_width == "58mm" { 9 } else { 10 }) as u32;
+        let t_primary_color = tmpl.get("primaryColor").and_then(|v| v.as_str()).unwrap_or("0,0,0");
+        let t_show_employee = tmpl.get("showEmployee").and_then(|v| v.as_bool()).unwrap_or(true);
+        let t_show_payment = tmpl.get("showPayment").and_then(|v| v.as_bool()).unwrap_or(true);
+        let t_show_date = tmpl.get("showDate").and_then(|v| v.as_bool()).unwrap_or(true);
+        let t_show_customer = tmpl.get("showCustomer").and_then(|v| v.as_bool()).unwrap_or(true);
+        let t_thank_you = tmpl.get("thankYouText").and_then(|v| v.as_str()).unwrap_or("\u{0634}\u{0643}\u{0631}\u{0627}\u{064b} \u{0644}\u{0627}\u{062e}\u{062a}\u{064a}\u{0627}\u{0631}\u{0643}\u{0645}!");
+        let t_thank_you_esc = t_thank_you.replace('\'', "''");
+        let t_header_align = tmpl.get("headerAlign").and_then(|v| v.as_str()).unwrap_or("center");
+        let store_esc = store_name.replace('\'', "''");
+        let phone_esc = phone.replace('\'', "''");
+        let address_esc = address.replace('\'', "''");
+        let invoice_esc = invoice_no.replace('\'', "''");
+        let date_esc = date.replace('\'', "''");
+        let customer_esc = customer_name.replace('\'', "''");
+        let payment_esc = payment_method.replace('\'', "''");
+        let employee_esc = employee_name.replace('\'', "''");
+        let footer_esc = footer.replace('\'', "''");
+        let currency_esc = currency.replace('\'', "''");
+        let items_esc = items_json.replace('\'', "''");
+        let printer_name_esc = printer_name.replace('\'', "''");
+        let doc_type_esc = doc_type.replace('\'', "''");
+        let is_58mm = printer_width == "58mm";
+        let width_px = if is_58mm { 300 } else { 400 };
+        let font_size = t_font_size;
+        let title_size = if is_58mm { 11 } else { 12 };
+        let ps_script = format!(
+            "Add-Type -AssemblyName System.Drawing\n\
+             Add-Type -AssemblyName System.Drawing.Printing\n\
+             $doc = New-Object System.Drawing.Printing.PrintDocument\n\
+             $doc.DocumentName = 'Sale Invoice {invoice_esc}'\n\
+             $doc.OriginAtMargins = $false\n\
+             $doc.DefaultPageSettings.Margins = (New-Object System.Drawing.Printing.Margins(10,10,10,10))\n\
+             $items = ConvertFrom-Json -InputObject '{items_esc}'\n\
+             if ('{printer_name_esc}') {{ try {{ $doc.PrinterSettings.PrinterName = '{printer_name_esc}' }} catch {{}} }}\n\
+             $doc.Add_PrintPage({{ param($sender, $e)\n\
+               $g = $e.Graphics\n\
+               $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit\n\
+               $y = 10\n\
+               $cx = {width_px} / 2\n\
+               $right = {width_px} - 10\n\
+               $font = New-Object System.Drawing.Font('Courier New', {font_size})\n\
+               $boldFont = New-Object System.Drawing.Font('Courier New', {font_size}, [System.Drawing.FontStyle]::Bold)\n\
+               $titleFont = New-Object System.Drawing.Font('Courier New', {title_size}, [System.Drawing.FontStyle]::Bold)\n\
+               $smallFont = New-Object System.Drawing.Font('Courier New', {font_size} - 1)\n\
+               $hexColor = '{t_primary_color_hex}'\n\
+               $brush = [System.Drawing.Brushes]::Black\n\
+               if ($hexColor.Length -ge 7) {{ try {{\n\
+                 $cr = [Convert]::ToInt32($hexColor.Substring(1,2), 16)\n\
+                 $cg = [Convert]::ToInt32($hexColor.Substring(3,2), 16)\n\
+                 $cb = [Convert]::ToInt32($hexColor.Substring(5,2), 16)\n\
+                 $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb($cr, $cg, $cb))\n\
+               }} catch {{}} }}\n\
+               $alignVal = '{t_header_align}'\n\
+               $alignEnum = [System.Drawing.StringAlignment]::Center\n\
+               if ($alignVal -eq 'right') {{ $alignEnum = [System.Drawing.StringAlignment]::Far }}\n\
+               if ($alignVal -eq 'left') {{ $alignEnum = [System.Drawing.StringAlignment]::Near }}\n\
+               $center = New-Object System.Drawing.StringFormat {{ Alignment = $alignEnum }}\n\
+               $right2 = New-Object System.Drawing.StringFormat {{ Alignment = [System.Drawing.StringAlignment]::Far }}\n\
+               $pen = New-Object System.Drawing.Pen($brush, 1)\n\
+               $pen.DashStyle = [System.Drawing.Drawing2D.DashStyle]::Dash\n\
+               \n\
+               $g.DrawString('{store_esc}', $titleFont, $brush, $cx, $y, $center)\n\
+               $y += 22\n\
+               if ('{phone_esc}') {{ $g.DrawString('Tel: {phone_esc}', $smallFont, $brush, $cx, $y, $center); $y += 16 }}\n\
+               if ('{address_esc}') {{ $g.DrawString('{address_esc}', $smallFont, $brush, $cx, $y, $center); $y += 16 }}\n\
+               $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
+               $g.DrawString('{doc_type_esc}', $boldFont, $brush, $cx, $y, $center); $y += 18\n\
+               $g.DrawString('#{invoice_esc}', $boldFont, $brush, $right, $y, $right2); $y += 18\n\
+               if ({t_show_date_ps}) {{ $g.DrawString('Date: {date_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
+               if ({t_show_customer_ps}) {{ $g.DrawString('Customer: {customer_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
+               if ({t_show_payment_ps}) {{ $g.DrawString('Payment: {payment_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
+               if ('{employee_esc}' -and {t_show_employee_ps}) {{ $g.DrawString('Employee: {employee_esc}', $font, $brush, $right, $y, $right2); $y += 16 }}\n\
+               $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
+               \n\
+               foreach ($item in $items) {{\n\
+                 $name = $item.name\n\
+                 if ($name.Length -gt 20) {{ $name = $name.Substring(0, 18) + '..' }}\n\
+                 $line = $name + ' ' + $item.qty + ' x ' + $item.price + ' = ' + $item.total\n\
+                 $g.DrawString($line, $font, $brush, $right, $y, $right2)\n\
+                 $y += 16\n\
+               }}\n\
+               \n\
+               $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
+               $g.DrawString('Total: ' + [math]::Round({total}, 2).ToString('F2'), $font, $brush, $right, $y, $right2); $y += 16\n\
+               $g.DrawString('Discount: ' + [math]::Round({discount}, 2).ToString('F2'), $font, $brush, $right, $y, $right2); $y += 16\n\
+               if ({additional} -gt 0) {{ $g.DrawString('Additional: ' + [math]::Round({additional}, 2).ToString('F2'), $font, $brush, $right, $y, $right2); $y += 16 }}\n\
+               $g.DrawString('NET: ' + [math]::Round({net_total}, 2).ToString('F2') + ' {currency_esc}', $boldFont, $brush, $right, $y, $right2); $y += 20\n\
+               \n\
+               $g.DrawLine($pen, 10, $y, $right, $y); $y += 6\n\
+               if ('{footer_esc}') {{ $g.DrawString('{footer_esc}', $smallFont, $brush, $cx, $y, $center); $y += 16 }}\n\
+               $g.DrawString('{t_thank_you}', $boldFont, $brush, $cx, $y, $center)\n\
+             }})\n\
+             $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController\n\
+             $doc.Print()\n\
+             $doc.Dispose()",
+            store_esc = store_esc,
+            phone_esc = phone_esc,
+            address_esc = address_esc,
+            invoice_esc = invoice_esc,
+            date_esc = date_esc,
+            customer_esc = customer_esc,
+            payment_esc = payment_esc,
+            employee_esc = employee_esc,
+            footer_esc = footer_esc,
+            currency_esc = currency_esc,
+            items_esc = items_esc,
+            printer_name_esc = printer_name_esc,
+            doc_type_esc = doc_type_esc,
+            width_px = width_px,
+            font_size = font_size,
+            title_size = title_size,
+            total = total,
+            discount = discount,
+            additional = additional,
+            net_total = net_total,
+            t_primary_color_hex = t_primary_color.trim_start_matches('#'),
+            t_header_align = t_header_align,
+            t_show_date_ps = if t_show_date { "$true" } else { "$false" },
+            t_show_customer_ps = if t_show_customer { "$true" } else { "$false" },
+            t_show_payment_ps = if t_show_payment { "$true" } else { "$false" },
+            t_show_employee_ps = if t_show_employee { "$true" } else { "$false" },
+            t_thank_you = t_thank_you_esc,
+        );
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &ps_script])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Print failed: {}", stderr));
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Direct printing is only supported on Windows".into())
+    }
+}
+
+#[tauri::command]
+pub fn print_barcode_label(
+    barcode_image_base64: String,
+    product_name: String,
+    barcode_value: String,
+    price: f64,
+    store_name: String,
+    quantity: i32,
+    width_mm: f64,
+    height_mm: f64,
+    show_name: bool,
+    show_price: bool,
+    show_barcode: bool,
+    show_store: bool,
+    printer_name: String,
+) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        use std::io::Write;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        let temp_dir = std::env::temp_dir();
+        let uid = uuid::Uuid::new_v4().to_string();
+        let img_path = temp_dir.join(format!("tabarak_bc_{}.png", uid));
+        let img_path_esc = img_path.to_string_lossy().replace('\\', "\\\\");
+        let b64_data = barcode_image_base64
+            .trim_start_matches("data:image/png;base64,")
+            .trim_start_matches("data:image/jpeg;base64,");
+        if let Ok(bytes) = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            b64_data,
+        ) {
+            std::fs::write(&img_path, &bytes).map_err(|e| e.to_string())?;
+        } else {
+            return Err("Failed to decode barcode image".into());
+        }
+        let name_esc = product_name.replace('\'', "''");
+        let bc_esc = barcode_value.replace('\'', "''");
+        let store_esc = store_name.replace('\'', "''");
+        let printer_name_esc = printer_name.replace('\'', "''");
+        let show_name_i32 = if show_name { 1 } else { 0 };
+        let show_price_i32 = if show_price { 1 } else { 0 };
+        let show_bc_i32 = if show_barcode { 1 } else { 0 };
+        let show_store_i32 = if show_store { 1 } else { 0 };
+        let qty_i32 = quantity.max(1);
+        let ps_script = format!(
+            "Add-Type -AssemblyName System.Drawing\n\
+             Add-Type -AssemblyName System.Drawing.Printing\n\
+             $doc = New-Object System.Drawing.Printing.PrintDocument\n\
+             $doc.DocumentName = 'Barcode {bc_esc}'\n\
+             $doc.OriginAtMargins = $false\n\
+             $doc.DefaultPageSettings.Margins = (New-Object System.Drawing.Printing.Margins(5,5,5,5))\n\
+             if ('{printer_name_esc}') {{ try {{ $doc.PrinterSettings.PrinterName = '{printer_name_esc}' }} catch {{}} }}\n\
+             $copiesLeft = {qty_i32}\n\
+             $doc.Add_PrintPage({{ param($sender, $e)\n\
+               $g = $e.Graphics\n\
+               $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit\n\
+               $pw = $e.PageBounds.Width\n\
+               $cx = [float]($pw / 2)\n\
+               $y = [float]8\n\
+               $brush = [System.Drawing.Brushes]::Black\n\
+               $font = New-Object System.Drawing.Font('Arial', 8)\n\
+               $nameFont = New-Object System.Drawing.Font('Arial', 9, [System.Drawing.FontStyle]::Bold)\n\
+               $bcFont = New-Object System.Drawing.Font('Courier New', 7)\n\
+               $fmt = New-Object System.Drawing.StringFormat\n\
+               $fmt.Alignment = [System.Drawing.StringAlignment]::Center\n\
+               $fmt.LineAlignment = [System.Drawing.StringAlignment]::Near\n\
+               $fmt.FormatFlags = [System.Drawing.StringFormatFlags]::DirectionRightToLeft\n\
+               \n\
+               if ({show_store_i32} -eq 1) {{\n\
+                 $g.DrawString(\"{store_esc}\", $font, $brush, $cx, $y, $fmt)\n\
+                 $y += 16\n\
+               }}\n\
+               if ({show_name_i32} -eq 1) {{\n\
+                 $g.DrawString(\"{name_esc}\", $nameFont, $brush, $cx, $y, $fmt)\n\
+                 $y += 20\n\
+               }}\n\
+               $img = [System.Drawing.Image]::FromFile(\"{img_path_esc}\")\n\
+               $iw = $pw - 16\n\
+               $ih = [int]([float]$iw * [float]$img.Height / [float]$img.Width)\n\
+               $g.DrawImage($img, [float](($pw - $iw) / 2), $y, [float]$iw, [float]$ih)\n\
+               $img.Dispose()\n\
+               $y += $ih + 4\n\
+               if ({show_bc_i32} -eq 1) {{\n\
+                 $g.DrawString(\"{bc_esc}\", $bcFont, $brush, $cx, $y, $fmt)\n\
+                 $y += 14\n\
+               }}\n\
+               if ({show_price_i32} -eq 1) {{\n\
+                 $priceStr = [math]::Round({price}, 2).ToString('F2') + ' EGP'\n\
+                 $g.DrawString($priceStr, $font, $brush, $cx, $y, $fmt)\n\
+               }}\n\
+               $copiesLeft -= 1\n\
+               if ($copiesLeft -gt 0) {{ $e.HasMorePages = $true }} else {{ $e.HasMorePages = $false }}\n\
+             }})\n\
+             $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController\n\
+             $doc.Print()\n\
+             $doc.Dispose()\n\
+             Remove-Item \"{img_path_esc}\" -ErrorAction SilentlyContinue",
+            img_path_esc = img_path_esc,
+            bc_esc = bc_esc,
+            name_esc = name_esc,
+            store_esc = store_esc,
+            printer_name_esc = printer_name_esc,
+            qty_i32 = qty_i32,
+            show_name_i32 = show_name_i32,
+            show_price_i32 = show_price_i32,
+            show_bc_i32 = show_bc_i32,
+            show_store_i32 = show_store_i32,
+            price = price,
+        );
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &ps_script])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Barcode print failed: {}", stderr));
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Direct printing is only supported on Windows".into())
+    }
+}
+
+#[tauri::command]
+pub fn test_print(printer_name: String, paper_size: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        let printer_name_esc = printer_name.replace('\'', "''");
+        let width_px = if paper_size == "58mm" { 300 } else if paper_size == "80mm" { 400 } else { 800 };
+        let ps_script = format!(
+            "Add-Type -AssemblyName System.Drawing\n\
+             Add-Type -AssemblyName System.Drawing.Printing\n\
+             $doc = New-Object System.Drawing.Printing.PrintDocument\n\
+             $doc.DocumentName = 'Tabarak Test Print'\n\
+             $doc.OriginAtMargins = $false\n\
+             $doc.DefaultPageSettings.Margins = (New-Object System.Drawing.Printing.Margins(10,10,10,10))\n\
+             if ('{printer_name_esc}') {{ try {{ $doc.PrinterSettings.PrinterName = '{printer_name_esc}' }} catch {{}} }}\n\
+             $doc.Add_PrintPage({{ param($sender, $e)\n\
+               $g = $e.Graphics\n\
+               $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit\n\
+               $cx = [float]({width_px} / 2)\n\
+               $y = [float]20\n\
+               $brush = [System.Drawing.Brushes]::Black\n\
+               $titleFont = New-Object System.Drawing.Font('Arial', 14, [System.Drawing.FontStyle]::Bold)\n\
+               $font = New-Object System.Drawing.Font('Arial', 10)\n\
+               $smallFont = New-Object System.Drawing.Font('Arial', 8)\n\
+               $fmt = New-Object System.Drawing.StringFormat{{ Alignment = [System.Drawing.StringAlignment]::Center }}\n\
+               $g.DrawString('TABARAK POS', $titleFont, $brush, $cx, $y, $fmt)\n\
+               $y += 30\n\
+               $g.DrawString('Test Print Successful!', $font, $brush, $cx, $y, $fmt)\n\
+               $y += 20\n\
+               $g.DrawString('Printer: {printer_name_esc}', $smallFont, $brush, $cx, $y, $fmt)\n\
+               $y += 16\n\
+               $g.DrawString('Paper: {paper_size}', $smallFont, $brush, $cx, $y, $fmt)\n\
+               $y += 16\n\
+               $now = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\n\
+               $g.DrawString($now, $smallFont, $brush, $cx, $y, $fmt)\n\
+             }})\n\
+             $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController\n\
+             $doc.Print()\n\
+             $doc.Dispose()",
+            printer_name_esc = printer_name_esc,
+            paper_size = paper_size,
+            width_px = width_px,
+        );
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &ps_script])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Test print failed: {}", stderr));
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Direct printing is only supported on Windows".into())
     }
 }

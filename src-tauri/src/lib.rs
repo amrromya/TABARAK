@@ -215,6 +215,7 @@ pub fn run() {
             commands::print_turn_number,
             commands::print_sale_receipt,
             commands::print_barcode_label,
+            commands::test_print,
             commands::is_first_run,
             commands::initialize_admin,
             commands::verify_admin_password,
