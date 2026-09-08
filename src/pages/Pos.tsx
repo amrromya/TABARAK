@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { api } from "../api";
-import { printSale as printSaleCentralized } from "../utils/directPrint";
+import { printSale as printSaleCentralized, getPrintSettings } from "../utils/directPrint";
 import { PrintSaleReturn } from "../components/PrintSaleReturn";
+import PrintPreview from "../components/PrintPreview";
 import { ProductCard } from "../components/ProductCard";
 import { InvoiceBar, type DiscountType } from "../components/InvoiceBar";
 import { ProductMovements } from "../components/ProductMovements";
@@ -80,6 +81,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
   const [ready, setReady] = useState(false);
 
   const [viewingSale, setViewingSale] = useState<Sale | null>(null);
+  const [previewSale, setPreviewSale] = useState<{ sale: Sale; html: string } | null>(null);
   const [printReturn, setPrintReturn] = useState<SaleReturn | null>(null);
   const [viewingReturn, setViewingReturn] = useState<SaleReturn | null>(null);
 
@@ -483,9 +485,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
           : `${t("invoiceUpdated")} ${saved.invoice_no}`,
       );
       await afterSave();
-      if (settings) {
-        await printSaleCentralized(saved, settings, "sales_invoice");
-      }
+      showPreview(saved);
     } catch (err) {
       notify(String(err), "error");
     }
@@ -542,17 +542,68 @@ export function Pos({ onBack }: { onBack: () => void }) {
     if (target) loadSale(target.id);
   };
 
+  const generateInvoiceHtml = (sale: Sale, s: typeof settings extends infer T ? NonNullable<T> : never): string => {
+    const ps = getPrintSettings();
+    const width = ps.receiptPrinter === "58mm" ? 300 : ps.receiptPrinter === "80mm" ? 400 : 800;
+    const fontSize = ps.receiptFontSize || 10;
+    const color = ps.receiptPrimaryColor || "#000000";
+    const align = ps.receiptHeaderAlign || "center";
+
+    const items = (sale.items || [])
+      .filter((it) => !(it.sell_price === 0 && !it.product_name))
+      .map((it) => `<tr><td>${(it.product_name || "").substring(0, 20)}</td><td style="text-align:center">${it.quantity}</td><td style="text-align:left">${Number(it.sell_price).toFixed(2)}</td><td style="text-align:left">${Number(it.total).toFixed(2)}</td></tr>`)
+      .join("");
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family: 'Courier New', monospace; font-size:${fontSize}px; width:${width}px; padding:10px; direction:rtl; }
+      .center { text-align:${align}; }
+      .bold { font-weight:bold; }
+      .large { font-size:${fontSize + 4}px; }
+      .small { font-size:${fontSize - 1}px; color:#666; }
+      .line { border-top:1px dashed ${color}; margin:8px 0; }
+      table { width:100%; border-collapse:collapse; margin:6px 0; }
+      td { padding:3px 0; }
+      .footer { text-align:center; margin-top:10px; font-weight:bold; }
+    </style></head><body>
+      <div class="center bold large">${s.store_name || "تبارك"}</div>
+      ${s.phone ? `<div class="center small">Tel: ${s.phone}</div>` : ""}
+      ${s.address ? `<div class="center small">${s.address}</div>` : ""}
+      <div class="line"></div>
+      <div class="center bold">${sale.doc_type || "SALE INVOICE"}</div>
+      <div class="bold" style="text-align:left">#${sale.invoice_no}</div>
+      ${ps.receiptShowDate !== false ? `<div class="small" style="text-align:left">Date: ${sale.date}</div>` : ""}
+      ${ps.receiptShowCustomer !== false ? `<div class="small" style="text-align:left">Customer: ${sale.customer_name || "نقدي"}</div>` : ""}
+      ${ps.receiptShowPayment !== false ? `<div class="small" style="text-align:left">Payment: ${sale.payment_method}</div>` : ""}
+      ${ps.receiptShowEmployee !== false && sale.employee_name ? `<div class="small" style="text-align:left">Employee: ${sale.employee_name}</div>` : ""}
+      <div class="line"></div>
+      <table><tbody>
+        <tr><td class="bold">Item</td><td class="bold" style="text-align:center">Qty</td><td class="bold" style="text-align:left">Price</td><td class="bold" style="text-align:left">Total</td></tr>
+        ${items}
+      </tbody></table>
+      <div class="line"></div>
+      <div style="text-align:left">Total: ${Number(sale.total).toFixed(2)}</div>
+      <div style="text-align:left">Discount: ${Number(sale.discount).toFixed(2)}</div>
+      ${(sale.additional || 0) > 0 ? `<div style="text-align:left">Additional: ${Number(sale.additional).toFixed(2)}</div>` : ""}
+      <div class="bold" style="text-align:left">NET: ${Number(sale.net_total).toFixed(2)} ${s.currency || "ج.م"}</div>
+      <div class="line"></div>
+      ${ps.invoiceFooter && s.invoice_footer ? `<div class="center small">${s.invoice_footer}</div>` : ""}
+      <div class="center bold footer">${ps.receiptThankYouText || "شكراً لاختياركم!"}</div>
+    </body></html>`;
+  };
+
+  const showPreview = (sale: Sale) => {
+    if (!settings) return;
+    const html = generateInvoiceHtml(sale, settings);
+    setPreviewSale({ sale, html });
+  };
+
   const printCurrent = async () => {
     if (printingRef.current) return;
     if (currentId != null) {
       try {
         const s = await api.getSale(currentId);
-        if (settings) {
-          printingRef.current = true;
-          setTimeout(() => { printingRef.current = false; }, 3000);
-          await printSaleCentralized(s, settings, "sales_invoice");
-          notify(t("printInvoice") + " ✓", "success");
-        }
+        showPreview(s);
       } catch (e) {
         notify(String(e), "error");
       }
@@ -591,12 +642,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
         total: l.quantity * l.sell_price,
       })),
     };
-    if (settings) {
-      printingRef.current = true;
-      setTimeout(() => { printingRef.current = false; }, 3000);
-      await printSaleCentralized(draft, settings, "sales_invoice");
-      notify(t("printInvoice") + " ✓", "success");
-    }
+    showPreview(draft);
   };
 
   const printQuote = async () => {
@@ -605,8 +651,6 @@ export function Pos({ onBack }: { onBack: () => void }) {
       notify(t("addItemError"), "error");
       return;
     }
-    printingRef.current = true;
-    setTimeout(() => { printingRef.current = false; }, 3000);
     const wh = warehouses.find((w) => w.id === Number(warehouseId));
     const emp = employees.find((e) => e.id === Number(employeeId));
     const custName =
@@ -637,9 +681,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
         total: l.quantity * l.sell_price,
       })),
     };
-    if (settings) {
-      await printSaleCentralized(draft, settings, "sales_invoice");
-    }
+    showPreview(draft);
     notify(t("priceQuoteSaved"));
   };
 
@@ -1388,6 +1430,24 @@ export function Pos({ onBack }: { onBack: () => void }) {
             </div>
           )}
         </Modal>
+      )}
+
+      {previewSale && settings && (
+        <PrintPreview
+          html={previewSale.html}
+          title={previewSale.sale.invoice_no}
+          paperSize={getPrintSettings().receiptPrinter}
+          onClose={() => setPreviewSale(null)}
+          onPrint={async () => {
+            try {
+              await printSaleCentralized(previewSale.sale, settings, "sales_invoice");
+              notify(t("printInvoice") + " ✓", "success");
+            } catch (e) {
+              notify(String(e), "error");
+            }
+            setPreviewSale(null);
+          }}
+        />
       )}
     </div>
   );
