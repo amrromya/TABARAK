@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { api } from "../api";
-import { PrintInvoice } from "../components/PrintInvoice";
-import { PrintThermal } from "../components/PrintThermal";
+import { printSale as printSaleCentralized } from "../utils/directPrint";
 import { PrintSaleReturn } from "../components/PrintSaleReturn";
 import { ProductCard } from "../components/ProductCard";
 import { InvoiceBar, type DiscountType } from "../components/InvoiceBar";
@@ -80,7 +79,6 @@ export function Pos({ onBack }: { onBack: () => void }) {
   const [history, setHistory] = useState<Sale[]>([]);
   const [ready, setReady] = useState(false);
 
-  const [printSale, setPrintSale] = useState<Sale | null>(null);
   const [viewingSale, setViewingSale] = useState<Sale | null>(null);
   const [printReturn, setPrintReturn] = useState<SaleReturn | null>(null);
   const [viewingReturn, setViewingReturn] = useState<SaleReturn | null>(null);
@@ -485,7 +483,9 @@ export function Pos({ onBack }: { onBack: () => void }) {
           : `${t("invoiceUpdated")} ${saved.invoice_no}`,
       );
       await afterSave();
-      setPrintSale(saved);
+      if (settings) {
+        await printSaleCentralized(saved, settings, "sales_invoice");
+      }
     } catch (err) {
       notify(String(err), "error");
     }
@@ -547,7 +547,12 @@ export function Pos({ onBack }: { onBack: () => void }) {
     if (currentId != null) {
       try {
         const s = await api.getSale(currentId);
-        setPrintSale(s);
+        if (settings) {
+          printingRef.current = true;
+          setTimeout(() => { printingRef.current = false; }, 3000);
+          await printSaleCentralized(s, settings, "sales_invoice");
+          notify(t("printInvoice") + " ✓", "success");
+        }
       } catch (e) {
         notify(String(e), "error");
       }
@@ -586,10 +591,15 @@ export function Pos({ onBack }: { onBack: () => void }) {
         total: l.quantity * l.sell_price,
       })),
     };
-    setPrintSale(draft);
+    if (settings) {
+      printingRef.current = true;
+      setTimeout(() => { printingRef.current = false; }, 3000);
+      await printSaleCentralized(draft, settings, "sales_invoice");
+      notify(t("printInvoice") + " ✓", "success");
+    }
   };
 
-  const printQuote = () => {
+  const printQuote = async () => {
     if (printingRef.current) return;
     if (lines.length === 0) {
       notify(t("addItemError"), "error");
@@ -627,7 +637,9 @@ export function Pos({ onBack }: { onBack: () => void }) {
         total: l.quantity * l.sell_price,
       })),
     };
-    setPrintSale(draft);
+    if (settings) {
+      await printSaleCentralized(draft, settings, "sales_invoice");
+    }
     notify(t("priceQuoteSaved"));
   };
 
@@ -1280,17 +1292,6 @@ export function Pos({ onBack }: { onBack: () => void }) {
           onViewInvoice={handleViewMovement}
         />
       )}
-
-      {printSale && settings && (() => {
-        let rp = "A4";
-        try { const raw = localStorage.getItem("tabarak_print_settings"); if (raw) { const ps = JSON.parse(raw); if (ps.receiptPrinter) rp = ps.receiptPrinter; } } catch {}
-        const isThermal = rp === "58mm" || rp === "80mm";
-        return isThermal ? (
-          <PrintThermal sale={printSale} settings={settings} onClose={() => setPrintSale(null)} />
-        ) : (
-          <PrintInvoice sale={printSale} settings={settings} onClose={() => setPrintSale(null)} />
-        );
-      })()}
 
       {printReturn && settings && (
         <PrintSaleReturn
