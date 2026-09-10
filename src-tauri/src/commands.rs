@@ -5863,33 +5863,44 @@ pub fn open_html_in_browser(html_content: String, filename: String) -> Result<()
 pub fn print_html_in_app(
     app: tauri::AppHandle,
     html_content: String,
-    title: String,
+    _title: String,
 ) -> Result<(), String> {
     use tauri::WebviewWindowBuilder;
 
-    let label = format!(
-        "print_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis()
-    );
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let label = format!("print_{}", stamp);
 
-    let temp_dir = std::env::temp_dir();
-    let file_path = temp_dir.join("tabarak_print.html");
-    std::fs::write(&file_path, &html_content).map_err(|e| e.to_string())?;
-    let url = tauri::WebviewUrl::App(std::path::PathBuf::from(&file_path.to_string_lossy().to_string()));
+    let window = WebviewWindowBuilder::new(
+        &app,
+        &label,
+        tauri::WebviewUrl::App(std::path::PathBuf::from("index.html")),
+    )
+    .title(&_title)
+    .inner_size(800.0, 600.0)
+    .visible(false)
+    .build()
+    .map_err(|e| format!("Failed to create print window: {}", e))?;
 
-    let window = WebviewWindowBuilder::new(&app, &label, url)
-        .title(&title)
-        .inner_size(900.0, 700.0)
-        .center()
-        .build()
-        .map_err(|e| format!("Failed to create print window: {}", e))?;
-
+    let w = window.clone();
+    let html = html_content.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(1500));
-        let _ = window.eval("window.print();");
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let escaped = html
+            .replace('\\', "\\\\")
+            .replace('`', "\\`")
+            .replace("${", "\\${");
+        let js = format!(
+            "document.open(); document.write(`{}`); document.close();",
+            escaped
+        );
+        let _ = w.eval(&js);
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        let _ = w.print();
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        let _ = w.close();
     });
 
     Ok(())
