@@ -544,52 +544,111 @@ export function Pos({ onBack }: { onBack: () => void }) {
 
   const generateInvoiceHtml = (sale: Sale, s: typeof settings extends infer T ? NonNullable<T> : never): string => {
     const ps = getPrintSettings();
-    const width = ps.receiptPrinter === "58mm" ? 300 : ps.receiptPrinter === "80mm" ? 400 : 800;
+    const paper = ps.receiptPrinter || "80mm";
     const fontSize = ps.receiptFontSize || 10;
     const color = ps.receiptPrimaryColor || "#000000";
     const align = ps.receiptHeaderAlign || "center";
 
+    const isThermal = paper === "58mm" || paper === "80mm";
+    // Thermal: 58mm=220px, 80mm=302px at 96DPI; A4/A5: standard CSS px
+    const bodyWidth = paper === "58mm" ? "58mm" : paper === "80mm" ? "80mm" : paper === "A5" ? "148mm" : "210mm";
+
     const items = (sale.items || [])
       .filter((it) => !(it.sell_price === 0 && !it.product_name))
-      .map((it) => `<tr><td>${(it.product_name || "").substring(0, 20)}</td><td style="text-align:center">${it.quantity}</td><td style="text-align:left">${Number(it.sell_price).toFixed(2)}</td><td style="text-align:left">${Number(it.total).toFixed(2)}</td></tr>`)
+      .map((it) => {
+        const name = (it.product_name || "").substring(0, isThermal ? 16 : 30);
+        return `<tr>
+          <td style="padding:2px 0;word-break:break-all">${name}</td>
+          <td style="padding:2px 4px;text-align:center;white-space:nowrap">${it.quantity}</td>
+          <td style="padding:2px 0;text-align:left;white-space:nowrap">${Number(it.sell_price).toFixed(2)}</td>
+          <td style="padding:2px 0;text-align:left;white-space:nowrap;font-weight:bold">${Number(it.total).toFixed(2)}</td>
+        </tr>`;
+      })
       .join("");
 
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-      * { margin:0; padding:0; box-sizing:border-box; }
-      body { font-family: 'Courier New', monospace; font-size:${fontSize}px; width:${width}px; padding:10px; direction:rtl; }
-      .center { text-align:${align}; }
-      .bold { font-weight:bold; }
-      .large { font-size:${fontSize + 4}px; }
-      .small { font-size:${fontSize - 1}px; color:#666; }
-      .line { border-top:1px dashed ${color}; margin:8px 0; }
-      table { width:100%; border-collapse:collapse; margin:6px 0; }
-      td { padding:3px 0; }
-      .footer { text-align:center; margin-top:10px; font-weight:bold; }
-    </style></head><body>
-      <div class="center bold large">${s.store_name || "تبارك"}</div>
-      ${s.phone ? `<div class="center small">Tel: ${s.phone}</div>` : ""}
-      ${s.address ? `<div class="center small">${s.address}</div>` : ""}
-      <div class="line"></div>
-      <div class="center bold">${sale.doc_type || "SALE INVOICE"}</div>
-      <div class="bold" style="text-align:left">#${sale.invoice_no}</div>
-      ${ps.receiptShowDate !== false ? `<div class="small" style="text-align:left">Date: ${sale.date}</div>` : ""}
-      ${ps.receiptShowCustomer !== false ? `<div class="small" style="text-align:left">Customer: ${sale.customer_name || "نقدي"}</div>` : ""}
-      ${ps.receiptShowPayment !== false ? `<div class="small" style="text-align:left">Payment: ${sale.payment_method}</div>` : ""}
-      ${ps.receiptShowEmployee !== false && sale.employee_name ? `<div class="small" style="text-align:left">Employee: ${sale.employee_name}</div>` : ""}
-      <div class="line"></div>
-      <table><tbody>
-        <tr><td class="bold">Item</td><td class="bold" style="text-align:center">Qty</td><td class="bold" style="text-align:left">Price</td><td class="bold" style="text-align:left">Total</td></tr>
-        ${items}
-      </tbody></table>
-      <div class="line"></div>
-      <div style="text-align:left">Total: ${Number(sale.total).toFixed(2)}</div>
-      <div style="text-align:left">Discount: ${Number(sale.discount).toFixed(2)}</div>
-      ${(sale.additional || 0) > 0 ? `<div style="text-align:left">Additional: ${Number(sale.additional).toFixed(2)}</div>` : ""}
-      <div class="bold" style="text-align:left">NET: ${Number(sale.net_total).toFixed(2)} ${s.currency || "ج.م"}</div>
-      <div class="line"></div>
-      ${ps.invoiceFooter && s.invoice_footer ? `<div class="center small">${s.invoice_footer}</div>` : ""}
-      <div class="center bold footer">${ps.receiptThankYouText || "شكراً لاختياركم!"}</div>
-    </body></html>`;
+    const lang = "ar";
+
+    return `<!DOCTYPE html>
+<html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  @page {
+    size: ${bodyWidth} auto;
+    margin: ${isThermal ? "2mm" : "10mm"};
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Courier New', monospace;
+    font-size: ${isThermal ? fontSize : fontSize + 2}px;
+    width: ${bodyWidth};
+    margin: 0 auto;
+    padding: ${isThermal ? "4mm" : "8mm"};
+    direction: rtl;
+    color: ${color};
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .center { text-align: ${align === "center" ? "center" : align === "left" ? "left" : "right"}; }
+  .rtl-text { direction: ltr; text-align: left; }
+  .bold { font-weight: bold; }
+  .store-name { font-size: ${isThermal ? fontSize + 6 : fontSize + 8}px; font-weight: bold; text-align: center; margin-bottom: 2mm; }
+  .sub-info { font-size: ${isThermal ? fontSize - 2 : fontSize}px; color: #555; text-align: center; margin-bottom: 1mm; }
+  .doc-title { font-size: ${isThermal ? fontSize + 2 : fontSize + 4}px; font-weight: bold; text-align: center; margin: 2mm 0; }
+  .line { border-top: 1px dashed ${color}; margin: 3mm 0; }
+  .info-row { display: flex; justify-content: space-between; margin: 1mm 0; font-size: ${isThermal ? fontSize - 1 : fontSize}px; }
+  .items-table { width: 100%; border-collapse: collapse; margin: 2mm 0; font-size: ${isThermal ? fontSize - 1 : fontSize}px; }
+  .items-table th { border-bottom: 1px solid ${color}; padding: 1.5mm 0; font-weight: bold; text-align: left; font-size: ${isThermal ? fontSize - 2 : fontSize - 1}px; }
+  .items-table td { padding: 1.5mm 0; }
+  .totals { margin: 2mm 0; }
+  .total-row { display: flex; justify-content: space-between; padding: 1mm 0; font-size: ${isThermal ? fontSize - 1 : fontSize}px; }
+  .total-row.grand { font-weight: bold; font-size: ${isThermal ? fontSize + 1 : fontSize + 2}px; border-top: 1px dashed ${color}; padding-top: 2mm; margin-top: 1mm; }
+  .footer-text { text-align: center; margin-top: 3mm; font-size: ${isThermal ? fontSize - 1 : fontSize}px; color: #555; }
+  .thank-you { text-align: center; margin-top: 2mm; font-weight: bold; font-size: ${isThermal ? fontSize : fontSize + 1}px; }
+  @media print {
+    body { width: ${bodyWidth}; margin: 0; padding: ${isThermal ? "2mm" : "8mm"}; }
+  }
+</style></head><body>
+
+  <div class="store-name">${s.store_name || "تبارك"}</div>
+  ${s.phone ? `<div class="sub-info">Tel: ${s.phone}</div>` : ""}
+  ${s.address ? `<div class="sub-info">${s.address}</div>` : ""}
+
+  <div class="line"></div>
+
+  <div class="doc-title">${sale.doc_type || "SALE INVOICE"}</div>
+
+  <div class="info-row"><span>#${sale.invoice_no}</span></div>
+  ${ps.receiptShowDate !== false ? `<div class="info-row"><span>${sale.date}</span></div>` : ""}
+  ${ps.receiptShowCustomer !== false ? `<div class="info-row"><span>Customer: ${sale.customer_name || "نقدي"}</span></div>` : ""}
+  ${ps.receiptShowPayment !== false ? `<div class="info-row"><span>Payment: ${sale.payment_method}</span></div>` : ""}
+  ${ps.receiptShowEmployee !== false && sale.employee_name ? `<div class="info-row"><span>Employee: ${sale.employee_name}</span></div>` : ""}
+
+  <div class="line"></div>
+
+  <table class="items-table">
+    <thead><tr>
+      <th style="text-align:left">${isThermal ? "Item" : "الصنف"}</th>
+      <th style="text-align:center;width:15%">Qty</th>
+      <th style="text-align:left;width:20%">Price</th>
+      <th style="text-align:left;width:20%">Total</th>
+    </tr></thead>
+    <tbody>${items}</tbody>
+  </table>
+
+  <div class="line"></div>
+
+  <div class="totals">
+    <div class="total-row"><span>Total</span><span>${Number(sale.total).toFixed(2)}</span></div>
+    <div class="total-row"><span>Discount</span><span>${Number(sale.discount).toFixed(2)}</span></div>
+    ${(sale.additional || 0) > 0 ? `<div class="total-row"><span>Additional</span><span>${Number(sale.additional).toFixed(2)}</span></div>` : ""}
+    <div class="total-row grand"><span>NET</span><span>${Number(sale.net_total).toFixed(2)} ${s.currency || "ج.م"}</span></div>
+  </div>
+
+  <div class="line"></div>
+
+  ${ps.invoiceFooter && s.invoice_footer ? `<div class="footer-text">${s.invoice_footer}</div>` : ""}
+  <div class="thank-you">${ps.receiptThankYouText || "شكراً لاختياركم!"}</div>
+
+</body></html>`;
   };
 
   const showPreview = (sale: Sale) => {

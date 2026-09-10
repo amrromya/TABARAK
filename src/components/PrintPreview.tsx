@@ -39,9 +39,18 @@ export default function PrintPreview({ html, title, onClose, onPrint, paperSize 
     }
   };
 
-  const pageWidth = paperSize === "58mm" ? 58 : paperSize === "80mm" ? 80 : paperSize === "A5" ? 148 : 210;
-  const pageHeight = paperSize === "58mm" ? 200 : paperSize === "80mm" ? 250 : paperSize === "A5" ? 210 : 297;
+  const isThermal = paperSize === "58mm" || paperSize === "80mm";
+  const isA5 = paperSize === "A5";
+
+  // Paper dimensions in mm for display container
+  const paperMmWidth = paperSize === "58mm" ? 58 : paperSize === "80mm" ? 80 : isA5 ? 148 : 210;
+  const paperMmHeight = paperSize === "58mm" ? 200 : paperSize === "80mm" ? 250 : isA5 ? 210 : 297;
+
+  // Scale: mm to px at 96DPI (1mm ≈ 3.7795px), then apply zoom
+  const mmToPx = 3.7795;
   const displayScale = zoom / 100;
+
+  const containerWidthPx = paperMmWidth * mmToPx * displayScale;
 
   return (
     <div style={{
@@ -50,7 +59,7 @@ export default function PrintPreview({ html, title, onClose, onPrint, paperSize 
       alignItems: "center", justifyContent: "center",
     }}>
       <div style={{
-        background: "#fff", borderRadius: 16, width: "90vw", height: "90vh",
+        background: "#fff", borderRadius: 16, width: "95vw", height: "95vh",
         display: "flex", flexDirection: "column", overflow: "hidden",
         boxShadow: "0 25px 60px rgba(0,0,0,0.3)",
       }}>
@@ -66,10 +75,11 @@ export default function PrintPreview({ html, title, onClose, onPrint, paperSize 
             </h3>
             {paperSize && (
               <span style={{
-                background: "#e0e7ff", color: "#3730a3",
-                padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                background: isThermal ? "#fef3c7" : "#e0e7ff",
+                color: isThermal ? "#92400e" : "#3730a3",
+                padding: "2px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
               }}>
-                {paperSize}
+                {paperSize} {paperMmWidth}×{paperMmHeight}mm
               </span>
             )}
           </div>
@@ -122,30 +132,35 @@ export default function PrintPreview({ html, title, onClose, onPrint, paperSize 
           >−</button>
           <span style={{ fontSize: 12, color: "#475569", minWidth: 40, textAlign: "center" }}>{zoom}%</span>
           <button
-            onClick={() => setZoom(Math.min(200, zoom + 25))}
+            onClick={() => setZoom(Math.min(300, zoom + 25))}
             style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid #cbd5e1", cursor: "pointer", fontSize: 12, background: "#fff" }}
           >+</button>
         </div>
 
         {/* Preview Area */}
         <div style={{
-          flex: 1, overflow: "auto", background: "#94a3b8",
-          display: "flex", justifyContent: "center", padding: 24,
+          flex: 1, overflow: "auto", background: "#64748b",
+          display: "flex", justifyContent: "center", alignItems: "flex-start",
+          padding: 24,
         }}>
+          {/* Paper sheet container */}
           <div style={{
-            background: "#fff", boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            borderRadius: 4, overflow: "hidden",
-            width: pageWidth * 3.78 * displayScale,
-            minHeight: pageHeight * 3.78 * displayScale,
-            transform: `scale(${displayScale})`,
-            transformOrigin: "top center",
+            background: "#fff",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+            borderRadius: isThermal ? 2 : 4,
+            overflow: "hidden",
+            width: containerWidthPx,
+            minWidth: containerWidthPx,
+            flexShrink: 0,
           }}>
             <iframe
               ref={iframeRef}
               title="print-preview"
               style={{
-                width: "100%", height: pageHeight * 3.78,
+                width: paperMmWidth + "mm",
+                height: paperMmHeight + "mm",
                 border: "none",
+                display: "block",
               }}
               sandbox="allow-same-origin"
             />
