@@ -44,14 +44,18 @@ export default function PrintPreview({ html, title, onClose, onPrint, paperSize 
   const handlePrint = () => {
     if (onPrint) {
       onPrint(selectedPrinter, copies);
-    } else if (iframeRef.current?.contentDocument) {
-      const iframe = iframeRef.current;
-      const win = iframe.contentWindow;
-      if (win) {
-        iframe.focus();
-        win.focus();
-        win.print();
-      }
+      return;
+    }
+    // Open HTML in a new window and print from there (works in Tauri)
+    const printWindow = window.open("", "_blank", "width=800,height=600");
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
     }
   };
 
