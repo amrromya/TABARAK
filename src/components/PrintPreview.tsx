@@ -20,6 +20,8 @@ export default function PrintPreview({ html, title, onClose, onPrint, paperSize 
     listPrinters().then(setPrinters).catch(() => {});
   }, []);
 
+  const isThermal = paperSize === "58mm" || paperSize === "80mm";
+
   useEffect(() => {
     if (iframeRef.current) {
       const doc = iframeRef.current.contentDocument;
@@ -27,19 +29,32 @@ export default function PrintPreview({ html, title, onClose, onPrint, paperSize 
         doc.open();
         doc.write(html);
         doc.close();
+        const style = doc.createElement("style");
+        style.textContent = `
+          @media print {
+            @page { size: ${paperSize || "80mm"} auto; margin: ${isThermal ? "2mm" : "10mm"}; }
+            body { width: ${paperSize || "80mm"}; margin: 0; padding: ${isThermal ? "2mm" : "8mm"}; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        `;
+        doc.head.appendChild(style);
       }
     }
-  }, [html]);
+  }, [html, paperSize, isThermal]);
 
   const handlePrint = () => {
     if (onPrint) {
       onPrint(selectedPrinter, copies);
-    } else {
-      iframeRef.current?.contentWindow?.print();
+    } else if (iframeRef.current?.contentDocument) {
+      const iframe = iframeRef.current;
+      const win = iframe.contentWindow;
+      if (win) {
+        iframe.focus();
+        win.focus();
+        win.print();
+      }
     }
   };
 
-  const isThermal = paperSize === "58mm" || paperSize === "80mm";
   const isA5 = paperSize === "A5";
 
   // Paper dimensions in mm for display container

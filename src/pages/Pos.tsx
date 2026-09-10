@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { api } from "../api";
-import { printSale as printSaleCentralized, getPrintSettings } from "../utils/directPrint";
+import { getPrintSettings } from "../utils/directPrint";
 import { PrintSaleReturn } from "../components/PrintSaleReturn";
 import PrintPreview from "../components/PrintPreview";
 import { ProductCard } from "../components/ProductCard";
@@ -1497,15 +1497,6 @@ export function Pos({ onBack }: { onBack: () => void }) {
           title={previewSale.sale.invoice_no}
           paperSize={getPrintSettings().receiptPrinter}
           onClose={() => setPreviewSale(null)}
-          onPrint={async () => {
-            try {
-              await printSaleCentralized(previewSale.sale, settings, "sales_invoice");
-              notify(t("printInvoice") + " ✓", "success");
-            } catch (e) {
-              notify(String(e), "error");
-            }
-            setPreviewSale(null);
-          }}
         />
       )}
     </div>
