@@ -5861,44 +5861,64 @@ pub fn open_html_in_browser(html_content: String, filename: String) -> Result<()
 
 #[tauri::command]
 pub fn print_html_in_app(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     html_content: String,
     _title: String,
 ) -> Result<(), String> {
-    use tauri::WebviewWindowBuilder;
-
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis();
-    let label = format!("print_{}", stamp);
+
+    let mut html = html_content;
+    if !html.contains("window.print()") {
+        let script = r#"<script>
+        window.onload = function() {
+            setTimeout(function() { window.print(); }, 400);
+            setTimeout(function() { window.close(); }, 2000);
+        };
+        </script>"#;
+        html = html.replace("</body>", &format!("{}\n</body>", script));
+    }
 
     let temp_dir = std::env::temp_dir();
     let file_path = temp_dir.join(format!("tabarak_print_{}.html", stamp));
-    std::fs::write(&file_path, &html_content).map_err(|e| e.to_string())?;
-    let abs = file_path.to_string_lossy().replace('\\', "/");
-    let file_url = format!("file:///{}", abs);
+    std::fs::write(&file_path, &html).map_err(|e| e.to_string())?;
+    let path_str = file_path.to_string_lossy().to_string();
 
-    let window = WebviewWindowBuilder::new(
-        &app,
-        &label,
-        tauri::WebviewUrl::External(file_url.parse().unwrap()),
-    )
-    .title(&_title)
-    .inner_size(900.0, 700.0)
-    .center()
-    .build()
-    .map_err(|e| format!("Failed to create print window: {}", e))?;
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-    let w = window.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(2000));
-        let _ = w.print();
-        std::thread::sleep(std::time::Duration::from_millis(500));
-        let _ = w.close();
-    });
+        let edge_paths = [
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        ];
 
-    Ok(())
+        let browser = edge_paths.iter().find(|p| std::path::Path::new(p).exists());
+
+        if let Some(exe) = browser {
+            std::process::Command::new(exe)
+                .args(["--app", &path_str])
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn()
+                .map_err(|e| format!("Failed to open for printing: {}", e))?;
+        } else {
+            std::process::Command::new("cmd")
+                .args(["/C", "start", "", &path_str])
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn()
+                .map_err(|e| format!("Failed to open for printing: {}", e))?;
+        }
+
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("print_html_in_app is only supported on Windows".into())
+    }
 }
 
 

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
-import { PrintInvoice } from "../components/PrintInvoice";
-import { PrintSaleReturn } from "../components/PrintSaleReturn";
+import ProfessionalPrintButton from "../components/ProfessionalPrintButton";
 import { ProductMovements } from "../components/ProductMovements";
 import { ProductPicker } from "../components/ProductPicker";
 import {
@@ -50,10 +49,8 @@ export function Sales({
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [printSale, setPrintSale] = useState<Sale | null>(null);
   const [viewingSale, setViewingSale] = useState<Sale | null>(null);
   const [showReturnForm, setShowReturnForm] = useState(false);
-  const [printReturn, setPrintReturn] = useState<SaleReturn | null>(null);
   const [viewingReturn, setViewingReturn] = useState<SaleReturn | null>(null);
   const [showMovements, setShowMovements] = useState(false);
   const [movementProduct, setMovementProduct] = useState<Product | null>(null);
@@ -296,16 +293,6 @@ export function Sales({
     }
   };
 
-  const showPrint = async (s: Sale) => {
-    try {
-      const full = await api.getSale(s.id);
-      setSettings(await api.getSettings());
-      setPrintSale(full);
-    } catch (err) {
-      notify(String(err), "error");
-    }
-  };
-
   const openReturn = async () => {
     try {
       const [p, c, emps] = await Promise.all([
@@ -419,9 +406,13 @@ export function Sales({
                   >
                     عرض
                   </button>
-                  <button className="btn sm outline" onClick={() => showPrint(s)}>
-                    🖨️
-                  </button>
+                  <ProfessionalPrintButton
+                    docType="sales_invoice"
+                    data={s}
+                    settings={settings || undefined}
+                    variant="outline"
+                    size="sm"
+                  />
                   <button
                     className="btn sm"
                     onClick={() => openReturn()}
@@ -953,6 +944,21 @@ export function Sales({
               {viewingSale.additional > 0 && <div><span>إضافي:</span> <b>{money(viewingSale.additional)}</b></div>}
               <div className="inv-net"><span>الصافي:</span> <b>{money(viewingSale.net_total)}</b></div>
             </div>
+            <div className="form-actions">
+              <ProfessionalPrintButton
+                docType="sales_invoice"
+                data={viewingSale}
+                settings={settings || undefined}
+                variant="primary"
+                size="sm"
+              />
+              <button
+                className="btn"
+                onClick={() => setViewingSale(null)}
+              >
+                إغلاق
+              </button>
+            </div>
           </div>
         </Modal>
       )}
@@ -986,6 +992,21 @@ export function Sales({
               {viewingReturn.additional > 0 && <div><span>إضافي:</span> <b>{money(viewingReturn.additional)}</b></div>}
               <div className="inv-net"><span>الصافي:</span> <b>{money(viewingReturn.total - viewingReturn.discount + viewingReturn.additional)}</b></div>
             </div>
+            <div className="form-actions">
+              <ProfessionalPrintButton
+                docType="sale_return"
+                data={viewingReturn}
+                settings={settings || undefined}
+                variant="primary"
+                size="sm"
+              />
+              <button
+                className="btn"
+                onClick={() => setViewingReturn(null)}
+              >
+                إغلاق
+              </button>
+            </div>
           </div>
         </Modal>
       )}
@@ -995,24 +1016,6 @@ export function Sales({
           product={movementProduct}
           onClose={() => setShowMovements(false)}
           onViewInvoice={handleViewMovement}
-        />
-      )}
-
-      {printSale && settings && (() => {
-        return (
-          <PrintInvoice
-            sale={printSale}
-            settings={settings}
-            onClose={() => setPrintSale(null)}
-          />
-        );
-      })()}
-
-      {printReturn && settings && (
-        <PrintSaleReturn
-          saleReturn={printReturn}
-          settings={settings}
-          onClose={() => setPrintReturn(null)}
         />
       )}
     </div>

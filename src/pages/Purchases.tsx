@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
-import { PrintPurchaseReturn } from "../components/PrintPurchaseReturn";
+import ProfessionalPrintButton from "../components/ProfessionalPrintButton";
 import { ProductMovements } from "../components/ProductMovements";
 import { ProductPicker } from "../components/ProductPicker";
 import {
@@ -70,8 +70,7 @@ export function Purchases({
     null,
   );
   const [isIndependentReturn, setIsIndependentReturn] = useState(false);
-  const [printPurchase, setPrintPurchase] = useState<Purchase | null>(null);
-  const [printReturn, setPrintReturn] = useState<PurchaseReturn | null>(null);
+  const [viewingReturn, setViewingReturn] = useState<PurchaseReturn | null>(null);
   const [showMovements, setShowMovements] = useState(false);
   const [movementProduct, setMovementProduct] = useState<Product | null>(null);
 
@@ -232,10 +231,10 @@ export function Purchases({
     try {
       if (movement.type === "purchase") {
         const purchase = await api.getPurchase(movement.related_id);
-        setPrintPurchase(purchase);
+        setViewingPurchase(purchase);
       } else if (movement.type === "purchase_return") {
         const ret = await api.getPurchaseReturn(movement.related_id);
-        setPrintReturn(ret);
+        setViewingReturn(ret);
       } else {
         notify("عرض الفاتورة غير متاح من هنا", "error");
       }
@@ -348,7 +347,7 @@ export function Purchases({
       setIsIndependentReturn(false);
       load();
       setSettings(await api.getSettings());
-      setPrintReturn(ret);
+      setViewingReturn(ret);
     } catch (err) {
       notify(String(err), "error");
     }
@@ -461,6 +460,13 @@ export function Purchases({
                   >
                     عرض
                   </button>
+                  <ProfessionalPrintButton
+                    docType="purchase_invoice"
+                    data={p}
+                    settings={settings || undefined}
+                    variant="outline"
+                    size="sm"
+                  />
                   <button
                     className="btn sm"
                     onClick={() => openEdit(p)}
@@ -1018,8 +1024,15 @@ export function Purchases({
             </table>
 
             <div className="form-actions">
+              <ProfessionalPrintButton
+                docType="purchase_invoice"
+                data={viewingPurchase}
+                settings={settings || undefined}
+                variant="primary"
+                size="sm"
+              />
               <button
-                className="btn primary"
+                className="btn"
                 onClick={() => {
                   setViewingPurchase(null);
                   openEdit(viewingPurchase);
@@ -1038,43 +1051,51 @@ export function Purchases({
         </Modal>
       )}
 
-      {printPurchase && (
-        <Modal title={`فاتورة مشتريات P-${printPurchase.id}`} onClose={() => setPrintPurchase(null)} fullScreen>
+      {viewingReturn && (
+        <Modal title={`فاتورة مردود مشتريات ${viewingReturn.invoice_no}`} onClose={() => setViewingReturn(null)} fullScreen>
           <div className="view-invoice">
             <div className="inv-meta">
-              <div><span>التاريخ:</span> <b>{fmtDate(printPurchase.date)}</b></div>
-              <div><span>المورد:</span> <b>{printPurchase.supplier_name ?? "—"}</b></div>
-              <div><span>الإجمالي:</span> <b>{money(printPurchase.total)}</b></div>
+              <div><span>التاريخ:</span> <b>{fmtDate(viewingReturn.date)}</b></div>
+              <div><span>المورد:</span> <b>{viewingReturn.supplier_name ?? "—"}</b></div>
+              <div><span>الموظف:</span> <b>{viewingReturn.employee_name ?? "—"}</b></div>
+              {viewingReturn.warehouse_name && <div><span>المستودع:</span> <b>{viewingReturn.warehouse_name}</b></div>}
             </div>
             <table className="table">
               <thead><tr><th>الصنف</th><th>الكمية</th><th>سعر الشراء</th><th>الإجمالي</th></tr></thead>
               <tbody>
-                {printPurchase.items.map((it, i) => (
+                {viewingReturn.items.map((it, i) => (
                   <tr key={i}>
-                    <td>{it.product_name}</td>
+                    <td>{it.product_name ?? it.item_name}</td>
                     <td>{qty(it.quantity)}</td>
                     <td>{money(it.cost_price)}</td>
-                    <td>{money(it.quantity * it.cost_price)}</td>
+                    <td>{money(it.total ?? it.quantity * it.cost_price)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <div className="inv-totals">
-              <div><span>المجموع الفرعي:</span> <b>{money(printPurchase.items.reduce((s, it) => s + it.quantity * it.cost_price, 0))}</b></div>
-              {printPurchase.discount > 0 && <div><span>الخصم:</span> <b>{money(printPurchase.discount)}</b></div>}
-              {printPurchase.additional > 0 && <div><span>إضافي:</span> <b>{money(printPurchase.additional)}</b></div>}
-              <div className="inv-net"><span>الصافي:</span> <b>{money(printPurchase.total)}</b></div>
+              <div><span>المجموع الفرعي:</span> <b>{money(viewingReturn.items.reduce((s, it) => s + (it.total ?? it.quantity * it.cost_price), 0))}</b></div>
+              {viewingReturn.discount > 0 && <div><span>الخصم:</span> <b>{money(viewingReturn.discount)}</b></div>}
+              {viewingReturn.additional > 0 && <div><span>إضافي:</span> <b>{money(viewingReturn.additional)}</b></div>}
+              <div className="inv-net"><span>الصافي:</span> <b>{money(viewingReturn.total ?? viewingReturn.items.reduce((s, it) => s + (it.total ?? it.quantity * it.cost_price), 0) - (viewingReturn.discount ?? 0) + (viewingReturn.additional ?? 0))}</b></div>
+            </div>
+            <div className="form-actions">
+              <ProfessionalPrintButton
+                docType="purchase_return"
+                data={viewingReturn}
+                settings={settings || undefined}
+                variant="primary"
+                size="sm"
+              />
+              <button
+                className="btn"
+                onClick={() => setViewingReturn(null)}
+              >
+                إغلاق
+              </button>
             </div>
           </div>
         </Modal>
-      )}
-
-      {printReturn && settings && (
-        <PrintPurchaseReturn
-          purchaseReturn={printReturn}
-          settings={settings}
-          onClose={() => setPrintReturn(null)}
-        />
       )}
 
       {showMovements && movementProduct && (

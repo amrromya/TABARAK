@@ -4,11 +4,13 @@ import { listen } from "@tauri-apps/api/event";
 import { api } from "../api";
 import { Field, useToast } from "../components/ui";
 import { isNotifEnabled, setNotifEnabled as saveNotifEnabled, getNotifSoundPath, setNotifSoundPath as saveNotifSoundPath, playNotifSound, getSuccessSoundPath, setSuccessSoundPath as saveSuccessSoundPath, getErrorSoundPath, setErrorSoundPath as saveErrorSoundPath, playSuccessSound, playErrorSound } from "../utils/notifications";
-import { getPrintSettings, savePrintSettings, type PrintSettings, listPrinters, testPrint, saveBarcodeTemplate, deleteBarcodeTemplate, generateBarcodePreview, type BarcodeType } from "../utils/directPrint";
+
 import type { Account, Branch, Permission, Settings, SyncConfig, SyncStatus, Warehouse, LanSyncStatus, LanSyncConfig } from "../types";
 import { t } from "../i18n";
 import { useColorTheme, THEME_PRESETS } from "../hooks/useColorTheme";
 import { useTheme } from "../hooks/useTheme";
+import PrintSettingsCard from "../components/PrintSettingsCard";
+import { getProfessionalPrintSettings, saveProfessionalPrintSettings, type ProfessionalPrintSettings, listAvailablePrinters } from "../utils/printSystem";
 
 const ACCOUNTS_KEY = "tabarak_accounts";
 
@@ -445,21 +447,8 @@ export function SettingsPage() {
   const [activeSection, setActiveSection] = useState<SectionKey | null>(null);
 
   // Print settings
-  const [printSettings, setPrintSettings] = useState<PrintSettings>(getPrintSettings);
+  const [proPrintSettings, setProPrintSettings] = useState<ProfessionalPrintSettings>(getProfessionalPrintSettings);
   const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
-  const [printTestLoading, setPrintTestLoading] = useState(false);
-  const [selectedProfile, setSelectedProfile] = useState("sales_invoice");
-  const [barcodePreviewValue, setBarcodePreviewValue] = useState("1234567890");
-  const [barcodePreviewImg, setBarcodePreviewImg] = useState("");
-  const [newTemplateName, setNewTemplateName] = useState("");
-
-  const updatePrintSettings = (patch: Partial<PrintSettings>) => {
-    setPrintSettings((prev) => {
-      const next = { ...prev, ...patch };
-      savePrintSettings(next);
-      return next;
-    });
-  };
 
   const [passModal, setPassModal] = useState<{ section: SectionKey } | null>(null);
   const [passInput, setPassInput] = useState("");
@@ -585,8 +574,8 @@ export function SettingsPage() {
     loadBranches();
     api.getAppVersion().then(setAppVersion).catch(() => {});
     api.getLicenseInfo().then(setLicenseInfo).catch(() => {});
-    listPrinters().then(setAvailablePrinters).catch(() => {});
-    setPrintSettings(getPrintSettings());
+    listAvailablePrinters().then(setAvailablePrinters).catch(() => {});
+    setProPrintSettings(getProfessionalPrintSettings());
   }, [notify, loadSync, loadBranches]);
 
   const openSection = (s: SectionKey) => {
@@ -1297,362 +1286,19 @@ export function SettingsPage() {
         );
 
       case "printing":
-        const currentProfile = printSettings.profiles[selectedProfile];
         return (
-          <div>
-            {/* === Section 1: Printers === */}
-            <div style={{ marginBottom: 24 }}>
-              <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600, color: "#1e293b" }}>🖨️ {t("defaultPrinter")}</h3>
-              <div className="settings-row">
-                <label>{t("defaultPrinter")}</label>
-                <select value={printSettings.defaultPrinter} onChange={(e) => updatePrintSettings({ defaultPrinter: e.target.value })}
-                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", minWidth: 200 }}>
-                  <option value="">{t("choosePrinter")}</option>
-                  {availablePrinters.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div className="settings-row" style={{ marginTop: 8 }}>
-                <label>{t("receiptPrinter")}</label>
-                <select value={printSettings.invoicePrinter} onChange={(e) => updatePrintSettings({ invoicePrinter: e.target.value })}
-                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", minWidth: 200 }}>
-                  <option value="">{t("choosePrinter")}</option>
-                  {availablePrinters.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div className="settings-row" style={{ marginTop: 8 }}>
-                <label>{t("barcodePrinter")}</label>
-                <select value={printSettings.barcodePrinter} onChange={(e) => updatePrintSettings({ barcodePrinter: e.target.value })}
-                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", minWidth: 200 }}>
-                  <option value="">{t("choosePrinter")}</option>
-                  {availablePrinters.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div className="settings-row" style={{ marginTop: 8 }}>
-                <label>{t("reportPrinter")}</label>
-                <select value={printSettings.reportPrinter || ""} onChange={(e) => updatePrintSettings({ reportPrinter: e.target.value })}
-                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", minWidth: 200 }}>
-                  <option value="">{t("choosePrinter")}</option>
-                  {availablePrinters.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div className="settings-row" style={{ marginTop: 8 }}>
-                <label>{t("receiptPrinterType")}</label>
-                <select value={printSettings.receiptPrinter} onChange={(e) => updatePrintSettings({ receiptPrinter: e.target.value })}
-                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", minWidth: 200 }}>
-                  <option value="A4">A4</option>
-                  <option value="80mm">80mm — {t("thermal80")}</option>
-                  <option value="58mm">58mm — {t("thermal58")}</option>
-                </select>
-              </div>
-              <div className="settings-row" style={{ marginTop: 8 }}>
-                <label>{t("showPrintPreviewLabel")}</label>
-                <input type="checkbox" checked={printSettings.showPrintPreview} onChange={(e) => updatePrintSettings({ showPrintPreview: e.target.checked })} />
-              </div>
-              <div className="settings-row" style={{ marginTop: 8 }}>
-                <label>{t("defaultCopiesLabel")}</label>
-                <input type="number" min={1} max={99} value={printSettings.defaultCopies} onChange={(e) => updatePrintSettings({ defaultCopies: parseInt(e.target.value) || 1 })}
-                  style={{ width: 60, padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
-              </div>
-              <button className="btn primary" onClick={async () => {
-                setPrintTestLoading(true);
-                try {
-                  await testPrint(printSettings.defaultPrinter || "", printSettings.receiptPrinter);
-                  notify(t("testPrintSuccess"), "success");
-                } catch (e: any) {
-                  notify(t("testPrintFailed") + ": " + String(e), "error");
-                }
-                setPrintTestLoading(false);
-              }} style={{ marginTop: 12 }} disabled={printTestLoading}>
-                {printTestLoading ? "..." : "🖨️ " + t("testPrintBtn")}
-              </button>
-            </div>
-
-            <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "16px 0" }} />
-
-            {/* === Section 2: Print Profiles === */}
-            <div style={{ marginBottom: 24 }}>
-              <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600, color: "#1e293b" }}>📋 {t("printProfiles")}</h3>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-                {Object.keys(printSettings.profiles).map((pid) => (
-                  <button key={pid} className={`btn ${selectedProfile === pid ? "primary" : ""}`}
-                    onClick={() => setSelectedProfile(pid)} style={{ fontSize: 12 }}>
-                    {printSettings.profiles[pid].name}
-                  </button>
-                ))}
-              </div>
-              {currentProfile && (
-                <div style={{ background: "#f8fafc", borderRadius: 12, padding: 16, border: "1px solid #e2e8f0" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <div className="settings-row">
-                      <label>{t("profilePrinter")}</label>
-                      <select value={currentProfile.printer} onChange={(e) => {
-                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, printer: e.target.value } };
-                        updatePrintSettings({ profiles });
-                      }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0", width: "100%" }}>
-                        <option value="">{t("defaultPrinter")}</option>
-                        {availablePrinters.map((p) => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </div>
-                    <div className="settings-row">
-                      <label>{t("paperSize")}</label>
-                      <select value={currentProfile.paperSize} onChange={(e) => {
-                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, paperSize: e.target.value as any } };
-                        updatePrintSettings({ profiles });
-                      }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0", width: "100%" }}>
-                        <option value="58mm">58mm</option>
-                        <option value="80mm">80mm</option>
-                        <option value="A5">A5</option>
-                        <option value="A4">A4</option>
-                        <option value="custom">{t("customPaperSize")}</option>
-                      </select>
-                    </div>
-                    <div className="settings-row">
-                      <label>{t("orientationLabel")}</label>
-                      <select value={currentProfile.orientation} onChange={(e) => {
-                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, orientation: e.target.value as any } };
-                        updatePrintSettings({ profiles });
-                      }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0", width: "100%" }}>
-                        <option value="portrait">{t("portrait")}</option>
-                        <option value="landscape">{t("landscape")}</option>
-                      </select>
-                    </div>
-                    <div className="settings-row">
-                      <label>{t("margins")}</label>
-                      <input type="number" min={0} max={50} value={currentProfile.margins} onChange={(e) => {
-                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, margins: parseInt(e.target.value) || 0 } };
-                        updatePrintSettings({ profiles });
-                      }} style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
-                    </div>
-                    <div className="settings-row">
-                      <label>{t("profileCopies")}</label>
-                      <input type="number" min={1} max={99} value={currentProfile.copies} onChange={(e) => {
-                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, copies: parseInt(e.target.value) || 1 } };
-                        updatePrintSettings({ profiles });
-                      }} style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
-                    </div>
-                    <div className="settings-row">
-                      <label>{t("profileDirectPrint")}</label>
-                      <input type="checkbox" checked={currentProfile.directPrint} onChange={(e) => {
-                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, directPrint: e.target.checked } };
-                        updatePrintSettings({ profiles });
-                      }} />
-                    </div>
-                    <div className="settings-row">
-                      <label>{t("profileShowPreview")}</label>
-                      <input type="checkbox" checked={currentProfile.preview} onChange={(e) => {
-                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, preview: e.target.checked } };
-                        updatePrintSettings({ profiles });
-                      }} />
-                    </div>
-                    <div className="settings-row">
-                      <label>{t("showHeader")}</label>
-                      <input type="checkbox" checked={currentProfile.showHeader} onChange={(e) => {
-                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, showHeader: e.target.checked } };
-                        updatePrintSettings({ profiles });
-                      }} />
-                    </div>
-                    <div className="settings-row">
-                      <label>{t("showFooter")}</label>
-                      <input type="checkbox" checked={currentProfile.showFooter} onChange={(e) => {
-                        const profiles = { ...printSettings.profiles, [selectedProfile]: { ...currentProfile, showFooter: e.target.checked } };
-                        updatePrintSettings({ profiles });
-                      }} />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "16px 0" }} />
-
-            {/* === Section 3: Receipt Template === */}
-            <div style={{ marginBottom: 24 }}>
-              <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600, color: "#1e293b" }}>🧾 {t("receiptTemplate")}</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div className="settings-row">
-                  <label>{t("receiptFontSize")}</label>
-                  <input type="number" min={6} max={20} value={printSettings.receiptFontSize} onChange={(e) => updatePrintSettings({ receiptFontSize: parseInt(e.target.value) || 10 })}
-                    style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
-                </div>
-                <div className="settings-row">
-                  <label>{t("receiptPrimaryColor")}</label>
-                  <input type="color" value={printSettings.receiptPrimaryColor} onChange={(e) => updatePrintSettings({ receiptPrimaryColor: e.target.value })}
-                    style={{ width: "100%", height: 36, borderRadius: 8, border: "1px solid #e2e8f0", cursor: "pointer" }} />
-                </div>
-                <div className="settings-row">
-                  <label>{t("receiptHeaderAlign")}</label>
-                  <select value={printSettings.receiptHeaderAlign} onChange={(e) => updatePrintSettings({ receiptHeaderAlign: e.target.value })}
-                    style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0", width: "100%" }}>
-                    <option value="center">{t("alignCenter")}</option>
-                    <option value="right">{t("alignRight")}</option>
-                    <option value="left">{t("alignLeft")}</option>
-                  </select>
-                </div>
-                <div className="settings-row">
-                  <label>{t("receiptThankYouText")}</label>
-                  <input type="text" value={printSettings.receiptThankYouText} onChange={(e) => updatePrintSettings({ receiptThankYouText: e.target.value })}
-                    style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
-                </div>
-                <div className="settings-row">
-                  <label>{t("receiptShowEmployee")}</label>
-                  <input type="checkbox" checked={printSettings.receiptShowEmployee} onChange={(e) => updatePrintSettings({ receiptShowEmployee: e.target.checked })} />
-                </div>
-                <div className="settings-row">
-                  <label>{t("receiptShowPayment")}</label>
-                  <input type="checkbox" checked={printSettings.receiptShowPayment} onChange={(e) => updatePrintSettings({ receiptShowPayment: e.target.checked })} />
-                </div>
-                <div className="settings-row">
-                  <label>{t("receiptShowDate")}</label>
-                  <input type="checkbox" checked={printSettings.receiptShowDate} onChange={(e) => updatePrintSettings({ receiptShowDate: e.target.checked })} />
-                </div>
-                <div className="settings-row">
-                  <label>{t("receiptShowCustomer")}</label>
-                  <input type="checkbox" checked={printSettings.receiptShowCustomer} onChange={(e) => updatePrintSettings({ receiptShowCustomer: e.target.checked })} />
-                </div>
-              </div>
-            </div>
-
-            <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "16px 0" }} />
-
-            {/* === Section 4: Barcode Templates === */}
-            <div style={{ marginBottom: 24 }}>
-              <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600, color: "#1e293b" }}>🏷️ {t("barcodeTemplates")}</h3>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-                {printSettings.barcodeTemplates.map((tpl) => (
-                  <button key={tpl.id}
-                    className={`btn ${printSettings.activeBarcodeTemplate === tpl.id ? "primary" : ""}`}
-                    onClick={() => updatePrintSettings({ activeBarcodeTemplate: tpl.id })}
-                    style={{ fontSize: 12 }}>
-                    {tpl.name}
-                    {printSettings.activeBarcodeTemplate === tpl.id && " ✓"}
-                  </button>
-                ))}
-              </div>
-
-              {/* Active template settings */}
-              {(() => {
-                const tpl = printSettings.barcodeTemplates.find((t) => t.id === printSettings.activeBarcodeTemplate) || printSettings.barcodeTemplates[0];
-                if (!tpl) return null;
-                const updateTemplate = (patch: Partial<typeof tpl>) => {
-                  const updated = printSettings.barcodeTemplates.map((t) => t.id === tpl.id ? { ...t, ...patch } : t);
-                  updatePrintSettings({ barcodeTemplates: updated });
-                };
-                return (
-                  <div style={{ background: "#f8fafc", borderRadius: 12, padding: 16, border: "1px solid #e2e8f0" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <div className="settings-row">
-                        <label>{t("barcodeType")}</label>
-                        <select value={tpl.barcodeType} onChange={(e) => updateTemplate({ barcodeType: e.target.value as BarcodeType })}
-                          style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0", width: "100%" }}>
-                          <option value="CODE128">CODE128</option>
-                          <option value="EAN13">EAN-13</option>
-                          <option value="EAN8">EAN-8</option>
-                          <option value="UPC_A">UPC-A</option>
-                          <option value="QR_CODE">QR Code</option>
-                        </select>
-                      </div>
-                      <div className="settings-row">
-                        <label>{t("barcodeDefaultCopies")}</label>
-                        <input type="number" min={1} max={99} value={printSettings.barcodeDefaultCopies} onChange={(e) => updatePrintSettings({ barcodeDefaultCopies: parseInt(e.target.value) || 1 })}
-                          style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
-                      </div>
-                      <div className="settings-row">
-                        <label>{t("widthLabel")} (mm)</label>
-                        <input type="number" min={10} max={150} value={tpl.widthMm} onChange={(e) => updateTemplate({ widthMm: parseInt(e.target.value) || 50 })}
-                          style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
-                      </div>
-                      <div className="settings-row">
-                        <label>{t("heightLabel")} (mm)</label>
-                        <input type="number" min={10} max={100} value={tpl.heightMm} onChange={(e) => updateTemplate({ heightMm: parseInt(e.target.value) || 25 })}
-                          style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
-                      </div>
-                      <div className="settings-row">
-                        <label>{t("fontSize")}</label>
-                        <input type="number" min={6} max={20} value={tpl.fontSize} onChange={(e) => updateTemplate({ fontSize: parseInt(e.target.value) || 10 })}
-                          style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
-                      </div>
-                      <div className="settings-row">
-                        <label>{t("showItemName")}</label>
-                        <input type="checkbox" checked={tpl.showName} onChange={(e) => updateTemplate({ showName: e.target.checked })} />
-                      </div>
-                      <div className="settings-row">
-                        <label>{t("showPriceLabel")}</label>
-                        <input type="checkbox" checked={tpl.showPrice} onChange={(e) => updateTemplate({ showPrice: e.target.checked })} />
-                      </div>
-                      <div className="settings-row">
-                        <label>{t("showBarcodeLabel")}</label>
-                        <input type="checkbox" checked={tpl.showBarcode} onChange={(e) => updateTemplate({ showBarcode: e.target.checked })} />
-                      </div>
-                      <div className="settings-row">
-                        <label>{t("showStoreNameLabel")}</label>
-                        <input type="checkbox" checked={tpl.showStoreName} onChange={(e) => updateTemplate({ showStoreName: e.target.checked })} />
-                      </div>
-                      <div className="settings-row">
-                        <label>{t("showSkuLabel")}</label>
-                        <input type="checkbox" checked={tpl.showSku} onChange={(e) => updateTemplate({ showSku: e.target.checked })} />
-                      </div>
-                      <div className="settings-row">
-                        <label>{t("horizontalGap")} (mm)</label>
-                        <input type="number" min={0} max={10} value={tpl.hGap} onChange={(e) => updateTemplate({ hGap: parseInt(e.target.value) || 0 })}
-                          style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
-                      </div>
-                      <div className="settings-row">
-                        <label>{t("verticalGap")} (mm)</label>
-                        <input type="number" min={0} max={10} value={tpl.vGap} onChange={(e) => updateTemplate({ vGap: parseInt(e.target.value) || 0 })}
-                          style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0" }} />
-                      </div>
-                    </div>
-                    {/* Add new template */}
-                    <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
-                      <input type="text" placeholder={t("templateName")} value={newTemplateName} onChange={(e) => setNewTemplateName(e.target.value)}
-                        style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0", flex: 1 }} />
-                      <button className="btn primary" onClick={() => {
-                        if (!newTemplateName.trim()) return;
-                        const id = newTemplateName.trim().toLowerCase().replace(/\s+/g, "_");
-                        const newTpl = { ...tpl, id, name: newTemplateName.trim() };
-                        saveBarcodeTemplate(newTpl);
-                        updatePrintSettings({ activeBarcodeTemplate: id, barcodeTemplates: [...printSettings.barcodeTemplates, newTpl] });
-                        setNewTemplateName("");
-                        notify(t("templateAdded"), "success");
-                      }}>{t("addTemplateBtn")}</button>
-                      {tpl.id !== "default" && (
-                        <button className="btn danger" onClick={() => {
-                          deleteBarcodeTemplate(tpl.id);
-                          updatePrintSettings({ activeBarcodeTemplate: "default" });
-                          notify(t("templateDeleted"), "success");
-                        }}>{t("deleteTemplateBtn")}</button>
-                      )}
-                    </div>
-
-                    {/* Barcode preview */}
-                    <div style={{ marginTop: 16 }}>
-                      <h4 style={{ margin: "0 0 8px", fontSize: 13, color: "#475569" }}>{t("barcodePreview")}</h4>
-                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                        <input type="text" placeholder="Barcode value" value={barcodePreviewValue} onChange={(e) => setBarcodePreviewValue(e.target.value)}
-                          style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e2e8f0", flex: 1 }} />
-                        <button className="btn" onClick={async () => {
-                          try {
-                            const img = await generateBarcodePreview(barcodePreviewValue, tpl.barcodeType);
-                            setBarcodePreviewImg(img);
-                          } catch { setBarcodePreviewImg(""); }
-                        }}>{t("barcodeScanTest")}</button>
-                      </div>
-                      {barcodePreviewImg && (
-                        <div style={{ textAlign: "center", padding: 12, background: "#fff", borderRadius: 8, border: "1px solid #e2e8f0" }}>
-                          <img src={barcodePreviewImg} alt="preview" style={{ maxWidth: 200, height: "auto" }} />
-                          <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>{tpl.widthMm}×{tpl.heightMm}mm · {tpl.barcodeType}</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            <button className="btn primary" onClick={() => {
-              notify(t("savePrintSettings"), "success");
-            }} style={{ marginTop: 8 }}>{t("savePrintSettings")}</button>
-          </div>
+          <PrintSettingsCard
+            settings={proPrintSettings}
+            onSettingsChange={(newSettings) => {
+              setProPrintSettings(newSettings);
+              saveProfessionalPrintSettings(newSettings);
+            }}
+            availablePrinters={availablePrinters}
+            onPrintersRefresh={async () => {
+              const printers = await listAvailablePrinters().catch(() => [] as string[]);
+              setAvailablePrinters(printers);
+            }}
+          />
         );
 
       case "backup":
