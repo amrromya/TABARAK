@@ -41,21 +41,16 @@ export default function PrintPreview({ html, title, onClose, onPrint, paperSize 
     }
   }, [html, paperSize, isThermal]);
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     if (onPrint) {
       onPrint(selectedPrinter, copies);
       return;
     }
-    // Open HTML in a new window and print from there (works in Tauri)
-    const printWindow = window.open("", "_blank", "width=800,height=600");
-    if (printWindow) {
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 500);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("open_html_in_browser", { htmlContent: html, filename: "invoice_print.html" });
+    } catch (e) {
+      console.error("Print failed:", e);
     }
   };
 
