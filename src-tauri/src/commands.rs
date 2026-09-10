@@ -5873,33 +5873,28 @@ pub fn print_html_in_app(
         .as_millis();
     let label = format!("print_{}", stamp);
 
+    let temp_dir = std::env::temp_dir();
+    let file_path = temp_dir.join(format!("tabarak_print_{}.html", stamp));
+    std::fs::write(&file_path, &html_content).map_err(|e| e.to_string())?;
+    let abs = file_path.to_string_lossy().replace('\\', "/");
+    let file_url = format!("file:///{}", abs);
+
     let window = WebviewWindowBuilder::new(
         &app,
         &label,
-        tauri::WebviewUrl::App(std::path::PathBuf::from("index.html")),
+        tauri::WebviewUrl::External(file_url.parse().unwrap()),
     )
     .title(&_title)
-    .inner_size(800.0, 600.0)
-    .visible(false)
+    .inner_size(900.0, 700.0)
+    .center()
     .build()
     .map_err(|e| format!("Failed to create print window: {}", e))?;
 
     let w = window.clone();
-    let html = html_content.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(2));
-        let escaped = html
-            .replace('\\', "\\\\")
-            .replace('`', "\\`")
-            .replace("${", "\\${");
-        let js = format!(
-            "document.open(); document.write(`{}`); document.close();",
-            escaped
-        );
-        let _ = w.eval(&js);
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        std::thread::sleep(std::time::Duration::from_millis(2000));
         let _ = w.print();
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        std::thread::sleep(std::time::Duration::from_millis(500));
         let _ = w.close();
     });
 
