@@ -5859,6 +5859,42 @@ pub fn open_html_in_browser(html_content: String, filename: String) -> Result<()
     }
 }
 
+#[tauri::command]
+pub fn print_html_in_app(
+    app: tauri::AppHandle,
+    html_content: String,
+    title: String,
+) -> Result<(), String> {
+    use tauri::WebviewWindowBuilder;
+
+    let label = format!(
+        "print_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+    );
+
+    let temp_dir = std::env::temp_dir();
+    let file_path = temp_dir.join("tabarak_print.html");
+    std::fs::write(&file_path, &html_content).map_err(|e| e.to_string())?;
+    let url = tauri::WebviewUrl::App(std::path::PathBuf::from(&file_path.to_string_lossy().to_string()));
+
+    let window = WebviewWindowBuilder::new(&app, &label, url)
+        .title(&title)
+        .inner_size(900.0, 700.0)
+        .center()
+        .build()
+        .map_err(|e| format!("Failed to create print window: {}", e))?;
+
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        let _ = window.eval("window.print();");
+    });
+
+    Ok(())
+}
+
 
 // =============== الطابعات ===============
 

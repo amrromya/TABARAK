@@ -236,6 +236,7 @@ pub fn run() {
             commands::get_audit_logs,
             commands::get_audit_log_count,
             commands::open_html_in_browser,
+            commands::print_html_in_app,
             lan_sync::commands::start_lan_sync,
             lan_sync::commands::stop_lan_sync,
             lan_sync::commands::get_lan_sync_status,

@@ -48,7 +48,7 @@ export default function PrintPreview({ html, title, onClose, onPrint, paperSize 
     }
     try {
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("open_html_in_browser", { htmlContent: html, filename: "invoice_print.html" });
+      await invoke("print_html_in_app", { htmlContent: html, title: title || "فاتورة" });
     } catch (e) {
       console.error("Print failed:", e);
     }
