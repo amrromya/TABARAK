@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { api } from "../api";
-import { getPrintSettings } from "../utils/directPrint";
+import { getPrintSettings, printSale } from "../utils/directPrint";
 import { PrintSaleReturn } from "../components/PrintSaleReturn";
 import PrintPreview from "../components/PrintPreview";
 import { ProductCard } from "../components/ProductCard";
@@ -485,7 +485,13 @@ export function Pos({ onBack }: { onBack: () => void }) {
           : `${t("invoiceUpdated")} ${saved.invoice_no}`,
       );
       await afterSave();
-      showPreview(saved);
+      try {
+        await printSale(saved, settings!);
+        notify(`${t("invoiceRegistered")} ${saved.invoice_no} ✓`, "success");
+      } catch (printErr) {
+        console.error("Print error:", printErr);
+        notify(`${t("invoiceRegistered")} ${saved.invoice_no} - طباعة: ${String(printErr)}`, "success");
+      }
     } catch (err) {
       notify(String(err), "error");
     }
@@ -546,107 +552,221 @@ export function Pos({ onBack }: { onBack: () => void }) {
     const ps = getPrintSettings();
     const paper = ps.receiptPrinter || "80mm";
     const fontSize = ps.receiptFontSize || 10;
-    const color = ps.receiptPrimaryColor || "#000000";
     const align = ps.receiptHeaderAlign || "center";
 
     const isThermal = paper === "58mm" || paper === "80mm";
-    // Thermal: 58mm=220px, 80mm=302px at 96DPI; A4/A5: standard CSS px
     const bodyWidth = paper === "58mm" ? "58mm" : paper === "80mm" ? "80mm" : paper === "A5" ? "148mm" : "210mm";
 
     const items = (sale.items || [])
       .filter((it) => !(it.sell_price === 0 && !it.product_name))
-      .map((it) => {
-        const name = (it.product_name || "").substring(0, isThermal ? 16 : 30);
+      .map((it, idx) => {
+        const name = (it.product_name || "").substring(0, isThermal ? 18 : 35);
         return `<tr>
-          <td style="padding:2px 0;word-break:break-all">${name}</td>
-          <td style="padding:2px 4px;text-align:center;white-space:nowrap">${it.quantity}</td>
-          <td style="padding:2px 0;text-align:left;white-space:nowrap">${Number(it.sell_price).toFixed(2)}</td>
-          <td style="padding:2px 0;text-align:left;white-space:nowrap;font-weight:bold">${Number(it.total).toFixed(2)}</td>
+          <td style="padding:3px 0;border-bottom:1px solid #eee">${idx + 1}</td>
+          <td style="padding:3px 0;border-bottom:1px solid #eee">${name}</td>
+          <td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center">${it.quantity}</td>
+          <td style="padding:3px 0;border-bottom:1px solid #eee;text-align:center">${Number(it.sell_price).toFixed(2)}</td>
+          <td style="padding:3px 0;border-bottom:1px solid #eee;text-align:center;font-weight:700">${Number(it.total).toFixed(2)}</td>
         </tr>`;
       })
       .join("");
 
-    const lang = "ar";
+    const pad = isThermal ? "4mm" : "12mm";
+    const headerSize = isThermal ? fontSize + 6 : fontSize + 12;
+    const titleSize = isThermal ? fontSize + 2 : fontSize + 5;
 
     return `<!DOCTYPE html>
-<html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="ar"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
-  @page {
-    size: ${bodyWidth} auto;
-    margin: ${isThermal ? "2mm" : "10mm"};
-  }
+  @page { size: ${bodyWidth} auto; margin: ${isThermal ? "2mm" : "8mm"}; }
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
-    font-family: 'Courier New', monospace;
-    font-size: ${isThermal ? fontSize : fontSize + 2}px;
+    font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+    font-size: ${isThermal ? fontSize : fontSize + 1}px;
     width: ${bodyWidth};
     margin: 0 auto;
-    padding: ${isThermal ? "4mm" : "8mm"};
+    padding: ${pad};
     direction: rtl;
-    color: ${color};
+    color: #1a1a2e;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    line-height: 1.5;
   }
-  .center { text-align: ${align === "center" ? "center" : align === "left" ? "left" : "right"}; }
-  .rtl-text { direction: ltr; text-align: left; }
-  .bold { font-weight: bold; }
-  .store-name { font-size: ${isThermal ? fontSize + 6 : fontSize + 8}px; font-weight: bold; text-align: center; margin-bottom: 2mm; }
-  .sub-info { font-size: ${isThermal ? fontSize - 2 : fontSize}px; color: #555; text-align: center; margin-bottom: 1mm; }
-  .doc-title { font-size: ${isThermal ? fontSize + 2 : fontSize + 4}px; font-weight: bold; text-align: center; margin: 2mm 0; }
-  .line { border-top: 1px dashed ${color}; margin: 3mm 0; }
-  .info-row { display: flex; justify-content: space-between; margin: 1mm 0; font-size: ${isThermal ? fontSize - 1 : fontSize}px; }
-  .items-table { width: 100%; border-collapse: collapse; margin: 2mm 0; font-size: ${isThermal ? fontSize - 1 : fontSize}px; }
-  .items-table th { border-bottom: 1px solid ${color}; padding: 1.5mm 0; font-weight: bold; text-align: left; font-size: ${isThermal ? fontSize - 2 : fontSize - 1}px; }
-  .items-table td { padding: 1.5mm 0; }
-  .totals { margin: 2mm 0; }
-  .total-row { display: flex; justify-content: space-between; padding: 1mm 0; font-size: ${isThermal ? fontSize - 1 : fontSize}px; }
-  .total-row.grand { font-weight: bold; font-size: ${isThermal ? fontSize + 1 : fontSize + 2}px; border-top: 1px dashed ${color}; padding-top: 2mm; margin-top: 1mm; }
-  .footer-text { text-align: center; margin-top: 3mm; font-size: ${isThermal ? fontSize - 1 : fontSize}px; color: #555; }
-  .thank-you { text-align: center; margin-top: 2mm; font-weight: bold; font-size: ${isThermal ? fontSize : fontSize + 1}px; }
+  .invoice-box {
+    border: ${isThermal ? "none" : "2px solid #0f3460"};
+    border-radius: ${isThermal ? "0" : "12px"};
+    padding: ${isThermal ? "2mm" : "8mm"};
+    background: #fff;
+  }
+  .header { text-align: ${align}; margin-bottom: ${isThermal ? "2mm" : "5mm"}; }
+  .store-name {
+    font-size: ${headerSize}px;
+    font-weight: 800;
+    color: #0f3460;
+    letter-spacing: 1px;
+    margin-bottom: 2mm;
+  }
+  .store-info { font-size: ${isThermal ? fontSize - 2 : fontSize}px; color: #555; line-height: 1.6; }
+  .divider {
+    border: none;
+    border-top: 2px solid #0f3460;
+    margin: ${isThermal ? "2mm" : "4mm"} 0;
+  }
+  .divider-dashed {
+    border: none;
+    border-top: 1px dashed #ccc;
+    margin: ${isThermal ? "1.5mm" : "3mm"} 0;
+  }
+  .doc-badge {
+    display: inline-block;
+    background: #0f3460;
+    color: #fff;
+    padding: ${isThermal ? "1mm 3mm" : "2mm 6mm"};
+    border-radius: 6px;
+    font-size: ${titleSize}px;
+    font-weight: 700;
+    margin: ${isThermal ? "1mm 0" : "2mm 0"};
+    letter-spacing: 0.5px;
+  }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: ${isThermal ? "1mm" : "2mm"};
+    margin: ${isThermal ? "2mm" : "4mm"} 0;
+    font-size: ${isThermal ? fontSize - 1 : fontSize}px;
+  }
+  .meta-item { display: flex; flex-direction: column; }
+  .meta-label { font-size: ${isThermal ? fontSize - 3 : fontSize - 2}px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .meta-value { font-weight: 700; color: #1a1a2e; }
+  .meta-full { grid-column: 1 / -1; }
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: ${isThermal ? "2mm" : "4mm"} 0;
+    font-size: ${isThermal ? fontSize - 1 : fontSize}px;
+  }
+  .items-table thead th {
+    background: #0f3460;
+    color: #fff;
+    padding: ${isThermal ? "1.5mm" : "2.5mm"} ${isThermal ? "1mm" : "2mm"};
+    font-weight: 700;
+    font-size: ${isThermal ? fontSize - 2 : fontSize - 1}px;
+    text-align: center;
+  }
+  .items-table thead th:first-child { border-radius: 0 ${isThermal ? "0" : "4px"} ${isThermal ? "0" : "4px"} 0; }
+  .items-table thead th:last-child { border-radius: ${isThermal ? "0" : "4px"} 0 0 ${isThermal ? "0" : "4px"}; }
+  .items-table tbody tr:nth-child(even) { background: #f8f9fc; }
+  .items-table td { padding: ${isThermal ? "1.5mm" : "2.5mm"} ${isThermal ? "1mm" : "2mm"}; border-bottom: 1px solid #eee; }
+  .totals-box {
+    margin: ${isThermal ? "2mm" : "5mm"} 0;
+    background: #f8f9fc;
+    border-radius: ${isThermal ? "0" : "8px"};
+    padding: ${isThermal ? "2mm" : "4mm"};
+  }
+  .total-row {
+    display: flex;
+    justify-content: space-between;
+    padding: ${isThermal ? "0.8mm" : "1.5mm"} 0;
+    font-size: ${isThermal ? fontSize - 1 : fontSize}px;
+  }
+  .total-row.grand {
+    font-weight: 800;
+    font-size: ${isThermal ? fontSize + 2 : fontSize + 4}px;
+    color: #0f3460;
+    border-top: 2px solid #0f3460;
+    padding-top: ${isThermal ? "2mm" : "3mm"};
+    margin-top: ${isThermal ? "1mm" : "2mm"};
+  }
+  .payment-badge {
+    display: inline-block;
+    background: #e8f5e9;
+    color: #2e7d32;
+    padding: ${isThermal ? "1mm 2mm" : "1.5mm 4mm"};
+    border-radius: 4px;
+    font-size: ${isThermal ? fontSize - 1 : fontSize}px;
+    font-weight: 600;
+  }
+  .footer { text-align: center; margin-top: ${isThermal ? "3mm" : "6mm"}; }
+  .footer-line { font-size: ${isThermal ? fontSize - 2 : fontSize - 1}px; color: #888; margin: 1mm 0; }
+  .thank-you { font-size: ${isThermal ? fontSize : fontSize + 2}px; font-weight: 800; color: #0f3460; margin-top: 2mm; }
   @media print {
     body { width: ${bodyWidth}; margin: 0; padding: ${isThermal ? "2mm" : "8mm"}; }
+    .invoice-box { border: none; }
   }
 </style></head><body>
 
-  <div class="store-name">${s.store_name || "تبارك"}</div>
-  ${s.phone ? `<div class="sub-info">Tel: ${s.phone}</div>` : ""}
-  ${s.address ? `<div class="sub-info">${s.address}</div>` : ""}
+<div class="invoice-box">
+  <div class="header">
+    <div class="store-name">${s.store_name || "تبارك"}</div>
+    <div class="store-info">
+      ${s.phone ? `📞 ${s.phone}` : ""}
+      ${s.phone && s.address ? " | " : ""}
+      ${s.address ? `📍 ${s.address}` : ""}
+    </div>
+  </div>
 
-  <div class="line"></div>
+  <hr class="divider">
 
-  <div class="doc-title">${sale.doc_type || "SALE INVOICE"}</div>
+  <div style="text-align:center">
+    <span class="doc-badge">${sale.doc_type || "فاتورة بيع"}</span>
+  </div>
 
-  <div class="info-row"><span>#${sale.invoice_no}</span></div>
-  ${ps.receiptShowDate !== false ? `<div class="info-row"><span>${sale.date}</span></div>` : ""}
-  ${ps.receiptShowCustomer !== false ? `<div class="info-row"><span>Customer: ${sale.customer_name || "نقدي"}</span></div>` : ""}
-  ${ps.receiptShowPayment !== false ? `<div class="info-row"><span>Payment: ${sale.payment_method}</span></div>` : ""}
-  ${ps.receiptShowEmployee !== false && sale.employee_name ? `<div class="info-row"><span>Employee: ${sale.employee_name}</span></div>` : ""}
+  <div class="meta-grid">
+    <div class="meta-item">
+      <span class="meta-label">رقم الفاتورة</span>
+      <span class="meta-value">#${sale.invoice_no}</span>
+    </div>
+    ${ps.receiptShowDate !== false ? `<div class="meta-item">
+      <span class="meta-label">التاريخ</span>
+      <span class="meta-value">${sale.date}</span>
+    </div>` : ""}
+    ${ps.receiptShowCustomer !== false ? `<div class="meta-item">
+      <span class="meta-label">العميل</span>
+      <span class="meta-value">${sale.customer_name || "نقدي"}</span>
+    </div>` : ""}
+    ${ps.receiptShowPayment !== false ? `<div class="meta-item">
+      <span class="meta-label">طريقة الدفع</span>
+      <span class="meta-value">${sale.payment_method === "cash" ? "💵 نقدي" : sale.payment_method === "card" ? "💳 فيزا" : sale.payment_method === "card_wallet" ? "📱 محفظة" : sale.payment_method}</span>
+    </div>` : ""}
+    ${ps.receiptShowEmployee !== false && sale.employee_name ? `<div class="meta-item">
+      <span class="meta-label">الموظف</span>
+      <span class="meta-value">${sale.employee_name}</span>
+    </div>` : ""}
+  </div>
 
-  <div class="line"></div>
+  <hr class="divider-dashed">
 
   <table class="items-table">
     <thead><tr>
-      <th style="text-align:left">${isThermal ? "Item" : "الصنف"}</th>
-      <th style="text-align:center;width:15%">Qty</th>
-      <th style="text-align:left;width:20%">Price</th>
-      <th style="text-align:left;width:20%">Total</th>
+      <th style="width:8%">#</th>
+      <th style="text-align:right;${isThermal ? "" : "width:42%"}">الصنف</th>
+      <th style="width:15%">الكمية</th>
+      <th style="width:17%">السعر</th>
+      <th style="width:18%">الإجمالي</th>
     </tr></thead>
     <tbody>${items}</tbody>
   </table>
 
-  <div class="line"></div>
-
-  <div class="totals">
-    <div class="total-row"><span>Total</span><span>${Number(sale.total).toFixed(2)}</span></div>
-    <div class="total-row"><span>Discount</span><span>${Number(sale.discount).toFixed(2)}</span></div>
-    ${(sale.additional || 0) > 0 ? `<div class="total-row"><span>Additional</span><span>${Number(sale.additional).toFixed(2)}</span></div>` : ""}
-    <div class="total-row grand"><span>NET</span><span>${Number(sale.net_total).toFixed(2)} ${s.currency || "ج.م"}</span></div>
+  <div class="totals-box">
+    <div class="total-row"><span>المجموع الفرعي</span><span>${Number(sale.total).toFixed(2)}</span></div>
+    ${(sale.discount || 0) > 0 ? `<div class="total-row" style="color:#c62828"><span>الخصم</span><span>-${Number(sale.discount).toFixed(2)}</span></div>` : ""}
+    ${(sale.additional || 0) > 0 ? `<div class="total-row" style="color:#2e7d32"><span>إضافي</span><span>+${Number(sale.additional).toFixed(2)}</span></div>` : ""}
+    <div class="total-row grand"><span>الصافي</span><span>${Number(sale.net_total).toFixed(2)} ${s.currency || "ج.م"}</span></div>
   </div>
 
-  <div class="line"></div>
+  ${ps.receiptShowPayment !== false ? `<div style="text-align:center;margin:2mm 0">
+    <span class="payment-badge">${sale.payment_method === "cash" ? "💵 الدفع نقدي" : sale.payment_method === "card" ? "💳 الدفع بالفيزا" : sale.payment_method === "card_wallet" ? "📱 الدفع بالمحفظة" : sale.payment_method}</span>
+  </div>` : ""}
 
-  ${ps.invoiceFooter && s.invoice_footer ? `<div class="footer-text">${s.invoice_footer}</div>` : ""}
-  <div class="thank-you">${ps.receiptThankYouText || "شكراً لاختياركم!"}</div>
+  <hr class="divider-dashed">
+
+  <div class="footer">
+    ${ps.invoiceFooter && s.invoice_footer ? `<div class="footer-line">${s.invoice_footer}</div>` : ""}
+    <div class="thank-you">${ps.receiptThankYouText || "شكراً لاختياركم!"}</div>
+    <div class="footer-line" style="margin-top:1mm">تبارك - نظام إدارة المبيعات</div>
+  </div>
+</div>
 
 </body></html>`;
   };
@@ -1497,6 +1617,15 @@ export function Pos({ onBack }: { onBack: () => void }) {
           title={previewSale.sale.invoice_no}
           paperSize={getPrintSettings().receiptPrinter}
           onClose={() => setPreviewSale(null)}
+          onPrint={async () => {
+            try {
+              await printSale(previewSale.sale, settings);
+              notify(t("printInvoice") + " ✓", "success");
+            } catch (e) {
+              notify(String(e), "error");
+            }
+            setPreviewSale(null);
+          }}
         />
       )}
     </div>
