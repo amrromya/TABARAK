@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { api } from "../api";
-import { getPrintSettings, printSale } from "../utils/directPrint";
+import { getPrintSettings, getCompanyLogo, printSale } from "../utils/directPrint";
 import { PrintSaleReturn } from "../components/PrintSaleReturn";
 import PrintPreview from "../components/PrintPreview";
 import { ProductCard } from "../components/ProductCard";
@@ -81,7 +81,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
   const [ready, setReady] = useState(false);
 
   const [viewingSale, setViewingSale] = useState<Sale | null>(null);
-  const [previewSale, setPreviewSale] = useState<{ sale: Sale; html: string } | null>(null);
+  const [previewSale, setPreviewSale] = useState<{ sale: Sale; html: string; paperSize?: string } | null>(null);
   const [printReturn, setPrintReturn] = useState<SaleReturn | null>(null);
   const [viewingReturn, setViewingReturn] = useState<SaleReturn | null>(null);
 
@@ -548,9 +548,9 @@ export function Pos({ onBack }: { onBack: () => void }) {
     if (target) loadSale(target.id);
   };
 
-  const generateInvoiceHtml = (sale: Sale, s: typeof settings extends infer T ? NonNullable<T> : never): string => {
+  const generateInvoiceHtml = (sale: Sale, s: typeof settings extends infer T ? NonNullable<T> : never, paperOverride?: string): string => {
     const ps = getPrintSettings();
-    const paper = ps.receiptPrinter || "80mm";
+    const paper = paperOverride || ps.receiptPrinter || "80mm";
     const fontSize = ps.receiptFontSize || 10;
     const align = ps.receiptHeaderAlign || "center";
 
@@ -698,6 +698,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
 
 <div class="invoice-box">
   <div class="header">
+    ${(() => { const logo = getCompanyLogo(); return logo ? `<img src="${logo}" alt="logo" style="max-width:${isThermal ? "30mm" : "40mm"};max-height:${isThermal ? "15mm" : "25mm"};object-fit:contain;margin:0 auto ${isThermal ? "1mm" : "3mm"};display:block;" />` : ""; })()}
     <div class="store-name">${s.store_name || "تبارك"}</div>
     <div class="store-info">
       ${s.phone ? `📞 ${s.phone}` : ""}
@@ -773,8 +774,10 @@ export function Pos({ onBack }: { onBack: () => void }) {
 
   const showPreview = (sale: Sale) => {
     if (!settings) return;
-    const html = generateInvoiceHtml(sale, settings);
-    setPreviewSale({ sale, html });
+    const ps = getPrintSettings();
+    const paper = ps.receiptPrinter || "80mm";
+    const html = generateInvoiceHtml(sale, settings, paper);
+    setPreviewSale({ sale, html, paperSize: paper });
   };
 
   const printCurrent = async () => {
@@ -1615,11 +1618,16 @@ export function Pos({ onBack }: { onBack: () => void }) {
         <PrintPreview
           html={previewSale.html}
           title={previewSale.sale.invoice_no}
-          paperSize={getPrintSettings().receiptPrinter}
+          paperSize={previewSale.paperSize || getPrintSettings().receiptPrinter}
           onClose={() => setPreviewSale(null)}
-          onPrint={async () => {
+          onPaperSizeChange={(newSize) => {
+            const newHtml = generateInvoiceHtml(previewSale.sale, settings, newSize);
+            setPreviewSale({ ...previewSale, html: newHtml, paperSize: newSize });
+          }}
+          onPrint={async (printer, copiesCount) => {
             try {
-              await printSale(previewSale.sale, settings);
+              const { invoke } = await import("@tauri-apps/api/core");
+              await invoke("print_html_direct", { htmlContent: previewSale.html, printerName: printer || "", copies: copiesCount || 1 });
               notify(t("printInvoice") + " ✓", "success");
             } catch (e) {
               notify(String(e), "error");

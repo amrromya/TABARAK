@@ -4132,6 +4132,14 @@ pub fn get_dashboard(state: State<AppState>) -> Result<Dashboard, String> {
         )
         .map_err(|e| e.to_string())?;
 
+    let electronic_balance: f64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(net_total),0) FROM sales WHERE payment_method IN ('card', 'card_visa', 'card_wallet')",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
     Ok(Dashboard {
         today_sales: crate::utils::money(today_sales),
         today_purchases: crate::utils::money(today_purchases),
@@ -4146,7 +4154,37 @@ pub fn get_dashboard(state: State<AppState>) -> Result<Dashboard, String> {
         cash_in_hand: crate::utils::money(
             opening + cash_collected + payments + receipt_vouchers_total - purchases_total - expenses_total - payment_vouchers_total,
         ),
+        electronic_balance: crate::utils::money(electronic_balance),
     })
+}
+
+#[tauri::command]
+pub fn get_electronic_transactions(state: State<AppState>) -> Result<Vec<serde_json::Value>, String> {
+    let conn = get_db(&state)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, invoice_no, date, customer_name, net_total, payment_method
+             FROM sales WHERE payment_method IN ('card', 'card_visa', 'card_wallet')
+             ORDER BY id DESC LIMIT 200",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "invoice_no": row.get::<_, String>(1)?,
+                "date": row.get::<_, String>(2)?,
+                "customer_name": row.get::<_, String>(3)?,
+                "total": row.get::<_, f64>(4)?,
+                "payment_method": row.get::<_, String>(5)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(result)
 }
 
 #[tauri::command]
@@ -6360,6 +6398,154 @@ pub fn test_print(printer_name: String, paper_size: String) -> Result<(), String
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(format!("Test print failed: {}", stderr));
         }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Direct printing is only supported on Windows".into())
+    }
+}
+
+// =============== تصدير PDF مباشر + طباعة بدون متصفح ===============
+
+fn find_edge() -> Result<String, String> {
+    let edge_paths = [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    ];
+    edge_paths.iter()
+        .find(|p| std::path::Path::new(p).exists())
+        .map(|p| p.to_string())
+        .ok_or_else(|| "Microsoft Edge not found".into())
+}
+
+#[tauri::command]
+pub async fn export_pdf_direct(html_content: String, title: String, save_path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let temp_dir = std::env::temp_dir();
+        let html_path = temp_dir.join(format!("tabarak_pdf_{}.html", stamp));
+        let pdf_path = temp_dir.join(format!("tabarak_pdf_{}.pdf", stamp));
+
+        std::fs::write(&html_path, &html_content).map_err(|e| e.to_string())?;
+
+        let edge = find_edge()?;
+        let html_url = format!("file:///{}", html_path.to_string_lossy().replace('\\', "/"));
+        let pdf_arg = format!("--print-to-pdf={}", pdf_path.to_string_lossy());
+
+        let output = tokio::task::spawn_blocking(move || {
+            std::process::Command::new(&edge)
+                .args(["--headless", "--no-sandbox", "--disable-gpu", "--disable-software-rasterizer", &pdf_arg, &html_url])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output()
+        }).await.map_err(|e| e.to_string())?
+          .map_err(|e| format!("Failed to run Edge: {}", e))?;
+
+        let _ = std::fs::remove_file(&html_path);
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("PDF export failed: {}", stderr));
+        }
+        if !pdf_path.exists() {
+            return Err("PDF file was not created".into());
+        }
+
+        std::fs::copy(&pdf_path, &save_path).map_err(|e| format!("Failed to save PDF: {}", e))?;
+        let _ = std::fs::remove_file(&pdf_path);
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("PDF export is only supported on Windows".into())
+    }
+}
+
+#[tauri::command]
+pub async fn print_html_direct(html_content: String, printer_name: String, copies: i32) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let temp_dir = std::env::temp_dir();
+        let html_path = temp_dir.join(format!("tabarak_print_{}.html", stamp));
+        let pdf_path = temp_dir.join(format!("tabarak_print_{}.pdf", stamp));
+
+        std::fs::write(&html_path, &html_content).map_err(|e| e.to_string())?;
+
+        let edge = find_edge()?;
+        let html_url = format!("file:///{}", html_path.to_string_lossy().replace('\\', "/"));
+        let pdf_arg = format!("--print-to-pdf={}", pdf_path.to_string_lossy());
+
+        let edge2 = edge.clone();
+        let pdf_arg2 = pdf_arg.clone();
+        let html_url2 = html_url.clone();
+
+        let output = tokio::task::spawn_blocking(move || {
+            std::process::Command::new(&edge2)
+                .args(["--headless", "--no-sandbox", "--disable-gpu", "--disable-software-rasterizer", &pdf_arg2, &html_url2])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output()
+        }).await.map_err(|e| e.to_string())?
+          .map_err(|e| format!("Failed to run Edge: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let _ = std::fs::remove_file(&html_path);
+            return Err(format!("PDF generation for print failed: {}", stderr));
+        }
+        let _ = std::fs::remove_file(&html_path);
+
+        if !pdf_path.exists() {
+            return Err("PDF file was not created".into());
+        }
+
+        let pdf_str = pdf_path.to_string_lossy().replace('\\', "\\\\");
+        let printer_name_esc = printer_name.replace('\'', "''");
+
+        for _ in 0..copies {
+            let ps_script = if printer_name.trim().is_empty() {
+                format!(
+                    "Start-Process -FilePath '{}' -Verb Print -Wait -WindowStyle Hidden",
+                    pdf_str
+                )
+            } else {
+                format!(
+                    "Start-Process -FilePath '{}' -Verb PrintTo -ArgumentList '{}' -Wait -WindowStyle Hidden",
+                    pdf_str, printer_name_esc
+                )
+            };
+
+            let print_output = tokio::task::spawn_blocking(move || {
+                std::process::Command::new("powershell")
+                    .args(["-NoProfile", "-Command", &ps_script])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .output()
+            }).await.map_err(|e| e.to_string())?
+              .map_err(|e| format!("PowerShell failed: {}", e))?;
+
+            if !print_output.status.success() {
+                let stderr = String::from_utf8_lossy(&print_output.stderr);
+                if stderr.contains("does not exist") || stderr.contains("not found") {
+                    let _ = std::fs::remove_file(&pdf_path);
+                    return Err(format!("Print failed: {}", stderr));
+                }
+            }
+        }
+
+        let _ = std::fs::remove_file(&pdf_path);
         Ok(())
     }
     #[cfg(not(target_os = "windows"))]

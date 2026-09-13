@@ -8,6 +8,7 @@ import { useColorTheme } from "./hooks/useColorTheme";
 import { initLang, setLang, getLang, t } from "./i18n";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { Dashboard } from "./pages/Dashboard";
+import { ElectronicTransactions } from "./pages/ElectronicTransactions";
 import { Inventory } from "./pages/Inventory";
 import { Warehouses } from "./pages/Warehouses";
 import { Sales } from "./pages/Sales";
@@ -280,7 +281,7 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
   const allowedPages = visibleNav.map((n) => n.key);
   const isDetailPage = page.startsWith("maint_detail_");
   const isMaintPage = page.startsWith("maint_");
-  const isAccountingPage = ["receipt_vouchers", "payment_vouchers", "warehouse_transfers", "stock_counts"].includes(page);
+  const isAccountingPage = ["receipt_vouchers", "payment_vouchers", "warehouse_transfers", "stock_counts", "electronic_txns"].includes(page);
   const safePage = isDetailPage ? page : (allowedPages.includes(page) || isMaintPage || isAccountingPage ? page : allowedPages[0] ?? "dashboard");
 
   return (
@@ -335,6 +336,7 @@ function Shell({ account, theme, toggleTheme }: { account: Account; theme: "ligh
       </aside>
       <main className="content">
         {safePage === "dashboard" && <Dashboard onNavigate={setPage} onOpenPos={(label) => openPosWindow(label, undefined, account)} />}
+        {safePage === "electronic_txns" && <ElectronicTransactions onBack={() => setPage("dashboard")} onViewSale={(id) => openPosWindow("sales-pos", id, account)} />}
         {safePage === "inventory" && (
           <Inventory
             onOpenCount={() => openCountWindow(undefined, account)}

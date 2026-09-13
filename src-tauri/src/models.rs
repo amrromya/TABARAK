@@ -580,6 +580,7 @@ pub struct Dashboard {
     pub total_customers: i64,
     pub total_debts: f64,
     pub cash_in_hand: f64,
+    pub electronic_balance: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]

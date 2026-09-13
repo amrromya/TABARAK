@@ -373,6 +373,7 @@ export interface Dashboard {
   total_customers: number;
   total_debts: number;
   cash_in_hand: number;
+  electronic_balance: number;
 }
 
 export interface ProfitLoss {

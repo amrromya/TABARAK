@@ -7,8 +7,6 @@ import {
   generateThermalReceiptHTML,
   generateA4InvoiceHTML,
   listAvailablePrinters,
-  ProfessionalPrintSettings,
-  getProfessionalPrintSettings,
   PaperSize,
   PrintDocumentConfig,
 } from "../utils/printSystem";
@@ -78,7 +76,7 @@ const buttonBaseStyle: React.CSSProperties = {
   fontFamily: "inherit",
 };
 
-function extractDocTitle(docType: DocType, data: DocData): string {
+function extractDocTitle(docType: DocType, _data: DocData): string {
   switch (docType) {
     case "sales_invoice":
       return t("saleInvoiceTitle");
@@ -97,7 +95,7 @@ function extractDocTitle(docType: DocType, data: DocData): string {
   }
 }
 
-function extractInvoiceNo(docType: DocType, data: DocData): string {
+function extractInvoiceNo(_docType: DocType, data: DocData): string {
   if (data.invoice_no) return String(data.invoice_no);
   if (data.id) return `#${data.id}`;
   if (data.voucher_no) return String(data.voucher_no);

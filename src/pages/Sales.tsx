@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
-import ProfessionalPrintButton from "../components/ProfessionalPrintButton";
+import PrintPreview from "../components/PrintPreview";
 import { ProductMovements } from "../components/ProductMovements";
 import { ProductPicker } from "../components/ProductPicker";
+import { getPrintSettings, getCompanyLogo } from "../utils/directPrint";
 import {
   Field,
   Modal,
@@ -54,6 +55,7 @@ export function Sales({
   const [viewingReturn, setViewingReturn] = useState<SaleReturn | null>(null);
   const [showMovements, setShowMovements] = useState(false);
   const [movementProduct, setMovementProduct] = useState<Product | null>(null);
+  const [showTodayItems, setShowTodayItems] = useState(false);
 
   const [date, setDate] = useState(today());
   const [customer, setCustomer] = useState("");
@@ -74,6 +76,8 @@ export function Sales({
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [printPreview, setPrintPreview] = useState<{ html: string; title: string; sale: Sale; paperSize?: string } | null>(null);
+  const [printReturnPreview, setPrintReturnPreview] = useState<{ html: string; title: string; ret: SaleReturn; paperSize?: string } | null>(null);
 
   const notify = useToast();
 
@@ -90,7 +94,168 @@ export function Sales({
 
   useEffect(() => {
     load();
+    api.getSettings().then(setSettings).catch(() => {});
   }, [load]);
+
+  const generateInvoiceHtml = (sale: Sale, s: Settings, paperOverride?: string): string => {
+    const ps = getPrintSettings();
+    const paper = paperOverride || ps.receiptPrinter || "80mm";
+    const fontSize = ps.receiptFontSize || 10;
+    const isThermal = paper === "58mm" || paper === "80mm";
+    const bodyWidth = paper === "58mm" ? "58mm" : paper === "80mm" ? "80mm" : paper === "A5" ? "148mm" : "210mm";
+    const align = ps.receiptHeaderAlign || "center";
+    const pad = isThermal ? "4mm" : "12mm";
+    const headerSize = isThermal ? fontSize + 6 : fontSize + 12;
+    const titleSize = isThermal ? fontSize + 2 : fontSize + 5;
+
+    const items = (sale.items || [])
+      .filter((it) => !(it.sell_price === 0 && !it.product_name))
+      .map((it, idx) => {
+        const name = (it.product_name || "").substring(0, isThermal ? 18 : 35);
+        return `<tr>
+          <td style="padding:3px 0;border-bottom:1px solid #eee">${idx + 1}</td>
+          <td style="padding:3px 0;border-bottom:1px solid #eee">${name}</td>
+          <td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center">${it.quantity}</td>
+          <td style="padding:3px 0;border-bottom:1px solid #eee;text-align:center">${Number(it.sell_price).toFixed(2)}</td>
+          <td style="padding:3px 0;border-bottom:1px solid #eee;text-align:center;font-weight:700">${Number(it.total).toFixed(2)}</td>
+        </tr>`;
+      }).join("");
+
+    return `<!DOCTYPE html>
+<html lang="ar"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @page { size: ${bodyWidth} auto; margin: ${isThermal ? "2mm" : "8mm"}; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Cairo','Segoe UI',Tahoma,sans-serif; font-size:${isThermal ? fontSize : fontSize + 1}px; width:${bodyWidth}; margin:0 auto; padding:${pad}; direction:rtl; color:#1a1a2e; -webkit-print-color-adjust:exact; print-color-adjust:exact; line-height:1.5; }
+  .invoice-box { border:${isThermal ? "none" : "2px solid #0f3460"}; border-radius:${isThermal ? "0" : "12px"}; padding:${isThermal ? "2mm" : "8mm"}; background:#fff; }
+  .header { text-align:${align}; margin-bottom:${isThermal ? "2mm" : "5mm"}; }
+  .store-name { font-size:${headerSize}px; font-weight:800; color:#0f3460; letter-spacing:1px; margin-bottom:2mm; }
+  .store-info { font-size:${isThermal ? fontSize - 2 : fontSize}px; color:#555; line-height:1.6; }
+  .divider { border:none; border-top:2px solid #0f3460; margin:${isThermal ? "2mm" : "4mm"} 0; }
+  .divider-dashed { border:none; border-top:1px dashed #ccc; margin:${isThermal ? "1.5mm" : "3mm"} 0; }
+  .doc-badge { display:inline-block; background:#0f3460; color:#fff; padding:${isThermal ? "1mm 3mm" : "2mm 6mm"}; border-radius:6px; font-size:${titleSize}px; font-weight:700; margin:${isThermal ? "1mm 0" : "2mm 0"}; letter-spacing:0.5px; }
+  .meta-grid { display:grid; grid-template-columns:1fr 1fr; gap:${isThermal ? "1mm" : "2mm"}; margin:${isThermal ? "2mm" : "4mm"} 0; font-size:${isThermal ? fontSize - 1 : fontSize}px; }
+  .meta-item { display:flex; flex-direction:column; }
+  .meta-label { font-size:${isThermal ? fontSize - 3 : fontSize - 2}px; color:#888; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+  .meta-value { font-weight:700; color:#1a1a2e; }
+  .items-table { width:100%; border-collapse:collapse; margin:${isThermal ? "2mm" : "4mm"} 0; font-size:${isThermal ? fontSize - 1 : fontSize}px; }
+  .items-table thead th { background:#0f3460; color:#fff; padding:${isThermal ? "1.5mm" : "2.5mm"} ${isThermal ? "1mm" : "2mm"}; font-weight:700; font-size:${isThermal ? fontSize - 2 : fontSize - 1}px; text-align:center; }
+  .items-table tbody tr:nth-child(even) { background:#f8f9fc; }
+  .items-table td { padding:${isThermal ? "1.5mm" : "2.5mm"} ${isThermal ? "1mm" : "2mm"}; border-bottom:1px solid #eee; }
+  .totals-box { margin:${isThermal ? "2mm" : "5mm"} 0; background:#f8f9fc; border-radius:${isThermal ? "0" : "8px"}; padding:${isThermal ? "2mm" : "4mm"}; }
+  .total-row { display:flex; justify-content:space-between; padding:${isThermal ? "0.8mm" : "1.5mm"} 0; font-size:${isThermal ? fontSize - 1 : fontSize}px; }
+  .total-row.grand { font-weight:800; font-size:${isThermal ? fontSize + 2 : fontSize + 4}px; color:#0f3460; border-top:2px solid #0f3460; padding-top:${isThermal ? "2mm" : "3mm"}; margin-top:${isThermal ? "1mm" : "2mm"}; }
+  .payment-badge { display:inline-block; background:#e8f5e9; color:#2e7d32; padding:${isThermal ? "1mm 2mm" : "1.5mm 4mm"}; border-radius:4px; font-size:${isThermal ? fontSize - 1 : fontSize}px; font-weight:600; }
+  .footer { text-align:center; margin-top:${isThermal ? "3mm" : "6mm"}; }
+  .footer-line { font-size:${isThermal ? fontSize - 2 : fontSize - 1}px; color:#888; margin:1mm 0; }
+  .thank-you { font-size:${isThermal ? fontSize : fontSize + 2}px; font-weight:800; color:#0f3460; margin-top:2mm; }
+  @media print { body { width:${bodyWidth}; margin:0; padding:${isThermal ? "2mm" : "8mm"}; } .invoice-box { border:none; } }
+</style></head><body>
+<div class="invoice-box">
+  <div class="header">
+    ${(() => { const logo = getCompanyLogo(); return logo ? `<img src="${logo}" alt="logo" style="max-width:${isThermal ? "30mm" : "40mm"};max-height:${isThermal ? "15mm" : "25mm"};object-fit:contain;margin:0 auto ${isThermal ? "1mm" : "3mm"};display:block;" />` : ""; })()}
+    <div class="store-name">${s.store_name || "تبارك"}</div>
+    <div class="store-info">${s.phone ? `📞 ${s.phone}` : ""}${s.phone && s.address ? " | " : ""}${s.address ? `📍 ${s.address}` : ""}</div>
+  </div>
+  <hr class="divider">
+  <div style="text-align:center"><span class="doc-badge">${sale.doc_type || "فاتورة بيع"}</span></div>
+  <div class="meta-grid">
+    <div class="meta-item"><span class="meta-label">رقم الفاتورة</span><span class="meta-value">#${sale.invoice_no}</span></div>
+    ${ps.receiptShowDate !== false ? `<div class="meta-item"><span class="meta-label">التاريخ</span><span class="meta-value">${sale.date}</span></div>` : ""}
+    ${ps.receiptShowCustomer !== false ? `<div class="meta-item"><span class="meta-label">العميل</span><span class="meta-value">${sale.customer_name || "نقدي"}</span></div>` : ""}
+    ${ps.receiptShowPayment !== false ? `<div class="meta-item"><span class="meta-label">طريقة الدفع</span><span class="meta-value">${sale.payment_method === "cash" ? "💵 نقدي" : sale.payment_method === "card" ? "💳 فيزا" : sale.payment_method}</span></div>` : ""}
+    ${ps.receiptShowEmployee !== false && sale.employee_name ? `<div class="meta-item"><span class="meta-label">الموظف</span><span class="meta-value">${sale.employee_name}</span></div>` : ""}
+  </div>
+  <hr class="divider-dashed">
+  <table class="items-table">
+    <thead><tr><th>#</th><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+    <tbody>${items}</tbody>
+  </table>
+  <div class="totals-box">
+    <div class="total-row"><span>الإجمالي:</span><span>${money(sale.total)}</span></div>
+    ${sale.discount > 0 ? `<div class="total-row"><span>الخصم:</span><span>-${money(sale.discount)}</span></div>` : ""}
+    ${sale.additional > 0 ? `<div class="total-row"><span>إضافي:</span><span>+${money(sale.additional)}</span></div>` : ""}
+    <div class="total-row grand"><span>الصافي:</span><span>${money(sale.net_total)}</span></div>
+  </div>
+  <div style="text-align:center;margin:${isThermal ? "2mm" : "4mm"} 0">
+    <span class="payment-badge">✅ ${sale.payment_method === "cash" ? "نقدي" : sale.payment_method === "card" ? "شبكة" : sale.payment_method}</span>
+  </div>
+  <div class="footer">
+    ${s.invoice_footer ? `<div class="footer-line">${s.invoice_footer}</div>` : ""}
+    <div class="thank-you">شكراً لاختياركم تبارك</div>
+  </div>
+</div>
+</body></html>`;
+  };
+
+  const generateReturnHtml = (ret: SaleReturn, s: Settings, paperOverride?: string): string => {
+    const ps = getPrintSettings();
+    const paper = paperOverride || ps.receiptPrinter || "80mm";
+    const fontSize = ps.receiptFontSize || 10;
+    const isThermal = paper === "58mm" || paper === "80mm";
+    const bodyWidth = paper === "58mm" ? "58mm" : paper === "80mm" ? "80mm" : paper === "A5" ? "148mm" : "210mm";
+    const headerSize = isThermal ? fontSize + 6 : fontSize + 12;
+    const titleSize = isThermal ? fontSize + 2 : fontSize + 5;
+
+    const items = (ret.items || [])
+      .filter((it) => !(it.sell_price === 0 && !it.product_name))
+      .map((it, idx) => {
+        const name = (it.product_name || "").substring(0, isThermal ? 18 : 35);
+        return `<tr>
+          <td style="padding:3px 0;border-bottom:1px solid #eee">${idx + 1}</td>
+          <td style="padding:3px 0;border-bottom:1px solid #eee">${name}</td>
+          <td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center">${it.quantity}</td>
+          <td style="padding:3px 0;border-bottom:1px solid #eee;text-align:center">${Number(it.sell_price).toFixed(2)}</td>
+          <td style="padding:3px 0;border-bottom:1px solid #eee;text-align:center;font-weight:700">${Number(it.total).toFixed(2)}</td>
+        </tr>`;
+      }).join("");
+
+    return `<!DOCTYPE html>
+<html lang="ar"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @page { size: ${bodyWidth} auto; margin: ${isThermal ? "2mm" : "8mm"}; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Cairo',sans-serif; font-size:${isThermal ? fontSize : fontSize + 1}px; width:${bodyWidth}; margin:0 auto; padding:12mm; direction:rtl; color:#1a1a2e; -webkit-print-color-adjust:exact; }
+  .invoice-box { border:${isThermal ? "none" : "2px solid #dc2626"}; border-radius:${isThermal ? "0" : "12px"}; padding:8mm; background:#fff; }
+  .header { text-align:center; margin-bottom:5mm; }
+  .store-name { font-size:${headerSize}px; font-weight:800; color:#dc2626; }
+  .doc-badge { display:inline-block; background:#dc2626; color:#fff; padding:2mm 6mm; border-radius:6px; font-size:${titleSize}px; font-weight:700; margin:2mm 0; }
+  .meta-grid { display:grid; grid-template-columns:1fr 1fr; gap:2mm; margin:4mm 0; }
+  .meta-label { font-size:${fontSize - 2}px; color:#888; font-weight:600; text-transform:uppercase; }
+  .meta-value { font-weight:700; }
+  .items-table { width:100%; border-collapse:collapse; margin:4mm 0; }
+  .items-table thead th { background:#dc2626; color:#fff; padding:2.5mm 2mm; font-weight:700; text-align:center; }
+  .items-table tbody tr:nth-child(even) { background:#fef2f2; }
+  .items-table td { padding:2.5mm 2mm; border-bottom:1px solid #eee; }
+  .total-row { display:flex; justify-content:space-between; padding:1.5mm 0; }
+  .total-row.grand { font-weight:800; font-size:${fontSize + 4}px; color:#dc2626; border-top:2px solid #dc2626; }
+</style></head><body>
+<div class="invoice-box">
+  <div class="header">
+    ${(() => { const logo = getCompanyLogo(); return logo ? `<img src="${logo}" alt="logo" style="max-width:${isThermal ? "30mm" : "40mm"};max-height:${isThermal ? "15mm" : "25mm"};object-fit:contain;margin:0 auto ${isThermal ? "1mm" : "3mm"};display:block;" />` : ""; })()}
+    <div class="store-name">${s.store_name || "تبارك"}</div>
+  </div>
+  <div style="text-align:center"><span class="doc-badge">مردود مبيعات</span></div>
+  <div class="meta-grid">
+    <div><span class="meta-label">رقم المردود:</span> <b>${ret.invoice_no}</b></div>
+    <div><span class="meta-label">التاريخ:</span> <b>${ret.date}</b></div>
+    <div><span class="meta-label">العميل:</span> <b>${ret.customer_name || "—"}</b></div>
+    <div><span class="meta-label">طريقة الدفع:</span> <b>${ret.payment_method}</b></div>
+  </div>
+  <table class="items-table">
+    <thead><tr><th>#</th><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+    <tbody>${items}</tbody>
+  </table>
+  <div style="margin:4mm 0;background:#fef2f2;padding:4mm;border-radius:8px">
+    <div class="total-row"><span>الإجمالي:</span><span>${money(ret.total)}</span></div>
+    ${ret.discount > 0 ? `<div class="total-row"><span>الخصم:</span><span>-${money(ret.discount)}</span></div>` : ""}
+    <div class="total-row grand"><span>الصافي:</span><span>${money(ret.total - ret.discount + (ret.additional || 0))}</span></div>
+  </div>
+</div>
+</body></html>`;
+  };
 
   const openNew = async () => {
     try {
@@ -327,6 +492,19 @@ export function Sales({
     .filter((s) => s.date === today())
     .reduce((sum, s) => sum + s.net_total, 0);
 
+  const todayItemsMap = sales
+    .filter((s) => s.date === today())
+    .flatMap((s) => (s.items || []).map((it) => ({ ...it, invoice_no: s.invoice_no })))
+    .reduce<Record<string, { product_name: string; quantity: number; sell_price: number; total: number; invoices: string[] }>>((acc, it) => {
+      const key = String(it.product_id);
+      if (!acc[key]) acc[key] = { product_name: it.product_name, quantity: 0, sell_price: it.sell_price, total: 0, invoices: [] };
+      acc[key].quantity += it.quantity;
+      acc[key].total += it.total;
+      if (!acc[key].invoices.includes(it.invoice_no)) acc[key].invoices.push(it.invoice_no);
+      return acc;
+    }, {});
+  const todayItems = Object.values(todayItemsMap);
+
   return (
     <div className="page">
       <div className="page-head">
@@ -340,6 +518,9 @@ export function Sales({
           />
           <button className="btn primary" onClick={() => onNewSale ? onNewSale() : openNew()}>
             + فاتورة جديدة
+          </button>
+          <button className="btn" onClick={() => setShowTodayItems(true)}>
+            📦 حركة الأصناف
           </button>
           <button className="btn" onClick={openReturn}>
             + مردود مبيعات
@@ -406,13 +587,19 @@ export function Sales({
                   >
                     عرض
                   </button>
-                  <ProfessionalPrintButton
-                    docType="sales_invoice"
-                    data={s}
-                    settings={settings || undefined}
-                    variant="outline"
-                    size="sm"
-                  />
+                  <button
+                    className="btn sm"
+                    onClick={async () => {
+                      if (!settings) return;
+                      try {
+                        const full = await api.getSale(s.id);
+                        setPrintPreview({ html: generateInvoiceHtml(full, settings), title: full.invoice_no, sale: full });
+                      } catch (e) { notify(String(e), "error"); }
+                    }}
+                    title="طباعة الفاتورة"
+                  >
+                    🖨️ طباعة
+                  </button>
                   <button
                     className="btn sm"
                     onClick={() => openReturn()}
@@ -945,13 +1132,16 @@ export function Sales({
               <div className="inv-net"><span>الصافي:</span> <b>{money(viewingSale.net_total)}</b></div>
             </div>
             <div className="form-actions">
-              <ProfessionalPrintButton
-                docType="sales_invoice"
-                data={viewingSale}
-                settings={settings || undefined}
-                variant="primary"
-                size="sm"
-              />
+              <button
+                className="btn primary"
+                onClick={() => {
+                  if (settings) {
+                    setPrintPreview({ html: generateInvoiceHtml(viewingSale, settings), title: viewingSale.invoice_no, sale: viewingSale });
+                  }
+                }}
+              >
+                🖨️ طباعة
+              </button>
               <button
                 className="btn"
                 onClick={() => setViewingSale(null)}
@@ -993,13 +1183,16 @@ export function Sales({
               <div className="inv-net"><span>الصافي:</span> <b>{money(viewingReturn.total - viewingReturn.discount + viewingReturn.additional)}</b></div>
             </div>
             <div className="form-actions">
-              <ProfessionalPrintButton
-                docType="sale_return"
-                data={viewingReturn}
-                settings={settings || undefined}
-                variant="primary"
-                size="sm"
-              />
+              <button
+                className="btn primary"
+                onClick={() => {
+                  if (settings) {
+                    setPrintReturnPreview({ html: generateReturnHtml(viewingReturn, settings), title: viewingReturn.invoice_no, ret: viewingReturn });
+                  }
+                }}
+              >
+                🖨️ طباعة المردود
+              </button>
               <button
                 className="btn"
                 onClick={() => setViewingReturn(null)}
@@ -1016,6 +1209,85 @@ export function Sales({
           product={movementProduct}
           onClose={() => setShowMovements(false)}
           onViewInvoice={handleViewMovement}
+        />
+      )}
+
+      {showTodayItems && (
+        <Modal title="حركة أصناف اليوم" onClose={() => setShowTodayItems(false)} width="760px">
+          <div style={{ marginBottom: 12, fontSize: 13, color: "#666" }}>
+            إجمالي الأصناف المباعة: <b>{todayItems.reduce((s, it) => s + it.quantity, 0)}</b> | عدد الأصناف: <b>{todayItems.length}</b>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>الصنف</th>
+                  <th>الكمية</th>
+                  <th>السعر</th>
+                  <th>المبلغ</th>
+                  <th>الفواتير</th>
+                </tr>
+              </thead>
+              <tbody>
+                {todayItems.length === 0 && (
+                  <tr><td colSpan={6} className="empty">لا توجد أصناف مباعة اليوم</td></tr>
+                )}
+                {todayItems.map((it, i) => (
+                  <tr key={i}>
+                    <td style={{ color: "#94a3b8" }}>{i + 1}</td>
+                    <td style={{ fontWeight: 600 }}>{it.product_name}</td>
+                    <td>{it.quantity}</td>
+                    <td>{money(it.sell_price)}</td>
+                    <td style={{ fontWeight: 700 }}>{money(it.total)}</td>
+                    <td style={{ fontSize: 11, color: "#666" }}>{it.invoices.join(", ")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Modal>
+      )}
+
+      {printPreview && settings && (
+        <PrintPreview
+          html={printPreview.html}
+          title={printPreview.title}
+          paperSize={printPreview.paperSize || getPrintSettings().receiptPrinter}
+          onClose={() => setPrintPreview(null)}
+          onPaperSizeChange={(newSize) => {
+            const newHtml = generateInvoiceHtml(printPreview.sale, settings, newSize);
+            setPrintPreview({ ...printPreview, html: newHtml, paperSize: newSize });
+          }}
+          onPrint={async (printer, copiesCount) => {
+            try {
+              const { invoke } = await import("@tauri-apps/api/core");
+              await invoke("print_html_direct", { htmlContent: printPreview.html, printerName: printer || "", copies: copiesCount || 1 });
+              notify("تمت الطباعة بنجاح ✓", "success");
+            } catch (e) { notify(String(e), "error"); }
+            setPrintPreview(null);
+          }}
+        />
+      )}
+
+      {printReturnPreview && settings && (
+        <PrintPreview
+          html={printReturnPreview.html}
+          title={printReturnPreview.title}
+          paperSize={printReturnPreview.paperSize || getPrintSettings().receiptPrinter}
+          onClose={() => setPrintReturnPreview(null)}
+          onPaperSizeChange={(newSize) => {
+            const newHtml = generateReturnHtml(printReturnPreview.ret, settings, newSize);
+            setPrintReturnPreview({ ...printReturnPreview, html: newHtml, paperSize: newSize });
+          }}
+          onPrint={async (printer, copiesCount) => {
+            try {
+              const { invoke } = await import("@tauri-apps/api/core");
+              await invoke("print_html_direct", { htmlContent: printReturnPreview.html, printerName: printer || "", copies: copiesCount || 1 });
+              notify("تمت طباعة المردود بنجاح ✓", "success");
+            } catch (e) { notify(String(e), "error"); }
+            setPrintReturnPreview(null);
+          }}
         />
       )}
     </div>

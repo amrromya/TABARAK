@@ -87,6 +87,13 @@ export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string
       cls: "blue",
       page: "reports",
     },
+    {
+      label: t("electronicBalance"),
+      value: money(data?.electronic_balance ?? 0),
+      icon: "💳",
+      cls: "teal",
+      page: "electronic_txns",
+    },
   ];
 
   return (
@@ -177,7 +184,6 @@ export function Dashboard({ onNavigate, onOpenPos }: { onNavigate: (page: string
           </div>
         </div>
       )}
-
 
       <div className="cards-grid">
         {cards.map((c) => (

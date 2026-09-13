@@ -9160,3 +9160,537 @@ nav::-webkit-scrollbar-thumb:hover {
 [data-theme="dark"] .scr-search2 button { background: #334155; color: #94a3b8; }
 [data-theme="dark"] .scr-empty-box { background: var(--surface); border-color: #334155; }
 
+/* ========== PrintSettingsCard (psc) — Professional Rewrite ========== */
+
+.psc-root {
+  font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Tabs ── */
+.psc-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  background: #f1f5f9;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.psc-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background: #fff;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+
+.psc-tab:hover {
+  border-color: #cbd5e1;
+  color: #334155;
+  background: #f8fafc;
+}
+
+.psc-tab-active {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+
+.psc-tab-active:hover {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+  color: #fff;
+}
+
+.psc-tab-icon {
+  font-size: 15px;
+}
+
+.psc-tab-label {
+  font-size: 12px;
+}
+
+/* ── Content ── */
+.psc-content {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  min-height: 200px;
+}
+
+/* ── Form Elements ── */
+.psc-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 5px;
+}
+
+.psc-input,
+.psc-select {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #1e293b;
+  outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s;
+  box-sizing: border-box;
+}
+
+.psc-input:focus,
+.psc-select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.psc-select {
+  cursor: pointer;
+}
+
+/* ── Color Input ── */
+.psc-color-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.psc-color-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 2px solid #d1d5db;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.psc-color-swatch:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.psc-color-hidden {
+  width: 0;
+  height: 0;
+  opacity: 0;
+  position: absolute;
+  pointer-events: none;
+}
+
+/* ── Checkbox ── */
+.psc-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.psc-checkbox:hover {
+  background: #f8fafc;
+}
+
+.psc-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+/* ── Grids ── */
+.psc-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.psc-grid-4 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.psc-checkbox-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.psc-checkbox-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.psc-checkbox-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+/* ── Sub Card ── */
+.psc-sub-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.psc-sub-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #1e3a5f;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.psc-section-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #1e3a5f;
+  margin-bottom: 14px;
+}
+
+.psc-section-subtitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  margin: 14px 0 8px;
+}
+
+.psc-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 16px 0;
+}
+
+/* ── Buttons ── */
+.psc-btn-primary {
+  padding: 12px 36px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(30, 58, 95, 0.3);
+  transition: all 0.18s;
+}
+
+.psc-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(30, 58, 95, 0.35);
+}
+
+.psc-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.psc-btn-secondary {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #f1f5f9;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.psc-btn-secondary:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+.psc-btn-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+/* ── Warning ── */
+.psc-warning {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ── Doc Type Tabs ── */
+.psc-doc-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 8px;
+  background: #f8fafc;
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.psc-doc-tab {
+  padding: 7px 13px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.psc-doc-tab:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.psc-doc-tab-active {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+  color: #fff;
+  border-color: transparent;
+}
+
+/* ── Save Bar ── */
+.psc-save-bar {
+  display: flex;
+  justify-content: center;
+  padding: 18px 0 6px;
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(to top, rgba(255, 255, 255, 0.98) 60%, transparent);
+  border-radius: 0 0 14px 14px;
+  margin-top: 10px;
+}
+
+/* ── Invoice Preview Layout ── */
+.psc-invoice-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.psc-invoice-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.psc-invoice-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.psc-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.psc-preview-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #1e3a5f;
+}
+
+.psc-preview-modes {
+  display: flex;
+  gap: 4px;
+}
+
+.psc-preview-mode {
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: inherit;
+  border-radius: 6px;
+  border: 1.5px solid #d1d5db;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.psc-preview-mode:hover {
+  border-color: #94a3b8;
+  color: #334155;
+}
+
+.psc-preview-mode-active {
+  background: #1e3a5f;
+  color: #fff;
+  border-color: #1e3a5f;
+}
+
+.psc-preview-frame-wrap {
+  display: flex;
+  justify-content: center;
+  overflow: auto;
+  max-height: 600px;
+  padding: 8px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.psc-preview-frame {
+  transform-origin: top center;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.psc-preview-iframe {
+  width: 100%;
+  height: 520px;
+  border: none;
+  display: block;
+}
+
+/* ── Dark Mode ── */
+[data-theme="dark"] .psc-tabs {
+  background: #1e293b;
+}
+[data-theme="dark"] .psc-tab {
+  background: #0f172a;
+  color: #94a3b8;
+  border-color: #334155;
+}
+[data-theme="dark"] .psc-tab:hover {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .psc-content {
+  background: #1e293b;
+  border-color: #334155;
+}
+[data-theme="dark"] .psc-input,
+[data-theme="dark"] .psc-select {
+  background: #0f172a;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .psc-input:focus,
+[data-theme="dark"] .psc-select:focus {
+  border-color: #3b82f6;
+}
+[data-theme="dark"] .psc-label {
+  color: #cbd5e1;
+}
+[data-theme="dark"] .psc-sub-card {
+  background: #0f172a;
+  border-color: #334155;
+}
+[data-theme="dark"] .psc-sub-title {
+  color: #93c5fd;
+  border-bottom-color: #334155;
+}
+[data-theme="dark"] .psc-checkbox-grid-2,
+[data-theme="dark"] .psc-checkbox-grid-3,
+[data-theme="dark"] .psc-checkbox-stack {
+  background: #0f172a;
+  border-color: #334155;
+}
+[data-theme="dark"] .psc-checkbox:hover {
+  background: #1e293b;
+}
+[data-theme="dark"] .psc-checkbox span {
+  color: #e2e8f0;
+}
+[data-theme="dark"] .psc-doc-tabs {
+  background: #0f172a;
+}
+[data-theme="dark"] .psc-doc-tab {
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
+}
+[data-theme="dark"] .psc-doc-tab:hover {
+  background: #334155;
+}
+[data-theme="dark"] .psc-btn-secondary {
+  background: #334155;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .psc-warning {
+  background: #451a03;
+  border-color: #78350f;
+  color: #fbbf24;
+}
+[data-theme="dark"] .psc-invoice-preview {
+  background: #0f172a;
+  border-color: #334155;
+}
+[data-theme="dark"] .psc-preview-frame-wrap {
+  background: #1e293b;
+  border-color: #334155;
+}
+[data-theme="dark"] .psc-preview-mode {
+  background: #1e293b;
+  border-color: #475569;
+  color: #94a3b8;
+}
+[data-theme="dark"] .psc-preview-mode-active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+[data-theme="dark"] .psc-color-swatch {
+  border-color: #475569;
+}
+

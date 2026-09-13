@@ -281,9 +281,9 @@ const DEFAULT_SETTINGS: ProfessionalPrintSettings = {
     beep: false,
   },
   barcodeConfig: {
-    widthMm: 50,
-    heightMm: 30,
-    fontSize: 10,
+    widthMm: 38,
+    heightMm: 25,
+    fontSize: 9,
     showName: true,
     showPrice: true,
     showBarcode: true,
@@ -475,7 +475,7 @@ interface DirectPrintOptions {
 
 async function printHtmlDirect(
   html: string,
-  opts: DirectPrintOptions
+  _opts: DirectPrintOptions
 ): Promise<void> {
   try {
     if (api && typeof api.openHtmlInBrowser === "function") {
@@ -604,7 +604,6 @@ export function generateThermalReceiptHTML(
   const thermal = settings.thermalConfig;
   const company = settings.companyInfo;
   const fontSize = thermal.fontSize;
-  const lineChar = thermal.lineCharacter;
   const charsPerLine = width === "80mm" ? 48 : 32;
 
   const storeName = data.storeName || company.nameAr || "تبارك";
@@ -613,9 +612,6 @@ export function generateThermalReceiptHTML(
   const taxNumber = data.taxNumber || company.taxNumber || "";
   const crNumber = data.crNumber || company.crNumber || "";
   const thankYou = data.thankYouText || settings.footerConfig.thankYouText || "شكراً لزيارتكم";
-
-  const line = lineChar.repeat(charsPerLine);
-  const doubleLine = "═".repeat(charsPerLine);
 
   const renderRow = (left: string, right: string) => {
     const l = String(left || "");
@@ -843,7 +839,6 @@ export function generateA4InvoiceHTML(data: A4InvoiceData): string {
     : "";
 
   const hasDiscount = (data.discountTotal ?? 0) > 0;
-  const extraCols = hasDiscount ? 1 : 0;
 
   const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
     <title>${escapeHtml(data.docTitle)}</title>
@@ -1085,8 +1080,6 @@ export function generateBarcodeLabelsHTML(
     border,
     barcodeType,
   } = config;
-
-  const colPct = 100 / columnsPerRow;
 
   const labelCards = labels.flatMap((lbl) => {
     const qty = Math.max(1, lbl.quantity || 1);
@@ -1390,23 +1383,6 @@ export function generateStatementHTML(data: StatementData): string {
     </div>
     </body></html>`;
   return html;
-}
-
-const ARABIC_DIGIT_MAP: Record<string, string> = {
-  "0": "٠",
-  "1": "١",
-  "2": "٢",
-  "3": "٣",
-  "4": "٤",
-  "5": "٥",
-  "6": "٦",
-  "7": "٧",
-  "8": "٨",
-  "9": "٩",
-};
-
-function toArabicDigits(s: string): string {
-  return s.replace(/\d/g, (d) => ARABIC_DIGIT_MAP[d] || d);
 }
 
 export function formatCurrency(amount: number | string, currency: string): string {

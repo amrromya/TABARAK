@@ -103,8 +103,8 @@ const DEFAULT_PROFILES: Record<string, PrintProfile> = {
 };
 
 const DEFAULT_TEMPLATES: BarcodeTemplate[] = [
-  { id: "default", name: "الافتراضي", widthMm: 50, heightMm: 30, showName: true, showPrice: true, showBarcode: true, showStoreName: true, showSku: false, fontSize: 10, barcodeType: "CODE128", hGap: 2, vGap: 2 },
-  { id: "compact", name: "مضغوط", widthMm: 40, heightMm: 25, showName: true, showPrice: true, showBarcode: true, showStoreName: false, showSku: false, fontSize: 8, barcodeType: "CODE128", hGap: 1, vGap: 1 },
+  { id: "default", name: "الافتراضي", widthMm: 38, heightMm: 25, showName: true, showPrice: true, showBarcode: true, showStoreName: true, showSku: false, fontSize: 9, barcodeType: "CODE128", hGap: 2, vGap: 2 },
+  { id: "compact", name: "مضغوط", widthMm: 30, heightMm: 20, showName: true, showPrice: true, showBarcode: true, showStoreName: false, showSku: false, fontSize: 8, barcodeType: "CODE128", hGap: 1, vGap: 1 },
   { id: "large", name: "كبير", widthMm: 70, heightMm: 40, showName: true, showPrice: true, showBarcode: true, showStoreName: true, showSku: true, fontSize: 12, barcodeType: "CODE128", hGap: 3, vGap: 3 },
   { id: "price_only", name: "السعر فقط", widthMm: 35, heightMm: 20, showName: false, showPrice: true, showBarcode: true, showStoreName: false, showSku: false, fontSize: 9, barcodeType: "CODE128", hGap: 2, vGap: 2 },
 ];
@@ -127,9 +127,9 @@ const DEFAULT_SETTINGS: PrintSettings = {
   warrantyText: "",
   defaultCopies: 1,
 
-  barcodeWidth: 50,
+  barcodeWidth: 38,
   barcodeHeight: 25,
-  barcodeFontSize: 10,
+  barcodeFontSize: 9,
   barcodeShowName: true,
   barcodeShowPrice: true,
   barcodeShowBarcode: true,
@@ -161,12 +161,22 @@ export function getPrintSettings(): PrintSettings {
       return {
         ...DEFAULT_SETTINGS,
         ...parsed,
-        profiles: { ...DEFAULT_PROFILES, ...(parsed.profiles || {}) },
         barcodeTemplates: parsed.barcodeTemplates?.length ? parsed.barcodeTemplates : DEFAULT_TEMPLATES,
       };
     }
   } catch {}
   return DEFAULT_SETTINGS;
+}
+
+export function getCompanyLogo(): string {
+  try {
+    const raw = localStorage.getItem("tabarak_pro_print_settings");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return parsed?.companyInfo?.logo || "";
+    }
+  } catch {}
+  return "";
 }
 
 export function savePrintSettings(settings: Partial<PrintSettings>) {
@@ -273,7 +283,7 @@ export async function printSaleReceipt(params: {
   total: number; discount: number; additional: number;
   netTotal: number; currency: string; footer: string; docType?: string;
   profileId?: string;
-}) {
+}, overridePrinter?: string) {
   const ps = getPrintSettings();
   const profileId = params.profileId || "sales_invoice";
   const profile = getProfile(profileId);
@@ -288,7 +298,7 @@ export async function printSaleReceipt(params: {
     thankYouText: ps.receiptThankYouText || "شكراً لاختياركم!",
     headerAlign: ps.receiptHeaderAlign || "center",
   });
-  const printerName = params.profileId ? getPrinterForProfile(profileId) : getReceiptPrinter();
+  const printerName = overridePrinter || (params.profileId ? getPrinterForProfile(profileId) : getReceiptPrinter());
   const docType = params.docType || (profileId === "return_invoice" ? "RETURN" : profileId === "purchase_invoice" ? "PURCHASE" : "SALE INVOICE");
 
   for (let i = 0; i < (profile.copies || 1); i++) {
@@ -332,7 +342,7 @@ export async function printSale(sale: {
   items: { product_name: string; item_name?: string | null; quantity: number; sell_price: number; total: number }[];
   total: number; discount: number; additional: number; net_total: number;
   doc_type?: string;
-}, settings: Settings, profileId?: string) {
+}, settings: Settings, profileId?: string, overridePrinter?: string) {
   const ps = getPrintSettings();
   const items = sale.items
     .filter((it) => !(it.sell_price === 0 && !it.item_name))
@@ -361,7 +371,7 @@ export async function printSale(sale: {
     footer: ps.invoiceFooter ? (settings.invoice_footer || "") : "",
     docType: sale.doc_type || "SALE INVOICE",
     profileId: profileId || "sales_invoice",
-  });
+  }, overridePrinter);
 }
 
 // ===== Barcode generation =====

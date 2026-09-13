@@ -258,6 +258,7 @@ export const api = {
 
   // التقارير
   getDashboard: () => invoke<Dashboard>("get_dashboard"),
+  getElectronicTransactions: () => invoke<{ id: number; invoice_no: string; date: string; customer_name: string; total: number; payment_method: string }[]>("get_electronic_transactions"),
   getProfitLoss: (range: DateRange) =>
     invoke<ProfitLoss>("get_profit_loss", { range }),
   getStockValue: () => invoke<StockValue>("get_stock_value"),

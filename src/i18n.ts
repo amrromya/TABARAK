@@ -36,6 +36,8 @@ const translations: Record<string, Record<Lang, string>> = {
   todayExpenses: { ar: "مصروفات اليوم", en: "Today's Expenses" },
   todayProfit: { ar: "ربح اليوم", en: "Today's Profit" },
   cashInHand: { ar: "رصيد الصندوق", en: "Cash in Hand" },
+  electronicBalance: { ar: "الرصيد الإلكتروني", en: "Electronic Balance" },
+  electronicTransactions: { ar: "العمليات الإلكترونية", en: "Electronic Transactions" },
   totalDebts: { ar: "الديون المستحقة", en: "Total Debts" },
   totalProducts: { ar: "إجمالي المنتجات", en: "Total Products" },
   lowStock: { ar: "منتجات منخفضة المخزون", en: "Low Stock Products" },

@@ -464,7 +464,7 @@ export function Purchases({
                     docType="purchase_invoice"
                     data={p}
                     settings={settings || undefined}
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                   />
                   <button
@@ -1065,7 +1065,7 @@ export function Purchases({
               <tbody>
                 {viewingReturn.items.map((it, i) => (
                   <tr key={i}>
-                    <td>{it.product_name ?? it.item_name}</td>
+                    <td>{it.product_name}</td>
                     <td>{qty(it.quantity)}</td>
                     <td>{money(it.cost_price)}</td>
                     <td>{money(it.total ?? it.quantity * it.cost_price)}</td>

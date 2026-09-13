@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   ProfessionalPrintSettings,
   DocType,
@@ -6,15 +6,13 @@ import {
   PaperSize,
   Orientation,
   BarcodeType,
-  getProfessionalPrintSettings,
   saveProfessionalPrintSettings,
-  getDocumentConfig,
-  saveDocumentConfig,
-  listAvailablePrinters,
   testPagePrint,
 } from "../utils/printSystem";
 import { useToast } from "../components/ui";
-import { t } from "../i18n";
+import { getPrintSettings, generateBarcodePreview } from "../utils/directPrint";
+
+/* ───────── Constants ───────── */
 
 const DOC_TYPE_LABELS: Record<DocType, string> = {
   sales_invoice: "فاتورة مبيعات",
@@ -44,6 +42,33 @@ const DOC_TYPES: DocType[] = [
   "inventory_report",
 ];
 
+type TabKey =
+  | "company"
+  | "printers"
+  | "invoice"
+  | "thermal"
+  | "barcode"
+  | "headerFooter"
+  | "qr";
+
+interface TabDef {
+  key: TabKey;
+  icon: string;
+  label: string;
+}
+
+const TABS: TabDef[] = [
+  { key: "company", icon: "🏢", label: "معلومات الشركة" },
+  { key: "printers", icon: "🖨️", label: "الطابعات" },
+  { key: "invoice", icon: "📄", label: "إعدادات الفواتير + معاينة" },
+  { key: "thermal", icon: "🔥", label: "الطابعة الحرارية" },
+  { key: "barcode", icon: "🏷️", label: "الباركود" },
+  { key: "headerFooter", icon: "📋", label: "الرأس والذيل" },
+  { key: "qr", icon: "📱", label: "QR Code" },
+];
+
+/* ───────── Interfaces ───────── */
+
 interface PrintSettingsCardProps {
   settings: ProfessionalPrintSettings;
   onSettingsChange: (s: ProfessionalPrintSettings) => void;
@@ -51,149 +76,7 @@ interface PrintSettingsCardProps {
   onPrintersRefresh: () => void;
 }
 
-const cardStyle: React.CSSProperties = {
-  background: "#ffffff",
-  borderRadius: "12px",
-  border: "1px solid #e5e7eb",
-  padding: "16px",
-  marginBottom: "16px",
-  boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-};
-
-const sectionHeaderStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  fontSize: "15px",
-  fontWeight: "700",
-  color: "#1e3a5f",
-  paddingBottom: "10px",
-  marginBottom: "14px",
-  borderBottom: "2px solid #f1f5f9",
-};
-
-const grid2Col: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: "12px",
-};
-
-const grid3Col: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr 1fr",
-  gap: "12px",
-};
-
-const grid4Col: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr 1fr 1fr",
-  gap: "10px",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: "12px",
-  fontWeight: "600",
-  color: "#374151",
-  marginBottom: "4px",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "7px 10px",
-  fontSize: "13px",
-  border: "1px solid #d1d5db",
-  borderRadius: "6px",
-  background: "#fff",
-  color: "#111827",
-  outline: "none",
-  transition: "border-color 0.15s, box-shadow 0.15s",
-  boxSizing: "border-box",
-};
-
-const inputFocusStyle = inputStyle;
-
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  cursor: "pointer",
-};
-
-const checkboxRow: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
-  padding: "4px 0",
-  fontSize: "13px",
-  color: "#374151",
-};
-
-const buttonStyle: React.CSSProperties = {
-  padding: "8px 16px",
-  fontSize: "13px",
-  fontWeight: "600",
-  borderRadius: "6px",
-  border: "none",
-  cursor: "pointer",
-  transition: "all 0.15s",
-};
-
-const primaryBtn: React.CSSProperties = {
-  ...buttonStyle,
-  background: "linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)",
-  color: "#fff",
-};
-
-const secondaryBtn: React.CSSProperties = {
-  ...buttonStyle,
-  background: "#f1f5f9",
-  color: "#374151",
-  border: "1px solid #d1d5db",
-};
-
-const tabBtn = (active: boolean): React.CSSProperties => ({
-  padding: "8px 14px",
-  fontSize: "12px",
-  fontWeight: active ? "700" : "500",
-  borderRadius: "8px",
-  border: active ? "none" : "1px solid #e5e7eb",
-  cursor: "pointer",
-  background: active ? "linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)" : "#f8fafc",
-  color: active ? "#fff" : "#475569",
-  transition: "all 0.15s",
-  whiteSpace: "nowrap",
-});
-
-const tabsWrap: React.CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "6px",
-  marginBottom: "14px",
-  padding: "8px",
-  background: "#f8fafc",
-  borderRadius: "8px",
-};
-
-const subCardStyle: React.CSSProperties = {
-  background: "#f8fafc",
-  borderRadius: "8px",
-  padding: "12px",
-  border: "1px solid #e2e8f0",
-};
-
-const colorInputWrap: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-};
-
-const colorSwatch: React.CSSProperties = {
-  width: "32px",
-  height: "32px",
-  borderRadius: "6px",
-  border: "2px solid #d1d5db",
-  cursor: "pointer",
-  flexShrink: 0,
-};
+/* ───────── Component ───────── */
 
 export default function PrintSettingsCard({
   settings,
@@ -202,8 +85,16 @@ export default function PrintSettingsCard({
   onPrintersRefresh,
 }: PrintSettingsCardProps) {
   const toast = useToast();
-  const [selectedDocType, setSelectedDocType] = useState<DocType>("sales_invoice");
+  const [activeTab, setActiveTab] = useState<TabKey>("company");
+  const [selectedDocType, setSelectedDocType] =
+    useState<DocType>("sales_invoice");
   const [saving, setSaving] = useState(false);
+  const [previewMode, setPreviewMode] = useState<"thermal80" | "thermal58" | "a4">(
+    "thermal80"
+  );
+  const [barcodePreviewUrl, setBarcodePreviewUrl] = useState<string>("");
+
+  /* ── Updaters ── */
 
   const update = useCallback(
     <K extends keyof ProfessionalPrintSettings>(
@@ -292,6 +183,19 @@ export default function PrintSettingsCard({
     update("barcodeConfig", { ...settings.barcodeConfig, [key]: value });
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    const bc = settings.barcodeConfig;
+    generateBarcodePreview("1234567890128", bc.barcodeType as any)
+      .then((url) => {
+        if (!cancelled) setBarcodePreviewUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setBarcodePreviewUrl("");
+      });
+    return () => { cancelled = true; };
+  }, [settings.barcodeConfig.widthMm, settings.barcodeConfig.heightMm, settings.barcodeConfig.barcodeType, settings.barcodeConfig.fontSize]);
+
   const updateQr = <K extends keyof ProfessionalPrintSettings["qrConfig"]>(
     key: K,
     value: ProfessionalPrintSettings["qrConfig"][K]
@@ -299,12 +203,14 @@ export default function PrintSettingsCard({
     update("qrConfig", { ...settings.qrConfig, [key]: value });
   };
 
+  /* ── Handlers ── */
+
   const handleSave = async () => {
     try {
       setSaving(true);
       saveProfessionalPrintSettings(settings);
       toast("تم حفظ إعدادات الطباعة بنجاح ✅", "success");
-    } catch (e) {
+    } catch {
       toast("حدث خطأ أثناء حفظ الإعدادات ❌", "error");
     } finally {
       setSaving(false);
@@ -315,1076 +221,1220 @@ export default function PrintSettingsCard({
     try {
       await testPagePrint(settings.defaultPrinter, "A4");
       toast("تم إرسال صفحة الاختبار للطابعة 🖨️", "success");
-    } catch (e) {
+    } catch {
       toast("فشل طباعة صفحة الاختبار ❌", "error");
     }
   };
 
   const currentDoc = settings.documents[selectedDocType];
 
-  return (
-    <div dir="rtl" style={{ fontFamily: "'Cairo', 'Segoe UI', Tahoma, sans-serif" }}>
-      {/* Section 1: Company Info */}
-      <div style={cardStyle}>
-        <div style={sectionHeaderStyle}>
-          <span style={{ fontSize: "18px" }}>🏢</span>
-          <span>معلومات الشركة</span>
-        </div>
-        <div style={grid2Col}>
-          <div>
-            <label style={labelStyle}>شعار الشركة (URL أو Base64)</label>
-            <input
-              type="text"
-              style={inputStyle}
-              value={settings.companyInfo.logo}
-              onChange={(e) => updateCompany("logo", e.target.value)}
-              placeholder="https://example.com/logo.png أو data:image/png;base64,..."
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>اسم الشركة (عربي)</label>
-            <input
-              type="text"
-              style={inputStyle}
-              value={settings.companyInfo.nameAr}
-              onChange={(e) => updateCompany("nameAr", e.target.value)}
-              placeholder="مؤسسة تبارك"
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>اسم الشركة (إنجليزي)</label>
-            <input
-              type="text"
-              style={inputStyle}
-              value={settings.companyInfo.nameEn}
-              onChange={(e) => updateCompany("nameEn", e.target.value)}
-              placeholder="Tabarak Establishment"
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>الرقم الضريبي</label>
-            <input
-              type="text"
-              style={inputStyle}
-              value={settings.companyInfo.taxNumber}
-              onChange={(e) => updateCompany("taxNumber", e.target.value)}
-              placeholder="الرقم الضريبي المسجل"
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>رقم السجل التجاري</label>
-            <input
-              type="text"
-              style={inputStyle}
-              value={settings.companyInfo.crNumber}
-              onChange={(e) => updateCompany("crNumber", e.target.value)}
-              placeholder="رقم السجل التجاري"
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>الموقع الإلكتروني</label>
-            <input
-              type="text"
-              style={inputStyle}
-              value={settings.companyInfo.website}
-              onChange={(e) => updateCompany("website", e.target.value)}
-              placeholder="https://www.example.com"
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>البريد الإلكتروني</label>
-            <input
-              type="email"
-              style={inputStyle}
-              value={settings.companyInfo.email}
-              onChange={(e) => updateCompany("email", e.target.value)}
-              placeholder="info@example.com"
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>الهاتف</label>
-            <input
-              type="tel"
-              style={inputStyle}
-              value={settings.companyInfo.phone}
-              onChange={(e) => updateCompany("phone", e.target.value)}
-              placeholder="01xxxxxxxxx"
-            />
-          </div>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label style={labelStyle}>العنوان</label>
-            <input
-              type="text"
-              style={inputStyle}
-              value={settings.companyInfo.address}
-              onChange={(e) => updateCompany("address", e.target.value)}
-              placeholder="العنوان الكامل للشركة"
-            />
-          </div>
-        </div>
-      </div>
+  /* ── Invoice Preview HTML ── */
 
-      {/* Section 2: Default Printers */}
-      <div style={cardStyle}>
-        <div style={sectionHeaderStyle}>
-          <span style={{ fontSize: "18px" }}>🖨️</span>
-          <span>الطابعات الافتراضية</span>
-        </div>
-        <div style={grid2Col}>
-          <div>
-            <label style={labelStyle}>الطابعة الافتراضية</label>
-            <select
-              style={selectStyle}
-              value={settings.defaultPrinter}
-              onChange={(e) => update("defaultPrinter", e.target.value)}
-            >
-              <option value="">— الافتراضية للنظام —</option>
-              {availablePrinters.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: "8px" }}>
-            <button
-              style={{ ...secondaryBtn, flex: 1 }}
-              onClick={onPrintersRefresh}
-            >
-              🔄 تحديث قائمة الطابعات
-            </button>
-            <button style={{ ...secondaryBtn, flex: 1 }} onClick={handleTestPrint}>
-              🧪 طباعة صفحة اختبار
-            </button>
-          </div>
-        </div>
-        {availablePrinters.length === 0 && (
-          <div
-            style={{
-              marginTop: "10px",
-              padding: "8px 12px",
-              background: "#fef3c7",
-              color: "#92400e",
-              borderRadius: "6px",
-              fontSize: "12px",
-            }}
-          >
-            ⚠️ لم يتم اكتشاف طابعات. قد تحتاج إلى تثبيت خدمة الطباعة المحلية.
-          </div>
-        )}
-      </div>
+  const previewHtml = useMemo(() => {
+    const ps = getPrintSettings();
+    const paper =
+      previewMode === "thermal80"
+        ? "80mm"
+        : previewMode === "thermal58"
+        ? "58mm"
+        : "A4";
+    const isThermal = paper === "58mm" || paper === "80mm";
+    const bodyWidth = paper === "58mm" ? "58mm" : paper === "80mm" ? "80mm" : "210mm";
+    const fontSize = ps.receiptFontSize || 10;
+    const align = ps.receiptHeaderAlign || "center";
+    const pad = isThermal ? "4mm" : "12mm";
+    const headerSize = isThermal ? fontSize + 6 : fontSize + 12;
+    const titleSize = isThermal ? fontSize + 2 : fontSize + 5;
 
-      {/* Section 3: Document Profiles */}
-      <div style={cardStyle}>
-        <div style={sectionHeaderStyle}>
-          <span style={{ fontSize: "18px" }}>📄</span>
-          <span>إعدادات أنواع المستندات</span>
-        </div>
+    const sampleItems = [
+      { name: "شاحن لاسلكي", qty: 2, price: 150, total: 300 },
+      { name: "كابل USB", qty: 3, price: 45, total: 135 },
+      { name: "سماعات بلوتوث", qty: 1, price: 299, total: 299 },
+    ];
 
-        <div style={tabsWrap}>
-          {DOC_TYPES.map((dt) => (
-            <button
-              key={dt}
-              style={tabBtn(selectedDocType === dt)}
-              onClick={() => setSelectedDocType(dt)}
-            >
-              {DOC_TYPE_LABELS[dt]}
-            </button>
-          ))}
-        </div>
+    const itemsHtml = sampleItems
+      .map(
+        (it, idx) => `<tr>
+        <td style="padding:3px 0;border-bottom:1px solid #eee">${idx + 1}</td>
+        <td style="padding:3px 0;border-bottom:1px solid #eee">${it.name}</td>
+        <td style="padding:3px 4px;border-bottom:1px solid #eee;text-align:center">${it.qty}</td>
+        <td style="padding:3px 0;border-bottom:1px solid #eee;text-align:center">${it.price.toFixed(2)}</td>
+        <td style="padding:3px 0;border-bottom:1px solid #eee;text-align:center;font-weight:700">${it.total.toFixed(2)}</td>
+      </tr>`
+      )
+      .join("");
 
-        <div style={subCardStyle}>
-          <div
-            style={{
-              fontSize: "13px",
-              fontWeight: "700",
-              color: "#1e3a5f",
-              marginBottom: "12px",
-            }}
-          >
-            إعدادات: {DOC_TYPE_LABELS[selectedDocType]}
-          </div>
+    const showDate = ps.receiptShowDate !== false;
+    const showCustomer = ps.receiptShowCustomer !== false;
+    const showPayment = ps.receiptShowPayment !== false;
+    const showEmployee = ps.receiptShowEmployee !== false;
 
-          <div style={grid2Col}>
-            <div>
-              <label style={labelStyle}>الطابعة المخصصة</label>
-              <select
-                style={selectStyle}
-                value={currentDoc.printer}
-                onChange={(e) => updateDocConfig("printer", e.target.value)}
+    return `<!DOCTYPE html>
+<html lang="ar"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @page { size: ${bodyWidth} auto; margin: ${isThermal ? "2mm" : "8mm"}; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+    font-size: ${isThermal ? fontSize : fontSize + 1}px;
+    width: ${bodyWidth};
+    margin: 0 auto;
+    padding: ${pad};
+    direction: rtl;
+    color: #1a1a2e;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    line-height: 1.5;
+  }
+  .invoice-box {
+    border: ${isThermal ? "none" : `2px solid ${settings.documents.sales_invoice.colors.primary}`};
+    border-radius: ${isThermal ? "0" : "12px"};
+    padding: ${isThermal ? "2mm" : "8mm"};
+    background: #fff;
+  }
+  .header { text-align: ${align}; margin-bottom: ${isThermal ? "2mm" : "5mm"}; }
+  .store-name {
+    font-size: ${headerSize}px;
+    font-weight: 800;
+    color: ${settings.documents.sales_invoice.colors.primary};
+    letter-spacing: 1px;
+    margin-bottom: 2mm;
+  }
+  .store-info { font-size: ${isThermal ? fontSize - 2 : fontSize}px; color: #555; line-height: 1.6; }
+  .divider {
+    border: none;
+    border-top: 2px solid ${settings.documents.sales_invoice.colors.primary};
+    margin: ${isThermal ? "2mm" : "4mm"} 0;
+  }
+  .divider-dashed {
+    border: none;
+    border-top: 1px dashed #ccc;
+    margin: ${isThermal ? "1.5mm" : "3mm"} 0;
+  }
+  .doc-badge {
+    display: inline-block;
+    background: ${settings.documents.sales_invoice.colors.primary};
+    color: #fff;
+    padding: ${isThermal ? "1mm 3mm" : "2mm 6mm"};
+    border-radius: 6px;
+    font-size: ${titleSize}px;
+    font-weight: 700;
+    margin: ${isThermal ? "1mm 0" : "2mm 0"};
+    letter-spacing: 0.5px;
+  }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: ${isThermal ? "1mm" : "2mm"};
+    margin: ${isThermal ? "2mm" : "4mm"} 0;
+    font-size: ${isThermal ? fontSize - 1 : fontSize}px;
+  }
+  .meta-item { display: flex; flex-direction: column; }
+  .meta-label { font-size: ${isThermal ? fontSize - 3 : fontSize - 2}px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .meta-value { font-weight: 700; color: #1a1a2e; }
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: ${isThermal ? "2mm" : "4mm"} 0;
+    font-size: ${isThermal ? fontSize - 1 : fontSize}px;
+  }
+  .items-table thead th {
+    background: ${settings.documents.sales_invoice.colors.primary};
+    color: #fff;
+    padding: ${isThermal ? "1.5mm" : "2.5mm"} ${isThermal ? "1mm" : "2mm"};
+    font-weight: 700;
+    font-size: ${isThermal ? fontSize - 2 : fontSize - 1}px;
+    text-align: center;
+  }
+  .items-table tbody tr:nth-child(even) { background: #f8f9fc; }
+  .items-table td { padding: ${isThermal ? "1.5mm" : "2.5mm"} ${isThermal ? "1mm" : "2mm"}; border-bottom: 1px solid #eee; }
+  .totals-box {
+    margin: ${isThermal ? "2mm" : "5mm"} 0;
+    background: #f8f9fc;
+    border-radius: ${isThermal ? "0" : "8px"};
+    padding: ${isThermal ? "2mm" : "4mm"};
+  }
+  .total-row {
+    display: flex;
+    justify-content: space-between;
+    padding: ${isThermal ? "0.8mm" : "1.5mm"} 0;
+    font-size: ${isThermal ? fontSize - 1 : fontSize}px;
+  }
+  .total-row.grand {
+    font-weight: 800;
+    font-size: ${isThermal ? fontSize + 2 : fontSize + 4}px;
+    color: ${settings.documents.sales_invoice.colors.primary};
+    border-top: 2px solid ${settings.documents.sales_invoice.colors.primary};
+    padding-top: ${isThermal ? "2mm" : "3mm"};
+    margin-top: ${isThermal ? "1mm" : "2mm"};
+  }
+  .payment-badge {
+    display: inline-block;
+    background: #e8f5e9;
+    color: #2e7d32;
+    padding: ${isThermal ? "1mm 2mm" : "1.5mm 4mm"};
+    border-radius: 4px;
+    font-size: ${isThermal ? fontSize - 1 : fontSize}px;
+    font-weight: 600;
+  }
+  .footer { text-align: center; margin-top: ${isThermal ? "3mm" : "6mm"}; }
+  .footer-line { font-size: ${isThermal ? fontSize - 2 : fontSize - 1}px; color: #888; margin: 1mm 0; }
+  .thank-you { font-size: ${isThermal ? fontSize : fontSize + 2}px; font-weight: 800; color: ${settings.documents.sales_invoice.colors.primary}; margin-top: 2mm; }
+</style></head><body>
+<div class="invoice-box">
+  <div class="header">
+    ${settings.companyInfo.logo ? `<img src="${settings.companyInfo.logo}" alt="logo" style="max-width:${isThermal ? "30mm" : "40mm"};max-height:${isThermal ? "15mm" : "25mm"};object-fit:contain;margin:0 auto ${isThermal ? "1mm" : "3mm"};display:block;" />` : ""}
+    <div class="store-name">${settings.companyInfo.nameAr || "تبارك"}</div>
+    <div class="store-info">
+      ${settings.companyInfo.phone ? `📞 ${settings.companyInfo.phone}` : ""}
+      ${settings.companyInfo.phone && settings.companyInfo.address ? " | " : ""}
+      ${settings.companyInfo.address ? `📍 ${settings.companyInfo.address}` : ""}
+    </div>
+  </div>
+  <hr class="divider">
+  <div style="text-align:center"><span class="doc-badge">فاتورة بيع</span></div>
+  <div class="meta-grid">
+    <div class="meta-item"><span class="meta-label">رقم الفاتورة</span><span class="meta-value">#10001</span></div>
+    ${showDate ? `<div class="meta-item"><span class="meta-label">التاريخ</span><span class="meta-value">2025-01-15</span></div>` : ""}
+    ${showCustomer ? `<div class="meta-item"><span class="meta-label">العميل</span><span class="meta-value">أحمد محمد</span></div>` : ""}
+    ${showPayment ? `<div class="meta-item"><span class="meta-label">طريقة الدفع</span><span class="meta-value">💵 نقدي</span></div>` : ""}
+    ${showEmployee ? `<div class="meta-item"><span class="meta-label">الموظف</span><span class="meta-value">سارة</span></div>` : ""}
+  </div>
+  <hr class="divider-dashed">
+  <table class="items-table">
+    <thead><tr>
+      <th style="width:8%">#</th>
+      <th style="text-align:right;${isThermal ? "" : "width:42%"}">الصنف</th>
+      <th style="width:15%">الكمية</th>
+      <th style="width:17%">السعر</th>
+      <th style="width:18%">الإجمالي</th>
+    </tr></thead>
+    <tbody>${itemsHtml}</tbody>
+  </table>
+  <div class="totals-box">
+    <div class="total-row"><span>المجموع الفرعي</span><span>734.00</span></div>
+    <div class="total-row" style="color:#c62828"><span>الخصم</span><span>-20.00</span></div>
+    <div class="total-row grand"><span>الصافي</span><span>714.00 ج.م</span></div>
+  </div>
+  ${showPayment ? `<div style="text-align:center;margin:2mm 0"><span class="payment-badge">💵 الدفع نقدي</span></div>` : ""}
+  <hr class="divider-dashed">
+  <div class="footer">
+    <div class="thank-you">${ps.receiptThankYouText || "شكراً لاختياركم!"}</div>
+    <div class="footer-line" style="margin-top:1mm">تبارك - نظام إدارة المبيعات</div>
+  </div>
+</div>
+</body></html>`;
+  }, [previewMode, settings]);
+
+  /* ── Subcomponents ── */
+
+  const renderLabel = (text: string, htmlFor?: string) => (
+    <label className="psc-label" htmlFor={htmlFor}>
+      {text}
+    </label>
+  );
+
+  const renderInput = (
+    props: React.InputHTMLAttributes<HTMLInputElement> & { id?: string }
+  ) => <input className="psc-input" {...props} />;
+
+  const renderSelect = (
+    props: React.SelectHTMLAttributes<HTMLSelectElement> & { id?: string }
+  ) => <select className="psc-select" {...props} />;
+
+  const renderColorInput = (
+    id: string,
+    value: string,
+    onChange: (v: string) => void
+  ) => (
+    <div className="psc-color-wrap">
+      <div
+        className="psc-color-swatch"
+        style={{ background: value }}
+        onClick={() => (document.getElementById(id) as HTMLInputElement)?.click()}
+      />
+      <input
+        id={id}
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="psc-color-hidden"
+      />
+      <input
+        type="text"
+        className="psc-input"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ direction: "ltr", textAlign: "left" }}
+      />
+    </div>
+  );
+
+  const renderCheckbox = (
+    checked: boolean,
+    onChange: (v: boolean) => void,
+    label: string
+  ) => (
+    <label className="psc-checkbox">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span>{label}</span>
+    </label>
+  );
+
+  const renderTabs = () => (
+    <div className="psc-tabs">
+      {TABS.map((tab) => (
+        <button
+          key={tab.key}
+          className={`psc-tab ${activeTab === tab.key ? "psc-tab-active" : ""}`}
+          onClick={() => setActiveTab(tab.key)}
+        >
+          <span className="psc-tab-icon">{tab.icon}</span>
+          <span className="psc-tab-label">{tab.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+
+  /* ── Tab Contents ── */
+
+  const renderCompanyTab = () => (
+    <div className="psc-grid-2">
+      <div>
+        {renderLabel("شعار الشركة")}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <label style={{
+            display: "inline-flex", alignItems: "center", gap: "6px",
+            padding: "8px 16px", fontSize: "13px", fontWeight: "600",
+            background: "linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)",
+            color: "#fff", borderRadius: "8px", cursor: "pointer",
+            boxShadow: "0 2px 6px rgba(30,58,95,0.2)", transition: "all 0.15s",
+          }}>
+            📁 اختر صورة
+            <input
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  updateCompany("logo", ev.target?.result as string);
+                };
+                reader.readAsDataURL(file);
+              }}
+            />
+          </label>
+          {settings.companyInfo.logo && (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <img
+                src={settings.companyInfo.logo}
+                alt="Logo"
+                style={{ width: "40px", height: "40px", objectFit: "contain", borderRadius: "6px", border: "1px solid #e5e7eb" }}
+              />
+              <button
+                type="button"
+                style={{
+                  padding: "4px 10px", fontSize: "11px", fontWeight: "600",
+                  background: "#fee2e2", color: "#dc2626", border: "none",
+                  borderRadius: "6px", cursor: "pointer",
+                }}
+                onClick={() => updateCompany("logo", "")}
               >
-                <option value="">— الافتراضية (العامة) —</option>
+                ✕ حذف
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      <div>
+        {renderLabel("اسم الشركة (عربي)")}
+        {renderInput({
+          value: settings.companyInfo.nameAr,
+          onChange: (e) => updateCompany("nameAr", e.target.value),
+          placeholder: "مؤسسة تبارك",
+        })}
+      </div>
+      <div>
+        {renderLabel("اسم الشركة (إنجليزي)")}
+        {renderInput({
+          value: settings.companyInfo.nameEn,
+          onChange: (e) => updateCompany("nameEn", e.target.value),
+          placeholder: "Tabarak Establishment",
+        })}
+      </div>
+      <div>
+        {renderLabel("الرقم الضريبي")}
+        {renderInput({
+          value: settings.companyInfo.taxNumber,
+          onChange: (e) => updateCompany("taxNumber", e.target.value),
+          placeholder: "الرقم الضريبي المسجل",
+        })}
+      </div>
+      <div>
+        {renderLabel("رقم السجل التجاري")}
+        {renderInput({
+          value: settings.companyInfo.crNumber,
+          onChange: (e) => updateCompany("crNumber", e.target.value),
+          placeholder: "رقم السجل التجاري",
+        })}
+      </div>
+      <div>
+        {renderLabel("الموقع الإلكتروني")}
+        {renderInput({
+          value: settings.companyInfo.website,
+          onChange: (e) => updateCompany("website", e.target.value),
+          placeholder: "https://www.example.com",
+        })}
+      </div>
+      <div>
+        {renderLabel("البريد الإلكتروني")}
+        {renderInput({
+          type: "email",
+          value: settings.companyInfo.email,
+          onChange: (e) => updateCompany("email", e.target.value),
+          placeholder: "info@example.com",
+        })}
+      </div>
+      <div>
+        {renderLabel("الهاتف")}
+        {renderInput({
+          type: "tel",
+          value: settings.companyInfo.phone,
+          onChange: (e) => updateCompany("phone", e.target.value),
+          placeholder: "01xxxxxxxxx",
+        })}
+      </div>
+      <div style={{ gridColumn: "1 / -1" }}>
+        {renderLabel("العنوان")}
+        {renderInput({
+          value: settings.companyInfo.address,
+          onChange: (e) => updateCompany("address", e.target.value),
+          placeholder: "العنوان الكامل للشركة",
+        })}
+      </div>
+    </div>
+  );
+
+  const renderPrintersTab = () => (
+    <>
+      <div className="psc-grid-2">
+        <div>
+          {renderLabel("الطابعة الافتراضية")}
+          {renderSelect({
+            value: settings.defaultPrinter,
+            onChange: (e) => update("defaultPrinter", e.target.value),
+            children: (
+              <>
+                <option value="">— الافتراضية للنظام —</option>
                 {availablePrinters.map((p) => (
                   <option key={p} value={p}>
                     {p}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>حجم الورق</label>
-              <select
-                style={selectStyle}
-                value={currentDoc.paperSize}
-                onChange={(e) => updateDocConfig("paperSize", e.target.value as PaperSize)}
-              >
-                <option value="A4">A4</option>
-                <option value="A5">A5</option>
-                <option value="80mm">80mm (حرارية)</option>
-                <option value="58mm">58mm (حرارية صغيرة)</option>
-                <option value="custom">مخصص</option>
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>الاتجاه</label>
-              <select
-                style={selectStyle}
-                value={currentDoc.orientation}
-                onChange={(e) => updateDocConfig("orientation", e.target.value as Orientation)}
-              >
-                <option value="portrait">عمودي (Portrait)</option>
-                <option value="landscape">أفقي (Landscape)</option>
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>عدد النسخ (1-99)</label>
-              <input
-                type="number"
-                min={1}
-                max={99}
-                style={inputStyle}
-                value={currentDoc.copies}
-                onChange={(e) =>
-                  updateDocConfig("copies", Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))
-                }
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>وضع الطباعة</label>
-              <select
-                style={selectStyle}
-                value={currentDoc.mode}
-                onChange={(e) => updateDocConfig("mode", e.target.value as PrintMode)}
-              >
-                <option value="direct">🖨️ طباعة مباشرة</option>
-                <option value="preview">👁️ معاينة أولاً</option>
-                <option value="dialog">💬 حوار النظام</option>
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>النسبة المئوية للتكبير/التصغير (50%-200%)</label>
-              <input
-                type="number"
-                min={50}
-                max={200}
-                style={inputStyle}
-                value={currentDoc.scale ?? 100}
-                onChange={(e) =>
-                  updateDocConfig(
-                    "scale",
-                    Math.max(50, Math.min(200, parseInt(e.target.value) || 100))
-                  )
-                }
-              />
-            </div>
-          </div>
-
-          <div
-            style={{
-              marginTop: "14px",
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: "8px",
-              padding: "10px",
-              background: "#fff",
-              borderRadius: "6px",
-              border: "1px solid #e2e8f0",
-            }}
-          >
-            <div style={checkboxRow}>
-              <input
-                type="checkbox"
-                checked={currentDoc.showHeader}
-                onChange={(e) => updateDocConfig("showHeader", e.target.checked)}
-              />
-              <span>إظهار رأس المستند</span>
-            </div>
-            <div style={checkboxRow}>
-              <input
-                type="checkbox"
-                checked={currentDoc.showFooter}
-                onChange={(e) => updateDocConfig("showFooter", e.target.checked)}
-              />
-              <span>إظهار ذيل المستند</span>
-            </div>
-            <div style={checkboxRow}>
-              <input
-                type="checkbox"
-                checked={currentDoc.showLogo}
-                onChange={(e) => updateDocConfig("showLogo", e.target.checked)}
-              />
-              <span>إظهار الشعار</span>
-            </div>
-          </div>
-
-          <div style={{ marginTop: "14px" }}>
-            <div
-              style={{
-                fontSize: "12px",
-                fontWeight: "700",
-                color: "#475569",
-                marginBottom: "8px",
-              }}
-            >
-              📐 الهوامش (mm)
-            </div>
-            <div style={grid4Col}>
-              {(["top", "right", "bottom", "left"] as const).map((side) => (
-                <div key={side}>
-                  <label style={labelStyle}>
-                    {side === "top"
-                      ? "أعلى"
-                      : side === "right"
-                      ? "يمين"
-                      : side === "bottom"
-                      ? "أسفل"
-                      : "يسار"}
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={50}
-                    style={inputStyle}
-                    value={currentDoc.margins[side]}
-                    onChange={(e) =>
-                      updateDocMargins(side, Math.max(0, parseInt(e.target.value) || 0))
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ marginTop: "14px" }}>
-            <div
-              style={{
-                fontSize: "12px",
-                fontWeight: "700",
-                color: "#475569",
-                marginBottom: "8px",
-              }}
-            >
-              🔤 الخطوط والألوان
-            </div>
-            <div style={grid2Col}>
-              <div>
-                <label style={labelStyle}>حجم الخط الأساسي (px)</label>
-                <input
-                  type="number"
-                  min={8}
-                  max={24}
-                  style={inputStyle}
-                  value={currentDoc.font.size}
-                  onChange={(e) =>
-                    updateDocFont("size", Math.max(8, parseInt(e.target.value) || 12))
-                  }
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>اللون الرئيسي</label>
-                <div style={colorInputWrap}>
-                  <div
-                    style={{ ...colorSwatch, background: currentDoc.colors.primary }}
-                    onClick={() =>
-                      (
-                        document.getElementById(
-                          `primary-color-${selectedDocType}`
-                        ) as HTMLInputElement
-                      )?.click()
-                    }
-                  />
-                  <input
-                    id={`primary-color-${selectedDocType}`}
-                    type="color"
-                    value={currentDoc.colors.primary}
-                    onChange={(e) => updateDocColors("primary", e.target.value)}
-                    style={{ width: "0", height: "0", opacity: "0", position: "absolute" }}
-                  />
-                  <input
-                    type="text"
-                    style={inputStyle}
-                    value={currentDoc.colors.primary}
-                    onChange={(e) => updateDocColors("primary", e.target.value)}
-                  />
-                </div>
-              </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label style={labelStyle}>لون خلفية العنوان</label>
-                <div style={colorInputWrap}>
-                  <div
-                    style={{ ...colorSwatch, background: currentDoc.colors.headerBg }}
-                    onClick={() =>
-                      (
-                        document.getElementById(
-                          `headerbg-color-${selectedDocType}`
-                        ) as HTMLInputElement
-                      )?.click()
-                    }
-                  />
-                  <input
-                    id={`headerbg-color-${selectedDocType}`}
-                    type="color"
-                    value={currentDoc.colors.headerBg}
-                    onChange={(e) => updateDocColors("headerBg", e.target.value)}
-                    style={{ width: "0", height: "0", opacity: "0", position: "absolute" }}
-                  />
-                  <input
-                    type="text"
-                    style={inputStyle}
-                    value={currentDoc.colors.headerBg}
-                    onChange={(e) => updateDocColors("headerBg", e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {currentDoc.paperSize === "custom" && (
-            <div style={{ marginTop: "14px" }}>
-              <div
-                style={{
-                  fontSize: "12px",
-                  fontWeight: "700",
-                  color: "#475569",
-                  marginBottom: "8px",
-                }}
-              >
-                ✂️ أبعاد مخصصة (mm)
-              </div>
-              <div style={grid2Col}>
-                <div>
-                  <label style={labelStyle}>العرض المخصص</label>
-                  <input
-                    type="number"
-                    min={20}
-                    max={300}
-                    style={inputStyle}
-                    value={currentDoc.customWidthMm ?? 50}
-                    onChange={(e) =>
-                      updateDocConfig(
-                        "customWidthMm",
-                        Math.max(20, parseInt(e.target.value) || 50)
-                      )
-                    }
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>الارتفاع المخصص</label>
-                  <input
-                    type="number"
-                    min={10}
-                    max={420}
-                    style={inputStyle}
-                    value={currentDoc.customHeightMm ?? 30}
-                    onChange={(e) =>
-                      updateDocConfig(
-                        "customHeightMm",
-                        Math.max(10, parseInt(e.target.value) || 30)
-                      )
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-          )}
+              </>
+            ),
+          })}
+        </div>
+        <div className="psc-btn-row">
+          <button className="psc-btn-secondary" onClick={onPrintersRefresh}>
+            🔄 تحديث قائمة الطابعات
+          </button>
+          <button className="psc-btn-secondary" onClick={handleTestPrint}>
+            🧪 طباعة صفحة اختبار
+          </button>
         </div>
       </div>
+      {availablePrinters.length === 0 && (
+        <div className="psc-warning">
+          ⚠️ لم يتم اكتشاف طابعات. قد تحتاج إلى تثبيت خدمة الطباعة المحلية.
+        </div>
+      )}
 
-      {/* Section 4: Thermal Printer Settings */}
-      <div style={cardStyle}>
-        <div style={sectionHeaderStyle}>
-          <span style={{ fontSize: "18px" }}>🔥</span>
-          <span>إعدادات الطابعة الحرارية</span>
-        </div>
-        <div style={subCardStyle}>
-          <div style={grid2Col}>
-            <div>
-              <label style={labelStyle}>العرض</label>
-              <select
-                style={selectStyle}
-                value={settings.thermalConfig.width}
-                onChange={(e) =>
-                  updateThermal("width", e.target.value as "58mm" | "80mm")
-                }
-              >
-                <option value="80mm">80mm (قياسي)</option>
-                <option value="58mm">58mm (صغير)</option>
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>حجم الخط (px)</label>
-              <input
-                type="number"
-                min={7}
-                max={16}
-                style={inputStyle}
-                value={settings.thermalConfig.fontSize}
-                onChange={(e) =>
-                  updateThermal("fontSize", Math.max(7, parseInt(e.target.value) || 10))
-                }
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>حرف الفاصل بين الأعمدة</label>
-              <select
-                style={selectStyle}
-                value={settings.thermalConfig.lineCharacter}
-                onChange={(e) => updateThermal("lineCharacter", e.target.value)}
-              >
-                <option value="─">─ خط رفيع</option>
-                <option value="━">━ خط سميك</option>
-                <option value="=">=  علامة =</option>
-                <option value="-">-  علامة -</option>
-                <option value="*">*  نجمة</option>
-                <option value=".">.  نقاط</option>
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>رسالة شكر أسفل الفاتورة</label>
-              <input
-                type="text"
-                style={inputStyle}
-                value={settings.footerConfig.thankYouText}
-                onChange={(e) => updateFooter("thankYouText", e.target.value)}
-                placeholder="شكراً لزيارتكم"
-              />
-            </div>
-          </div>
-          <div
-            style={{
-              marginTop: "14px",
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: "6px",
-              padding: "10px",
-              background: "#fff",
-              borderRadius: "6px",
-              border: "1px solid #e2e8f0",
-            }}
-          >
-            <div style={checkboxRow}>
-              <input
-                type="checkbox"
-                checked={settings.thermalConfig.cutPaper}
-                onChange={(e) => updateThermal("cutPaper", e.target.checked)}
-              />
-              <span>✂️ قص الورق بعد الطباعة</span>
-            </div>
-            <div style={checkboxRow}>
-              <input
-                type="checkbox"
-                checked={settings.thermalConfig.openDrawer}
-                onChange={(e) => updateThermal("openDrawer", e.target.checked)}
-              />
-              <span>💰 فتح درج النقود</span>
-            </div>
-            <div style={checkboxRow}>
-              <input
-                type="checkbox"
-                checked={settings.thermalConfig.printQR}
-                onChange={(e) => updateThermal("printQR", e.target.checked)}
-              />
-              <span>📱 طباعة رمز QR</span>
-            </div>
-            <div style={checkboxRow}>
-              <input
-                type="checkbox"
-                checked={settings.thermalConfig.dense}
-                onChange={(e) => updateThermal("dense", e.target.checked)}
-              />
-              <span>⬛ طباعة مدمجة (غليظة)</span>
-            </div>
-            <div style={checkboxRow}>
-              <input
-                type="checkbox"
-                checked={settings.thermalConfig.beep}
-                onChange={(e) => updateThermal("beep", e.target.checked)}
-              />
-              <span>🔔 صفارة التنبيه</span>
-            </div>
-          </div>
-        </div>
+      {/* Document profiles */}
+      <div className="psc-divider" />
+      <div className="psc-section-title">
+        📄 إعدادات أنواع المستندات
       </div>
-
-      {/* Section 5: Barcode Settings */}
-      <div style={cardStyle}>
-        <div style={sectionHeaderStyle}>
-          <span style={{ fontSize: "18px" }}>🏷️</span>
-          <span>إعدادات الباركود</span>
-        </div>
-        <div style={subCardStyle}>
-          <div style={grid2Col}>
-            <div>
-              <label style={labelStyle}>نوع الباركود</label>
-              <select
-                style={selectStyle}
-                value={settings.barcodeConfig.barcodeType}
-                onChange={(e) => updateBarcode("barcodeType", e.target.value as BarcodeType)}
-              >
-                <option value="CODE128">CODE 128</option>
-                <option value="EAN13">EAN-13</option>
-                <option value="QR_CODE">QR Code</option>
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>نوع الخط</label>
-              <input
-                type="text"
-                style={inputStyle}
-                value={settings.barcodeConfig.fontFamily}
-                onChange={(e) => updateBarcode("fontFamily", e.target.value)}
-                placeholder="'Segoe UI', 'Cairo', sans-serif"
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>عرض الملصق (mm)</label>
-              <input
-                type="number"
-                min={20}
-                max={200}
-                style={inputStyle}
-                value={settings.barcodeConfig.widthMm}
-                onChange={(e) =>
-                  updateBarcode("widthMm", Math.max(20, parseInt(e.target.value) || 50))
-                }
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>ارتفاع الملصق (mm)</label>
-              <input
-                type="number"
-                min={10}
-                max={200}
-                style={inputStyle}
-                value={settings.barcodeConfig.heightMm}
-                onChange={(e) =>
-                  updateBarcode("heightMm", Math.max(10, parseInt(e.target.value) || 30))
-                }
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>حجم الخط (px)</label>
-              <input
-                type="number"
-                min={6}
-                max={20}
-                style={inputStyle}
-                value={settings.barcodeConfig.fontSize}
-                onChange={(e) =>
-                  updateBarcode("fontSize", Math.max(6, parseInt(e.target.value) || 10))
-                }
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>عدد الأعمدة في الصفحة (1-8)</label>
-              <input
-                type="number"
-                min={1}
-                max={8}
-                style={inputStyle}
-                value={settings.barcodeConfig.columnsPerRow}
-                onChange={(e) =>
-                  updateBarcode(
-                    "columnsPerRow",
-                    Math.max(1, Math.min(8, parseInt(e.target.value) || 3))
-                  )
-                }
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>المسافة بين الملصقات (mm)</label>
-              <input
-                type="number"
-                min={0}
-                max={20}
-                style={inputStyle}
-                value={settings.barcodeConfig.labelGap}
-                onChange={(e) =>
-                  updateBarcode("labelGap", Math.max(0, parseInt(e.target.value) || 2))
-                }
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>هوامش الصفحة (mm)</label>
-              <input
-                type="number"
-                min={0}
-                max={30}
-                style={inputStyle}
-                value={settings.barcodeConfig.pageMargin}
-                onChange={(e) =>
-                  updateBarcode("pageMargin", Math.max(0, parseInt(e.target.value) || 5))
-                }
-              />
-            </div>
-          </div>
-          <div
-            style={{
-              marginTop: "14px",
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: "6px",
-              padding: "10px",
-              background: "#fff",
-              borderRadius: "6px",
-              border: "1px solid #e2e8f0",
-            }}
+      <div className="psc-doc-tabs">
+        {DOC_TYPES.map((dt) => (
+          <button
+            key={dt}
+            className={`psc-doc-tab ${selectedDocType === dt ? "psc-doc-tab-active" : ""}`}
+            onClick={() => setSelectedDocType(dt)}
           >
-            <div style={checkboxRow}>
-              <input
-                type="checkbox"
-                checked={settings.barcodeConfig.showName}
-                onChange={(e) => updateBarcode("showName", e.target.checked)}
-              />
-              <span>إظهار اسم الصنف</span>
-            </div>
-            <div style={checkboxRow}>
-              <input
-                type="checkbox"
-                checked={settings.barcodeConfig.showPrice}
-                onChange={(e) => updateBarcode("showPrice", e.target.checked)}
-              />
-              <span>إظهار السعر</span>
-            </div>
-            <div style={checkboxRow}>
-              <input
-                type="checkbox"
-                checked={settings.barcodeConfig.showBarcode}
-                onChange={(e) => updateBarcode("showBarcode", e.target.checked)}
-              />
-              <span>إظهار الباركود</span>
-            </div>
-            <div style={checkboxRow}>
-              <input
-                type="checkbox"
-                checked={settings.barcodeConfig.showSku}
-                onChange={(e) => updateBarcode("showSku", e.target.checked)}
-              />
-              <span>إظهار SKU</span>
-            </div>
-            <div style={checkboxRow}>
-              <input
-                type="checkbox"
-                checked={settings.barcodeConfig.border}
-                onChange={(e) => updateBarcode("border", e.target.checked)}
-              />
-              <span>حدود للملصقات</span>
-            </div>
+            {DOC_TYPE_LABELS[dt]}
+          </button>
+        ))}
+      </div>
+      <div className="psc-sub-card">
+        <div className="psc-sub-title">إعدادات: {DOC_TYPE_LABELS[selectedDocType]}</div>
+        <div className="psc-grid-2">
+          <div>
+            {renderLabel("الطابعة المخصصة")}
+            {renderSelect({
+              value: currentDoc.printer,
+              onChange: (e) => updateDocConfig("printer", e.target.value),
+              children: (
+                <>
+                  <option value="">— الافتراضية —</option>
+                  {availablePrinters.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </>
+              ),
+            })}
+          </div>
+          <div>
+            {renderLabel("حجم الورق")}
+            {renderSelect({
+              value: currentDoc.paperSize,
+              onChange: (e) => updateDocConfig("paperSize", e.target.value as PaperSize),
+              children: (
+                <>
+                  <option value="A4">A4</option>
+                  <option value="A5">A5</option>
+                  <option value="80mm">80mm (حرارية)</option>
+                  <option value="58mm">58mm (حرارية صغيرة)</option>
+                  <option value="custom">مخصص</option>
+                </>
+              ),
+            })}
+          </div>
+          <div>
+            {renderLabel("الاتجاه")}
+            {renderSelect({
+              value: currentDoc.orientation,
+              onChange: (e) => updateDocConfig("orientation", e.target.value as Orientation),
+              children: (
+                <>
+                  <option value="portrait">عمودي</option>
+                  <option value="landscape">أفقي</option>
+                </>
+              ),
+            })}
+          </div>
+          <div>
+            {renderLabel("عدد النسخ (1-99)")}
+            {renderInput({
+              type: "number",
+              min: 1,
+              max: 99,
+              value: currentDoc.copies,
+              onChange: (e) =>
+                updateDocConfig("copies", Math.max(1, Math.min(99, parseInt(e.target.value) || 1))),
+            })}
+          </div>
+          <div>
+            {renderLabel("وضع الطباعة")}
+            {renderSelect({
+              value: currentDoc.mode,
+              onChange: (e) => updateDocConfig("mode", e.target.value as PrintMode),
+              children: (
+                <>
+                  <option value="direct">🖨️ طباعة مباشرة</option>
+                  <option value="preview">👁️ معاينة أولاً</option>
+                  <option value="dialog">💬 حوار النظام</option>
+                </>
+              ),
+            })}
+          </div>
+          <div>
+            {renderLabel("التكبير/التصغير (50%-200%)")}
+            {renderInput({
+              type: "number",
+              min: 50,
+              max: 200,
+              value: currentDoc.scale ?? 100,
+              onChange: (e) =>
+                updateDocConfig("scale", Math.max(50, Math.min(200, parseInt(e.target.value) || 100))),
+            })}
           </div>
         </div>
-      </div>
-
-      {/* Section 6: Header & Footer */}
-      <div style={cardStyle}>
-        <div style={sectionHeaderStyle}>
-          <span style={{ fontSize: "18px" }}>📋</span>
-          <span>إعدادات رأس وذيل المستند</span>
+        <div className="psc-checkbox-grid-3">
+          {renderCheckbox(currentDoc.showHeader, (v) => updateDocConfig("showHeader", v), "إظهار رأس المستند")}
+          {renderCheckbox(currentDoc.showFooter, (v) => updateDocConfig("showFooter", v), "إظهار ذيل المستند")}
+          {renderCheckbox(currentDoc.showLogo, (v) => updateDocConfig("showLogo", v), "إظهار الشعار")}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-          <div style={subCardStyle}>
-            <div
-              style={{
-                fontSize: "13px",
-                fontWeight: "700",
-                color: "#1e3a5f",
-                marginBottom: "10px",
-              }}
-            >
-              ⬆️ رأس المستند (Header)
+        <div className="psc-section-subtitle">📐 الهوامش (mm)</div>
+        <div className="psc-grid-4">
+          {(["top", "right", "bottom", "left"] as const).map((side) => (
+            <div key={side}>
+              {renderLabel(side === "top" ? "أعلى" : side === "right" ? "يمين" : side === "bottom" ? "أسفل" : "يسار")}
+              {renderInput({
+                type: "number",
+                min: 0,
+                max: 50,
+                value: currentDoc.margins[side],
+                onChange: (e) => updateDocMargins(side, Math.max(0, parseInt(e.target.value) || 0)),
+              })}
             </div>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "4px",
-                marginBottom: "12px",
-                padding: "8px",
-                background: "#fff",
-                borderRadius: "6px",
-                border: "1px solid #e2e8f0",
-              }}
-            >
-              <div style={checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={settings.headerConfig.showLogo}
-                  onChange={(e) => updateHeader("showLogo", e.target.checked)}
-                />
-                <span>إظهار الشعار</span>
-              </div>
-              <div style={checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={settings.headerConfig.showTax}
-                  onChange={(e) => updateHeader("showTax", e.target.checked)}
-                />
-                <span>إظهار الرقم الضريبي</span>
-              </div>
-              <div style={checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={settings.headerConfig.showCR}
-                  onChange={(e) => updateHeader("showCR", e.target.checked)}
-                />
-                <span>إظهار السجل التجاري</span>
-              </div>
-            </div>
-            <div style={grid2Col}>
+          ))}
+        </div>
+        <div className="psc-section-subtitle">🔤 الخطوط والألوان</div>
+        <div className="psc-grid-2">
+          <div>
+            {renderLabel("حجم الخط الأساسي (px)")}
+            {renderInput({
+              type: "number",
+              min: 8,
+              max: 24,
+              value: currentDoc.font.size,
+              onChange: (e) => updateDocFont("size", Math.max(8, parseInt(e.target.value) || 12)),
+            })}
+          </div>
+          <div>
+            {renderLabel("اللون الرئيسي")}
+            {renderColorInput(
+              `primary-color-${selectedDocType}`,
+              currentDoc.colors.primary,
+              (v) => updateDocColors("primary", v)
+            )}
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            {renderLabel("لون خلفية العنوان")}
+            {renderColorInput(
+              `headerbg-color-${selectedDocType}`,
+              currentDoc.colors.headerBg,
+              (v) => updateDocColors("headerBg", v)
+            )}
+          </div>
+        </div>
+        {currentDoc.paperSize === "custom" && (
+          <>
+            <div className="psc-section-subtitle">✂️ أبعاد مخصصة (mm)</div>
+            <div className="psc-grid-2">
               <div>
-                <label style={labelStyle}>المحاذاة</label>
-                <select
-                  style={selectStyle}
-                  value={settings.headerConfig.alignment}
-                  onChange={(e) =>
-                    updateHeader(
-                      "alignment",
-                      e.target.value as "left" | "center" | "right"
-                    )
-                  }
-                >
+                {renderLabel("العرض")}
+                {renderInput({
+                  type: "number",
+                  min: 20,
+                  max: 300,
+                  value: currentDoc.customWidthMm ?? 50,
+                  onChange: (e) => updateDocConfig("customWidthMm", Math.max(20, parseInt(e.target.value) || 50)),
+                })}
+              </div>
+              <div>
+                {renderLabel("الارتفاع")}
+                {renderInput({
+                  type: "number",
+                  min: 10,
+                  max: 420,
+                  value: currentDoc.customHeightMm ?? 30,
+                  onChange: (e) => updateDocConfig("customHeightMm", Math.max(10, parseInt(e.target.value) || 30)),
+                })}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+
+  const renderInvoiceTab = () => (
+    <div className="psc-invoice-layout">
+      {/* Left: Settings */}
+      <div className="psc-invoice-settings">
+        <div className="psc-section-subtitle">🎨 تخصيص القالب</div>
+        <div className="psc-grid-2">
+          <div>
+            {renderLabel("لون الرئيسي")}
+            {renderColorInput(
+              "receipt-primary-color",
+              settings.documents.sales_invoice.colors.primary,
+              (v) => {
+                const docs = { ...settings.documents };
+                (Object.keys(docs) as DocType[]).forEach((dk) => {
+                  docs[dk] = { ...docs[dk], colors: { ...docs[dk].colors, primary: v, headerBg: v } };
+                });
+                update("documents", docs);
+              }
+            )}
+          </div>
+          <div>
+            {renderLabel("حجم الخط")}
+            {renderInput({
+              type: "number",
+              min: 7,
+              max: 20,
+              value: getPrintSettings().receiptFontSize || 10,
+              onChange: (e) => {
+                const v = Math.max(7, Math.min(20, parseInt(e.target.value) || 10));
+                const ps = getPrintSettings();
+                ps.receiptFontSize = v;
+                localStorage.setItem("tabarak_print_settings", JSON.stringify(ps));
+              },
+            })}
+          </div>
+          <div>
+            {renderLabel("محاذاة الرأس")}
+            {renderSelect({
+              value: getPrintSettings().receiptHeaderAlign || "center",
+              onChange: (e) => {
+                const ps = getPrintSettings();
+                ps.receiptHeaderAlign = e.target.value;
+                localStorage.setItem("tabarak_print_settings", JSON.stringify(ps));
+              },
+              children: (
+                <>
                   <option value="right">يمين</option>
                   <option value="center">وسط</option>
                   <option value="left">يسار</option>
-                </select>
+                </>
+              ),
+            })}
+          </div>
+          <div>
+            {renderLabel("الobraḍ (العرض)")}
+            {renderSelect({
+              value: getPrintSettings().receiptPrinter || "80mm",
+              onChange: (e) => {
+                const ps = getPrintSettings();
+                ps.receiptPrinter = e.target.value;
+                localStorage.setItem("tabarak_print_settings", JSON.stringify(ps));
+                setPreviewMode(
+                  e.target.value === "58mm" ? "thermal58" : e.target.value === "80mm" ? "thermal80" : "a4"
+                );
+              },
+              children: (
+                <>
+                  <option value="80mm">80mm (حرارية)</option>
+                  <option value="58mm">58mm (صغيرة)</option>
+                  <option value="A4">A4 (ورقي)</option>
+                </>
+              ),
+            })}
+          </div>
+        </div>
+        <div className="psc-checkbox-grid-2">
+          {renderCheckbox(
+            getPrintSettings().receiptShowDate !== false,
+            (v) => {
+              const ps = getPrintSettings();
+              ps.receiptShowDate = v;
+              localStorage.setItem("tabarak_print_settings", JSON.stringify(ps));
+            },
+            "إظهار التاريخ"
+          )}
+          {renderCheckbox(
+            getPrintSettings().receiptShowCustomer !== false,
+            (v) => {
+              const ps = getPrintSettings();
+              ps.receiptShowCustomer = v;
+              localStorage.setItem("tabarak_print_settings", JSON.stringify(ps));
+            },
+            "إظهار اسم العميل"
+          )}
+          {renderCheckbox(
+            getPrintSettings().receiptShowPayment !== false,
+            (v) => {
+              const ps = getPrintSettings();
+              ps.receiptShowPayment = v;
+              localStorage.setItem("tabarak_print_settings", JSON.stringify(ps));
+            },
+            "إظهار طريقة الدفع"
+          )}
+          {renderCheckbox(
+            getPrintSettings().receiptShowEmployee !== false,
+            (v) => {
+              const ps = getPrintSettings();
+              ps.receiptShowEmployee = v;
+              localStorage.setItem("tabarak_print_settings", JSON.stringify(ps));
+            },
+            "إظهار الموظف"
+          )}
+        </div>
+        <div className="psc-grid-2" style={{ marginTop: 12 }}>
+          <div>
+            {renderLabel("رسالة الشكر")}
+            {renderInput({
+              value: settings.footerConfig.thankYouText,
+              onChange: (e) => updateFooter("thankYouText", e.target.value),
+              placeholder: "شكراً لاختياركم!",
+            })}
+          </div>
+          <div>
+            {renderLabel("نص الذيل")}
+            {renderInput({
+              value: settings.footerConfig.text,
+              onChange: (e) => updateFooter("text", e.target.value),
+              placeholder: "نص أسفل الفاتورة",
+            })}
+          </div>
+          <div>
+            {renderLabel("شعار الفاتورة")}
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <label style={{
+                display: "inline-flex", alignItems: "center", gap: "6px",
+                padding: "8px 16px", fontSize: "13px", fontWeight: "600",
+                background: "linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)",
+                color: "#fff", borderRadius: "8px", cursor: "pointer",
+                boxShadow: "0 2px 6px rgba(30,58,95,0.2)", transition: "all 0.15s",
+              }}>
+                📁 اختر صورة
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      updateCompany("logo", ev.target?.result as string);
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
+              {settings.companyInfo.logo && (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <img
+                    src={settings.companyInfo.logo}
+                    alt="Logo"
+                    style={{ width: "36px", height: "36px", objectFit: "contain", borderRadius: "6px", border: "1px solid #e5e7eb" }}
+                  />
+                  <button
+                    type="button"
+                    style={{
+                      padding: "3px 8px", fontSize: "11px", fontWeight: "600",
+                      background: "#fee2e2", color: "#dc2626", border: "none",
+                      borderRadius: "6px", cursor: "pointer",
+                    }}
+                    onClick={() => updateCompany("logo", "")}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right: Preview */}
+      <div className="psc-invoice-preview">
+        <div className="psc-preview-header">
+          <span className="psc-preview-title">🔍 معاينة الفاتورة</span>
+          <div className="psc-preview-modes">
+            {(["thermal80", "thermal58", "a4"] as const).map((mode) => (
+              <button
+                key={mode}
+                className={`psc-preview-mode ${previewMode === mode ? "psc-preview-mode-active" : ""}`}
+                onClick={() => setPreviewMode(mode)}
+              >
+                {mode === "thermal80" ? "80mm" : mode === "thermal58" ? "58mm" : "A4"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="psc-preview-frame-wrap">
+          <div
+            className="psc-preview-frame"
+            style={{
+              width: previewMode === "thermal80" ? 320 : previewMode === "thermal58" ? 232 : 420,
+            }}
+          >
+            <iframe
+              srcDoc={previewHtml}
+              className="psc-preview-iframe"
+              title="Invoice Preview"
+              sandbox="allow-same-origin"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderThermalTab = () => (
+    <div className="psc-grid-2">
+      <div>
+        {renderLabel("العرض")}
+        {renderSelect({
+          value: settings.thermalConfig.width,
+          onChange: (e) => updateThermal("width", e.target.value as "58mm" | "80mm"),
+          children: (
+            <>
+              <option value="80mm">80mm (قياسي)</option>
+              <option value="58mm">58mm (صغير)</option>
+            </>
+          ),
+        })}
+      </div>
+      <div>
+        {renderLabel("حجم الخط (px)")}
+        {renderInput({
+          type: "number",
+          min: 7,
+          max: 16,
+          value: settings.thermalConfig.fontSize,
+          onChange: (e) => updateThermal("fontSize", Math.max(7, parseInt(e.target.value) || 10)),
+        })}
+      </div>
+      <div>
+        {renderLabel("حرف الفاصل بين الأعمدة")}
+        {renderSelect({
+          value: settings.thermalConfig.lineCharacter,
+          onChange: (e) => updateThermal("lineCharacter", e.target.value),
+          children: (
+            <>
+              <option value="─">─ خط رفيع</option>
+              <option value="━">━ خط سميك</option>
+              <option value="=">= علامة =</option>
+              <option value="-">- علامة -</option>
+              <option value="*">* نجمة</option>
+              <option value=".">. نقاط</option>
+            </>
+          ),
+        })}
+      </div>
+      <div>
+        {renderLabel("رسالة شكر أسفل الفاتورة")}
+        {renderInput({
+          value: settings.footerConfig.thankYouText,
+          onChange: (e) => updateFooter("thankYouText", e.target.value),
+          placeholder: "شكراً لزيارتكم",
+        })}
+      </div>
+      <div className="psc-checkbox-grid-2" style={{ gridColumn: "1 / -1" }}>
+        {renderCheckbox(settings.thermalConfig.cutPaper, (v) => updateThermal("cutPaper", v), "✂️ قص الورق بعد الطباعة")}
+        {renderCheckbox(settings.thermalConfig.openDrawer, (v) => updateThermal("openDrawer", v), "💰 فتح درج النقود")}
+        {renderCheckbox(settings.thermalConfig.printQR, (v) => updateThermal("printQR", v), "📱 طباعة رمز QR")}
+        {renderCheckbox(settings.thermalConfig.dense, (v) => updateThermal("dense", v), "⬛ طباعة مدمجة (غليظة)")}
+        {renderCheckbox(settings.thermalConfig.beep, (v) => updateThermal("beep", v), "🔔 صفارة التنبيه")}
+      </div>
+    </div>
+  );
+
+  const renderBarcodeTab = () => {
+    const bc = settings.barcodeConfig;
+    const scale = 3;
+    const previewW = bc.widthMm * scale;
+    const fontSizeScaled = Math.max(7, bc.fontSize * 0.8);
+
+    return (
+      <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
+        {/* Settings */}
+        <div style={{ flex: 1, minWidth: 320 }}>
+          <div className="psc-grid-2">
+            <div>
+              {renderLabel("نوع الباركود")}
+              {renderSelect({
+                value: bc.barcodeType,
+                onChange: (e) => updateBarcode("barcodeType", e.target.value as BarcodeType),
+                children: (
+                  <>
+                    <option value="CODE128">CODE 128</option>
+                    <option value="EAN13">EAN-13</option>
+                    <option value="QR_CODE">QR Code</option>
+                  </>
+                ),
+              })}
+            </div>
+            <div>
+              {renderLabel("نوع الخط")}
+              {renderInput({
+                value: bc.fontFamily,
+                onChange: (e) => updateBarcode("fontFamily", e.target.value),
+                placeholder: "'Segoe UI', 'Cairo', sans-serif",
+              })}
+            </div>
+            <div>
+              {renderLabel("عرض الملصق (mm)")}
+              {renderInput({
+                type: "number",
+                min: 20,
+                max: 200,
+                value: bc.widthMm,
+                onChange: (e) => updateBarcode("widthMm", Math.max(20, parseInt(e.target.value) || 38)),
+              })}
+            </div>
+            <div>
+              {renderLabel("ارتفاع الملصق (mm)")}
+              {renderInput({
+                type: "number",
+                min: 10,
+                max: 200,
+                value: bc.heightMm,
+                onChange: (e) => updateBarcode("heightMm", Math.max(10, parseInt(e.target.value) || 25)),
+              })}
+            </div>
+            <div>
+              {renderLabel("حجم الخط (px)")}
+              {renderInput({
+                type: "number",
+                min: 6,
+                max: 20,
+                value: bc.fontSize,
+                onChange: (e) => updateBarcode("fontSize", Math.max(6, parseInt(e.target.value) || 9)),
+              })}
+            </div>
+            <div>
+              {renderLabel("عدد الأعمدة (1-8)")}
+              {renderInput({
+                type: "number",
+                min: 1,
+                max: 8,
+                value: bc.columnsPerRow,
+                onChange: (e) =>
+                  updateBarcode("columnsPerRow", Math.max(1, Math.min(8, parseInt(e.target.value) || 3))),
+              })}
+            </div>
+            <div>
+              {renderLabel("المسافة بين الملصقات (mm)")}
+              {renderInput({
+                type: "number",
+                min: 0,
+                max: 20,
+                value: bc.labelGap,
+                onChange: (e) => updateBarcode("labelGap", Math.max(0, parseInt(e.target.value) || 2)),
+              })}
+            </div>
+            <div>
+              {renderLabel("هوامش الصفحة (mm)")}
+              {renderInput({
+                type: "number",
+                min: 0,
+                max: 30,
+                value: bc.pageMargin,
+                onChange: (e) => updateBarcode("pageMargin", Math.max(0, parseInt(e.target.value) || 5)),
+              })}
+            </div>
+            <div className="psc-checkbox-grid-3" style={{ gridColumn: "1 / -1" }}>
+              {renderCheckbox(bc.showName, (v) => updateBarcode("showName", v), "إظهار اسم الصنف")}
+              {renderCheckbox(bc.showPrice, (v) => updateBarcode("showPrice", v), "إظهار السعر")}
+              {renderCheckbox(bc.showBarcode, (v) => updateBarcode("showBarcode", v), "إظهار الباركود")}
+              {renderCheckbox(bc.showSku, (v) => updateBarcode("showSku", v), "إظهار SKU")}
+              {renderCheckbox(bc.border, (v) => updateBarcode("border", v), "حدود للملصقات")}
+            </div>
+          </div>
+        </div>
+
+        {/* Live Preview */}
+        <div style={{ width: 260, flexShrink: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 14 }}>👁️</span> معاينة مباشرة
+          </div>
+          <div style={{
+            border: "2px dashed #cbd5e1", borderRadius: 10, padding: 12,
+            background: "#f8fafc", display: "flex", flexDirection: "column", alignItems: "center",
+          }}>
+            {/* Dimensions label */}
+            <div style={{ fontSize: 10, color: "#64748b", marginBottom: 6, fontWeight: 500 }}>
+              {bc.widthMm}mm × {bc.heightMm}mm
+            </div>
+            {/* Label card */}
+            <div style={{
+              width: Math.min(previewW, 220),
+              border: bc.border ? "1.5px solid #334155" : "1px solid #e2e8f0",
+              borderRadius: 6, background: "#fff", padding: "6px 8px",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+              fontFamily: bc.fontFamily || "'Cairo', sans-serif",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+            }}>
+              {/* Store name */}
+              <div style={{ fontSize: Math.max(7, fontSizeScaled - 2), fontWeight: 700, color: "#1e293b", textAlign: "center", lineHeight: 1.2 }}>
+                {settings.companyInfo.nameAr || "اسم المتجر"}
               </div>
-              <div>
-                <label style={labelStyle}>نمط الحدود</label>
-                <select
-                  style={selectStyle}
-                  value={settings.headerConfig.borderStyle}
-                  onChange={(e) =>
-                    updateHeader(
-                      "borderStyle",
-                      e.target.value as "none" | "solid" | "double" | "dashed"
-                    )
-                  }
-                >
+              {/* Product name */}
+              {bc.showName && (
+                <div style={{ fontSize: fontSizeScaled, color: "#334155", textAlign: "center", lineHeight: 1.2, fontWeight: 500 }}>
+                  اسم الصنف التجريبي
+                </div>
+              )}
+              {/* Barcode image */}
+              {bc.showBarcode && barcodePreviewUrl && (
+                <img
+                  src={barcodePreviewUrl}
+                  alt="barcode"
+                  style={{
+                    width: "100%",
+                    maxWidth: Math.min(previewW - 20, 200),
+                    height: "auto",
+                    display: "block",
+                  }}
+                />
+              )}
+              {bc.showBarcode && !barcodePreviewUrl && (
+                <div style={{ width: "100%", height: 30, background: "#f1f5f9", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#94a3b8" }}>
+                  جاري التحميل...
+                </div>
+              )}
+              {/* Price */}
+              {bc.showPrice && (
+                <div style={{ fontSize: Math.max(8, fontSizeScaled + 1), fontWeight: 700, color: "#0f766e", textAlign: "center", lineHeight: 1.2 }}>
+                  99.99 ج.م
+                </div>
+              )}
+              {/* SKU */}
+              {bc.showSku && (
+                <div style={{ fontSize: Math.max(6, fontSizeScaled - 3), color: "#94a3b8", textAlign: "center" }}>
+                  SKU: 001
+                </div>
+              )}
+            </div>
+            {/* Size info */}
+            <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 6 }}>
+              معاينة بألوان {bc.widthMm}×{bc.heightMm}mm
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderHeaderFooterTab = () => (
+    <div className="psc-grid-2">
+      {/* Header */}
+      <div className="psc-sub-card">
+        <div className="psc-sub-title">⬆️ رأس المستند (Header)</div>
+        <div className="psc-checkbox-stack">
+          {renderCheckbox(settings.headerConfig.showLogo, (v) => updateHeader("showLogo", v), "إظهار الشعار")}
+          {renderCheckbox(settings.headerConfig.showTax, (v) => updateHeader("showTax", v), "إظهار الرقم الضريبي")}
+          {renderCheckbox(settings.headerConfig.showCR, (v) => updateHeader("showCR", v), "إظهار السجل التجاري")}
+        </div>
+        <div className="psc-grid-2" style={{ marginTop: 12 }}>
+          <div>
+            {renderLabel("المحاذاة")}
+            {renderSelect({
+              value: settings.headerConfig.alignment,
+              onChange: (e) => updateHeader("alignment", e.target.value as "left" | "center" | "right"),
+              children: (
+                <>
+                  <option value="right">يمين</option>
+                  <option value="center">وسط</option>
+                  <option value="left">يسار</option>
+                </>
+              ),
+            })}
+          </div>
+          <div>
+            {renderLabel("نمط الحدود")}
+            {renderSelect({
+              value: settings.headerConfig.borderStyle,
+              onChange: (e) =>
+                updateHeader("borderStyle", e.target.value as "none" | "solid" | "double" | "dashed"),
+              children: (
+                <>
                   <option value="none">بدون حدود</option>
                   <option value="solid">خط متصل</option>
                   <option value="double">خط مزدوج</option>
                   <option value="dashed">خط متقطع</option>
-                </select>
-              </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label style={labelStyle}>لون الحدود</label>
-                <div style={colorInputWrap}>
-                  <div
-                    style={{ ...colorSwatch, background: settings.headerConfig.borderColor }}
-                    onClick={() =>
-                      (
-                        document.getElementById("header-border-color") as HTMLInputElement
-                      )?.click()
-                    }
-                  />
-                  <input
-                    id="header-border-color"
-                    type="color"
-                    value={settings.headerConfig.borderColor}
-                    onChange={(e) => updateHeader("borderColor", e.target.value)}
-                    style={{ width: "0", height: "0", opacity: "0", position: "absolute" }}
-                  />
-                  <input
-                    type="text"
-                    style={inputStyle}
-                    value={settings.headerConfig.borderColor}
-                    onChange={(e) => updateHeader("borderColor", e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
+                </>
+              ),
+            })}
           </div>
-
-          <div style={subCardStyle}>
-            <div
-              style={{
-                fontSize: "13px",
-                fontWeight: "700",
-                color: "#1e3a5f",
-                marginBottom: "10px",
-              }}
-            >
-              ⬇️ ذيل المستند (Footer)
-            </div>
-            <div style={grid2Col}>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label style={labelStyle}>نص مخصص</label>
-                <input
-                  type="text"
-                  style={inputStyle}
-                  value={settings.footerConfig.text}
-                  onChange={(e) => updateFooter("text", e.target.value)}
-                  placeholder="نص إضافي يظهر في أسفل الصفحة"
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>اسم توقيع 1</label>
-                <input
-                  type="text"
-                  style={inputStyle}
-                  value={settings.footerConfig.signatureLine1}
-                  onChange={(e) => updateFooter("signatureLine1", e.target.value)}
-                  placeholder="المستلم"
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>اسم توقيع 2</label>
-                <input
-                  type="text"
-                  style={inputStyle}
-                  value={settings.footerConfig.signatureLine2}
-                  onChange={(e) => updateFooter("signatureLine2", e.target.value)}
-                  placeholder="المخزن / المحاسب"
-                />
-              </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label style={labelStyle}>رسالة الشكر</label>
-                <input
-                  type="text"
-                  style={inputStyle}
-                  value={settings.footerConfig.thankYouText}
-                  onChange={(e) => updateFooter("thankYouText", e.target.value)}
-                  placeholder="شكراً لاختياركم تبارك"
-                />
-              </div>
-            </div>
-            <div
-              style={{
-                marginTop: "12px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "4px",
-                padding: "8px",
-                background: "#fff",
-                borderRadius: "6px",
-                border: "1px solid #e2e8f0",
-              }}
-            >
-              <div style={checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={settings.footerConfig.showPageNumbers}
-                  onChange={(e) => updateFooter("showPageNumbers", e.target.checked)}
-                />
-                <span>إظهار أرقام الصفحات</span>
-              </div>
-              <div style={checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={settings.footerConfig.showSignature}
-                  onChange={(e) => updateFooter("showSignature", e.target.checked)}
-                />
-                <span>إظهار منطقة التوقيع</span>
-              </div>
-            </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            {renderLabel("لون الحدود")}
+            {renderColorInput("header-border-color", settings.headerConfig.borderColor, (v) =>
+              updateHeader("borderColor", v)
+            )}
           </div>
         </div>
       </div>
 
-      {/* Section 7: QR Code Settings */}
-      <div style={cardStyle}>
-        <div style={sectionHeaderStyle}>
-          <span style={{ fontSize: "18px" }}>📱</span>
-          <span>إعدادات QR Code</span>
+      {/* Footer */}
+      <div className="psc-sub-card">
+        <div className="psc-sub-title">⬇️ ذيل المستند (Footer)</div>
+        <div className="psc-grid-2">
+          <div style={{ gridColumn: "1 / -1" }}>
+            {renderLabel("نص مخصص")}
+            {renderInput({
+              value: settings.footerConfig.text,
+              onChange: (e) => updateFooter("text", e.target.value),
+              placeholder: "نص إضافي يظهر في أسفل الصفحة",
+            })}
+          </div>
+          <div>
+            {renderLabel("اسم توقيع 1")}
+            {renderInput({
+              value: settings.footerConfig.signatureLine1,
+              onChange: (e) => updateFooter("signatureLine1", e.target.value),
+              placeholder: "المستلم",
+            })}
+          </div>
+          <div>
+            {renderLabel("اسم توقيع 2")}
+            {renderInput({
+              value: settings.footerConfig.signatureLine2,
+              onChange: (e) => updateFooter("signatureLine2", e.target.value),
+              placeholder: "المخزن / المحاسب",
+            })}
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            {renderLabel("رسالة الشكر")}
+            {renderInput({
+              value: settings.footerConfig.thankYouText,
+              onChange: (e) => updateFooter("thankYouText", e.target.value),
+              placeholder: "شكراً لاختياركم تبارك",
+            })}
+          </div>
         </div>
-        <div style={subCardStyle}>
-          <div style={grid2Col}>
-            <div>
-              <label style={labelStyle}>حجم QR (px)</label>
-              <input
-                type="number"
-                min={40}
-                max={300}
-                style={inputStyle}
-                value={settings.qrConfig.size}
-                onChange={(e) =>
-                  updateQr("size", Math.max(40, Math.min(300, parseInt(e.target.value) || 80)))
-                }
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>درجة تصحيح الخطأ</label>
-              <select
-                style={selectStyle}
-                value={settings.qrConfig.errorCorrection}
-                onChange={(e) =>
-                  updateQr(
-                    "errorCorrection",
-                    e.target.value as "L" | "M" | "Q" | "H"
-                  )
-                }
-              >
-                <option value="L">L (منخفضة ~7%)</option>
-                <option value="M">M (متوسطة ~15%)</option>
-                <option value="Q">Q (عالية ~25%)</option>
-                <option value="H">H (عالية جداً ~30%)</option>
-              </select>
-            </div>
-          </div>
-          <div
-            style={{
-              marginTop: "14px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "4px",
-              padding: "10px",
-              background: "#fff",
-              borderRadius: "6px",
-              border: "1px solid #e2e8f0",
-            }}
-          >
-            <div style={checkboxRow}>
-              <input
-                type="checkbox"
-                checked={settings.qrConfig.enabled}
-                onChange={(e) => updateQr("enabled", e.target.checked)}
-              />
-              <span>✅ تفعيل QR Code في الفواتير</span>
-            </div>
-            <div style={checkboxRow}>
-              <input
-                type="checkbox"
-                checked={settings.qrConfig.includeInvoiceData}
-                onChange={(e) => updateQr("includeInvoiceData", e.target.checked)}
-              />
-              <span>📝 تضمين بيانات الفاتورة الكاملة في QR</span>
-            </div>
-          </div>
+        <div className="psc-checkbox-stack" style={{ marginTop: 12 }}>
+          {renderCheckbox(settings.footerConfig.showPageNumbers, (v) => updateFooter("showPageNumbers", v), "إظهار أرقام الصفحات")}
+          {renderCheckbox(settings.footerConfig.showSignature, (v) => updateFooter("showSignature", v), "إظهار منطقة التوقيع")}
         </div>
       </div>
+    </div>
+  );
 
-      {/* Save Button */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          padding: "16px 0 8px",
-          position: "sticky",
-          bottom: 0,
-          background: "linear-gradient(to top, #f8fafc 60%, transparent)",
-          borderRadius: "12px",
-          marginTop: "8px",
-        }}
-      >
+  const renderQrTab = () => (
+    <div className="psc-grid-2">
+      <div>
+        {renderLabel("حجم QR (px)")}
+        {renderInput({
+          type: "number",
+          min: 40,
+          max: 300,
+          value: settings.qrConfig.size,
+          onChange: (e) =>
+            updateQr("size", Math.max(40, Math.min(300, parseInt(e.target.value) || 80))),
+        })}
+      </div>
+      <div>
+        {renderLabel("درجة تصحيح الخطأ")}
+        {renderSelect({
+          value: settings.qrConfig.errorCorrection,
+          onChange: (e) => updateQr("errorCorrection", e.target.value as "L" | "M" | "Q" | "H"),
+          children: (
+            <>
+              <option value="L">L (منخفضة ~7%)</option>
+              <option value="M">M (متوسطة ~15%)</option>
+              <option value="Q">Q (عالية ~25%)</option>
+              <option value="H">H (عالية جداً ~30%)</option>
+            </>
+          ),
+        })}
+      </div>
+      <div className="psc-checkbox-stack" style={{ gridColumn: "1 / -1" }}>
+        {renderCheckbox(settings.qrConfig.enabled, (v) => updateQr("enabled", v), "✅ تفعيل QR Code في الفواتير")}
+        {renderCheckbox(settings.qrConfig.includeInvoiceData, (v) => updateQr("includeInvoiceData", v), "📝 تضمين بيانات الفاتورة الكاملة في QR")}
+      </div>
+    </div>
+  );
+
+  /* ── Main Render ── */
+
+  const tabContent: { [K in TabKey]: () => React.ReactNode } = {
+    company: renderCompanyTab,
+    printers: renderPrintersTab,
+    invoice: renderInvoiceTab,
+    thermal: renderThermalTab,
+    barcode: renderBarcodeTab,
+    headerFooter: renderHeaderFooterTab,
+    qr: renderQrTab,
+  };
+
+  return (
+    <div dir="rtl" className="psc-root">
+      {renderTabs()}
+      <div className="psc-content">{tabContent[activeTab]()}</div>
+      <div className="psc-save-bar">
         <button
-          style={{
-            ...primaryBtn,
-            padding: "12px 40px",
-            fontSize: "15px",
-            borderRadius: "10px",
-            boxShadow: "0 4px 14px rgba(30,58,95,0.3)",
-            opacity: saving ? 0.7 : 1,
-            cursor: saving ? "not-allowed" : "pointer",
-          }}
+          className="psc-btn-primary"
           onClick={handleSave}
           disabled={saving}
         >
