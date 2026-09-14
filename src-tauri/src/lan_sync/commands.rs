@@ -1,6 +1,6 @@
 use tauri::State;
 use crate::AppState;
-use super::{LanSyncConfig, LanSyncStatus, LanDevice, start_lan_server, stop_lan_server, get_status, sync_with_device, discover_devices, save_config, load_config, remove_device, SERVER_STATE};
+use super::{LanSyncConfig, LanSyncStatus, LanDevice, SyncLogEntry, start_lan_server, stop_lan_server, get_status, sync_with_device, discover_devices, save_config, load_config, remove_device, get_sync_log, SERVER_STATE};
 
 #[tauri::command]
 pub fn start_lan_sync(
@@ -10,6 +10,7 @@ pub fn start_lan_sync(
     port: u16,
     auto_sync: bool,
     sync_interval_secs: u64,
+    sync_token: String,
 ) -> Result<LanSyncStatus, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let mut config = load_config(&conn)?;
@@ -18,6 +19,7 @@ pub fn start_lan_sync(
     config.port = port;
     config.auto_sync = auto_sync;
     config.sync_interval_secs = sync_interval_secs;
+    config.sync_token = sync_token;
     save_config(&conn, &config)?;
     start_lan_server(&conn, state.db_path.clone(), config)
 }
@@ -38,12 +40,11 @@ pub fn get_lan_sync_status(
         stmt.query_row([], |row| row.get::<_, String>(0)).unwrap_or_default()
     };
 
-    // Check if server is actually running
     let global = SERVER_STATE.lock().map_err(|e| e.to_string())?;
     if let Some(server_state) = global.as_ref() {
         Ok(get_status(&conn, server_state))
     } else {
-        // Server not running, return offline status
+        let log = get_sync_log(&conn).unwrap_or_default();
         Ok(LanSyncStatus {
             is_running: false,
             device_id,
@@ -56,6 +57,7 @@ pub fn get_lan_sync_status(
             pending_pull: 0,
             auto_sync: config.auto_sync,
             sync_interval_secs: config.sync_interval_secs,
+            sync_log: log,
         })
     }
 }
@@ -98,4 +100,12 @@ pub fn remove_lan_device(
     device_id: String,
 ) -> Result<(), String> {
     remove_device(&device_id)
+}
+
+#[tauri::command]
+pub fn get_lan_sync_log(
+    state: State<'_, AppState>,
+) -> Result<Vec<SyncLogEntry>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    get_sync_log(&conn)
 }

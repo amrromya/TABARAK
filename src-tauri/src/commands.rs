@@ -6553,3 +6553,309 @@ pub async fn print_html_direct(html_content: String, printer_name: String, copie
         Err("Direct printing is only supported on Windows".into())
     }
 }
+
+// =============== استيراد بيانات كيان سوفت ===============
+
+#[tauri::command]
+pub async fn import_kayan_soft(state: State<'_, AppState>, file_path: String) -> Result<ImportResult, String> {
+    use std::io::Write;
+
+    let src = std::path::Path::new(&file_path);
+    if !src.exists() {
+        return Err("ملف النسخة الاحتياطية غير موجود".into());
+    }
+
+    let temp_dir = std::env::temp_dir().join("kayan_import");
+    fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
+
+    let db_name = "kayan_import";
+
+    // Cleanup helper
+    let cleanup_db = |db_name: &str| {
+        if let Some(cmd) = find_sqlcmd() {
+            let _ = std::process::Command::new(&cmd)
+                .args(["-Q", &format!("ALTER DATABASE [{}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{}];", db_name, db_name)])
+                .output();
+        }
+    };
+
+    // 1. Find LocalDB and sqlcmd
+    let sqlcmd_path = find_sqlcmd().ok_or("لم يتم العثور على sqlcmd. تأكد من تثبيت SQL Server.")?;
+    let localdb_path = find_localdb().ok_or("لم يتم العثور على SqlLocalDB. تأكد من تثبيت SQL Server LocalDB.")?;
+
+    // Start LocalDB
+    let _ = std::process::Command::new(&localdb_path)
+        .args(["start", "MSSQLLocalDB"])
+        .output();
+
+    // Get pipe name
+    let info_output = std::process::Command::new(&localdb_path)
+        .args(["info", "MSSQLLocalDB"])
+        .output()
+        .map_err(|e| format!("فشل الحصول على معلومات LocalDB: {e}"))?;
+    let info_stdout = String::from_utf8_lossy(&info_output.stdout);
+    let pipe_name = info_stdout
+        .lines()
+        .find(|l| l.trim().starts_with("Instance pipe name:"))
+        .map(|l| l.trim().trim_start_matches("Instance pipe name:").trim().to_string())
+        .ok_or("لم يتم العثور على pipe name لـ LocalDB")?;
+
+    if pipe_name.is_empty() {
+        return Err("pipe name فارغ - تأكد من تشغيل LocalDB".into());
+    }
+
+    let mdf_path = temp_dir.join("kayan.mdf");
+    let ldf_path = temp_dir.join("kayan_log.ldf");
+
+    // 2. Restore backup
+    let restore_sql = format!(
+        "RESTORE DATABASE [{}] FROM DISK = N'{}' WITH REPLACE, MOVE 'tabarak' TO N'{}', MOVE 'tabarak_log' TO N'{}'",
+        db_name,
+        file_path.replace('\'', "''"),
+        mdf_path.to_string_lossy().replace('\'', "''"),
+        ldf_path.to_string_lossy().replace('\'', "''"),
+    );
+
+    let restore_output = std::process::Command::new(&sqlcmd_path)
+        .args(["-S", &pipe_name, "-E", "-Q", &restore_sql])
+        .output()
+        .map_err(|e| format!("فشل استعادة النسخة الاحتياطية: {e}"))?;
+
+    if !restore_output.status.success() {
+        let stderr = String::from_utf8_lossy(&restore_output.stderr);
+        let stdout = String::from_utf8_lossy(&restore_output.stdout);
+        cleanup_db(db_name);
+        let _ = fs::remove_dir_all(&temp_dir);
+        return Err(format!("فشل استعادة النسخة الاحتياطية: {} {}", stdout, stderr));
+    }
+
+    // 3. Export data using sqlcmd with TSV output (-o file avoids console wrapping)
+    let export_data = |sql: &str| -> Result<String, String> {
+        let sql_file = temp_dir.join("export.sql");
+        let out_file = temp_dir.join("export.txt");
+        let mut f = fs::File::create(&sql_file).map_err(|e| e.to_string())?;
+        f.write_all(sql.as_bytes()).map_err(|e| e.to_string())?;
+        f.flush().map_err(|e| e.to_string())?;
+        drop(f);
+
+        let output = std::process::Command::new(&sqlcmd_path)
+            .args(["-S", &pipe_name, "-E", "-d", db_name, "-i", &sql_file.to_string_lossy(), "-s", "\t", "-W", "-h-1", "-o", &out_file.to_string_lossy()])
+            .output()
+            .map_err(|e| format!("فشل تصدير البيانات: {e}"))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("فشل تصدير البيانات: {}", stderr));
+        }
+
+        fs::read_to_string(&out_file).map_err(|e| format!("فشل قراءة ملف التصدير: {}", e))
+    };
+
+    // Parse tab-separated lines
+    let parse_tsv = |data: &str| -> Vec<Vec<String>> {
+        data.lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| l.split('\t').map(|s| s.trim().to_string()).collect())
+            .collect()
+    };
+
+    let conn = get_db(&state)?;
+    let mut result = ImportResult {
+        products: 0,
+        customers: 0,
+        employees: 0,
+        warehouses: 0,
+        categories: 0,
+    };
+
+    // 4. Import categories (from groups and classes)
+    {
+        let data = export_data(
+            "SELECT DISTINCT group_name FROM mygroups WHERE (stoped = 0 OR stoped IS NULL) AND group_name IS NOT NULL AND group_name != '' UNION SELECT DISTINCT class_name FROM myclass_items WHERE class_name IS NOT NULL AND class_name != ''"
+        )?;
+        let rows = parse_tsv(&data);
+
+        let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+        for row in &rows {
+            if let Some(name) = row.first() {
+                if !name.is_empty() {
+                    let _ = tx.execute("INSERT OR IGNORE INTO categories (name) VALUES (?1)", params![name]);
+                }
+            }
+        }
+        result.categories = rows.len() as i64;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
+    // 5. Import warehouses
+    {
+        let data = export_data("SELECT stor_name FROM mystors")?;
+        let rows = parse_tsv(&data);
+
+        let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+        for row in &rows {
+            if let Some(name) = row.first() {
+                if !name.is_empty() {
+                    let count: i64 = tx.query_row("SELECT COUNT(*) FROM warehouses", [], |r| r.get(0)).unwrap_or(0);
+                    let is_default = if count == 0 { 1i64 } else { 0i64 };
+                    let _ = tx.execute("INSERT OR IGNORE INTO warehouses (name, is_default) VALUES (?1, ?2)", params![name, is_default]);
+                }
+            }
+        }
+        result.warehouses = rows.len() as i64;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
+    // 6. Import employees
+    {
+        let data = export_data("SELECT employ_name FROM myemploy")?;
+        let rows = parse_tsv(&data);
+
+        let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+        for row in &rows {
+            if let Some(name) = row.first() {
+                if !name.is_empty() {
+                    let _ = tx.execute("INSERT OR IGNORE INTO employees (name, phone) VALUES (?1, ?2)", params![name, Option::<String>::None]);
+                }
+            }
+        }
+        result.employees = rows.len() as i64;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
+    // 7. Import customers (myam + mytree)
+    {
+        let data = export_data("SELECT a.am_name, t.tel1, t.address1 FROM myam a LEFT JOIN mytree t ON a.acc_id = t.acc_id")?;
+        let rows = parse_tsv(&data);
+
+        let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+        for row in &rows {
+            if let Some(name) = row.first() {
+                if !name.is_empty() {
+                    let phone = row.get(1).and_then(|p| if p.is_empty() { None } else { Some(p.as_str()) });
+                    let notes = row.get(2).and_then(|a| if a.is_empty() { None } else { Some(a.as_str()) });
+                    let _ = tx.execute("INSERT OR IGNORE INTO customers (name, phone, notes) VALUES (?1, ?2, ?3)", params![name, phone, notes]);
+                }
+            }
+        }
+        result.customers = rows.len() as i64;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
+    // 8. Import products
+    {
+        let items_sql = "SELECT TOP 3000 i.item_name, i.item_code, i.item_stop, g.group_name, c.class_name, u.unit_name, ud.unit_convert, ud.is_basic_unit FROM myitems i LEFT JOIN mygroups g ON i.group_id = g.group_id LEFT JOIN myclass_items c ON i.class_id = c.class_id LEFT JOIN myunits_data ud ON i.item_id = ud.item_id LEFT JOIN myunits_name u ON ud.unit_name_id = u.unit_id ORDER BY i.item_id";
+        let data = export_data(items_sql)?;
+        let rows = parse_tsv(&data);
+
+        let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+
+        // Build category name -> id map
+        let cat_map: HashMap<String, i64> = {
+            let mut stmt = tx.prepare("SELECT id, name FROM categories").map_err(|e| e.to_string())?;
+            let cat_rows = stmt.query_map([], |r| Ok((r.get::<_, String>(1)?, r.get::<_, i64>(0)?))).map_err(|e| e.to_string())?;
+            cat_rows.filter_map(|r| r.ok()).collect()
+        };
+
+        for row in &rows {
+            let name = match row.first() {
+                Some(n) if !n.is_empty() => n.as_str(),
+                _ => continue,
+            };
+            let barcode: Option<&str> = row.get(1).and_then(|b| if b.is_empty() { None } else { Some(b.as_str()) });
+            let group_name: Option<&str> = row.get(3).and_then(|g| if g.is_empty() { None } else { Some(g.as_str()) });
+            let class_name: Option<&str> = row.get(4).and_then(|c| if c.is_empty() { None } else { Some(c.as_str()) });
+            let unit_name: Option<&str> = row.get(5).and_then(|u| if u.is_empty() { None } else { Some(u.as_str()) });
+            let unit_convert: Option<f64> = row.get(6).and_then(|u| u.parse::<f64>().ok());
+            let is_basic: Option<String> = row.get(7).cloned();
+
+            // Determine category: prefer group, fallback to class
+            let cat_name = group_name.or(class_name);
+            let category_id = cat_name.and_then(|cn| cat_map.get(cn).copied());
+
+            let unit = unit_name.unwrap_or("قطعة");
+
+            tx.execute(
+                "INSERT INTO products (name, barcode, category_id, unit, cost_price, sell_price, quantity) VALUES (?1, ?2, ?3, ?4, 0, 0, 0)",
+                params![name, barcode, category_id, unit],
+            )
+            .map_err(|e| e.to_string())?;
+
+            let product_id = tx.last_insert_rowid();
+
+            // Insert product unit if we have unit data
+            if let Some(un) = unit_name {
+                if !un.is_empty() {
+                    let conv = unit_convert.unwrap_or(1.0);
+                    let is_basic_unit = is_basic.as_deref().map(|b| b == "1" || b.to_lowercase() == "true").unwrap_or(true);
+                    let factor = if is_basic_unit { 1.0 } else { conv };
+                    let _ = tx.execute(
+                        "INSERT INTO product_units (product_id, unit_name, conversion_factor, sell_price) VALUES (?1, ?2, ?3, 0)",
+                        params![product_id, un, factor],
+                    );
+                }
+            }
+        }
+        result.products = rows.len() as i64;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
+    // 9. Cleanup
+    cleanup_db(db_name);
+    let _ = fs::remove_dir_all(&temp_dir);
+
+    add_system_audit_log(&conn, "import", "kayan_soft", None, None, Some(&format!(
+        "تم استيراد {} منتج، {} عميل، {} موظف، {} مستودع، {} تصنيف",
+        result.products, result.customers, result.employees, result.warehouses, result.categories
+    )));
+
+    Ok(result)
+}
+
+fn find_sqlcmd() -> Option<String> {
+    let paths = [
+        r"C:\Program Files\SqlCmd\sqlcmd.exe",
+        r"C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\sqlcmd.exe",
+        r"C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\130\Tools\Binn\sqlcmd.exe",
+        r"C:\Program Files (x86)\Microsoft SQL Server\130\Tools\Binn\sqlcmd.exe",
+        r"C:\Program Files (x86)\Microsoft SQL Server\110\Tools\Binn\sqlcmd.exe",
+    ];
+    for p in &paths {
+        if std::path::Path::new(p).exists() {
+            return Some(p.to_string());
+        }
+    }
+    if let Ok(output) = std::process::Command::new("where").arg("sqlcmd").output() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if let Some(first_line) = stdout.lines().next() {
+            let path = first_line.trim();
+            if !path.is_empty() && std::path::Path::new(path).exists() {
+                return Some(path.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn find_localdb() -> Option<String> {
+    let paths = [
+        r"C:\Program Files\Microsoft SQL Server\150\Tools\Binn\SqlLocalDB.exe",
+        r"C:\Program Files\Microsoft SQL Server\130\Tools\Binn\SqlLocalDB.exe",
+        r"C:\Program Files (x86)\Microsoft SQL Server\130\Tools\Binn\SqlLocalDB.exe",
+    ];
+    for p in &paths {
+        if std::path::Path::new(p).exists() {
+            return Some(p.to_string());
+        }
+    }
+    if let Ok(output) = std::process::Command::new("where").arg("SqlLocalDB").output() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if let Some(first_line) = stdout.lines().next() {
+            let path = first_line.trim();
+            if !path.is_empty() && std::path::Path::new(path).exists() {
+                return Some(path.to_string());
+            }
+        }
+    }
+    None
+}

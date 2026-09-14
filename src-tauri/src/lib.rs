@@ -240,6 +240,8 @@ pub fn run() {
             commands::print_html_in_app,
             commands::export_pdf_direct,
             commands::print_html_direct,
+            commands::export_pdf_direct,
+            commands::import_kayan_soft,
             lan_sync::commands::start_lan_sync,
             lan_sync::commands::stop_lan_sync,
             lan_sync::commands::get_lan_sync_status,
@@ -248,6 +250,7 @@ pub fn run() {
             lan_sync::commands::save_lan_sync_config,
             lan_sync::commands::load_lan_sync_config,
             lan_sync::commands::remove_lan_device,
+            lan_sync::commands::get_lan_sync_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -56,6 +56,10 @@ export function Sales({
   const [showMovements, setShowMovements] = useState(false);
   const [movementProduct, setMovementProduct] = useState<Product | null>(null);
   const [showTodayItems, setShowTodayItems] = useState(false);
+  const [itemsSearch, setItemsSearch] = useState("");
+  const [itemsDateFrom, setItemsDateFrom] = useState(today());
+  const [itemsDateTo, setItemsDateTo] = useState(today());
+  const [itemsExporting, setItemsExporting] = useState(false);
 
   const [date, setDate] = useState(today());
   const [customer, setCustomer] = useState("");
@@ -493,17 +497,161 @@ export function Sales({
     .reduce((sum, s) => sum + s.net_total, 0);
 
   const todayItemsMap = sales
-    .filter((s) => s.date === today())
-    .flatMap((s) => (s.items || []).map((it) => ({ ...it, invoice_no: s.invoice_no })))
-    .reduce<Record<string, { product_name: string; quantity: number; sell_price: number; total: number; invoices: string[] }>>((acc, it) => {
+    .filter((s) => {
+      if (itemsDateFrom && s.date < itemsDateFrom) return false;
+      if (itemsDateTo && s.date > itemsDateTo) return false;
+      return true;
+    })
+    .flatMap((s) => (s.items || []).map((it) => ({ ...it, invoice_no: s.invoice_no, sale_date: s.date })))
+    .reduce<Record<string, { product_name: string; quantity: number; sell_price: number; total: number; invoices: string[]; dates: string[] }>>((acc, it) => {
       const key = String(it.product_id);
-      if (!acc[key]) acc[key] = { product_name: it.product_name, quantity: 0, sell_price: it.sell_price, total: 0, invoices: [] };
+      if (!acc[key]) acc[key] = { product_name: it.product_name, quantity: 0, sell_price: it.sell_price, total: 0, invoices: [], dates: [] };
       acc[key].quantity += it.quantity;
       acc[key].total += it.total;
       if (!acc[key].invoices.includes(it.invoice_no)) acc[key].invoices.push(it.invoice_no);
+      if (!acc[key].dates.includes(it.sale_date)) acc[key].dates.push(it.sale_date);
       return acc;
     }, {});
-  const todayItems = Object.values(todayItemsMap);
+  const allTodayItems = Object.values(todayItemsMap);
+  const todayItems = itemsSearch
+    ? allTodayItems.filter((it) => it.product_name.includes(itemsSearch) || it.invoices.some((inv) => inv.includes(itemsSearch)))
+    : allTodayItems;
+
+  if (showTodayItems) {
+    return (
+      <div className="page">
+        <div className="page-head">
+          <h1>
+            <button className="btn" onClick={() => setShowTodayItems(false)} style={{ marginLeft: 10 }}>
+              ← رجوع
+            </button>
+            📦 حركة الأصناف
+          </h1>
+          <div className="head-actions">
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>من:</label>
+              <input type="date" className="search" value={itemsDateFrom} onChange={(e) => setItemsDateFrom(e.target.value)} style={{ width: 150 }} />
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>إلى:</label>
+              <input type="date" className="search" value={itemsDateTo} onChange={(e) => setItemsDateTo(e.target.value)} style={{ width: 150 }} />
+            </div>
+            <button className="btn sm" onClick={() => { setItemsDateFrom(""); setItemsDateTo(""); }}>الكل</button>
+            <button className="btn sm" onClick={() => { setItemsDateFrom(today()); setItemsDateTo(today()); }}>اليوم</button>
+            <input
+              className="search"
+              placeholder="🔍 بحث بالاسم أو رقم الفاتورة..."
+              value={itemsSearch}
+              onChange={(e) => setItemsSearch(e.target.value)}
+              style={{ width: 240 }}
+            />
+            <button className="btn primary" disabled={itemsExporting || todayItems.length === 0} onClick={async () => {
+              setItemsExporting(true);
+              try {
+                const { jsPDF } = await import("jspdf");
+                const autoTableMod = await import("jspdf-autotable");
+                const autoTable = autoTableMod.default;
+                const doc = new jsPDF({ orientation: "l", unit: "mm", format: "a4" });
+                const pw = doc.internal.pageSize.getWidth();
+
+                doc.setFontSize(18);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(15, 52, 96);
+                doc.text("Items Movement Report", pw / 2, 14, { align: "center" });
+
+                doc.setFontSize(10);
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(100);
+                const range = itemsDateFrom && itemsDateTo ? `${itemsDateFrom} - ${itemsDateTo}` : itemsDateFrom ? `From: ${itemsDateFrom}` : itemsDateTo ? `Until: ${itemsDateTo}` : "All Dates";
+                doc.text(`Date Range: ${range}`, pw / 2, 21, { align: "center" });
+                doc.text(`Generated: ${new Date().toLocaleDateString("en-GB")}`, pw / 2, 26, { align: "center" });
+                doc.setDrawColor(15, 52, 96);
+                doc.setLineWidth(0.5);
+                doc.line(14, 29, pw - 14, 29);
+
+                const tQty = todayItems.reduce((s, it) => s + it.quantity, 0);
+                const tAmt = todayItems.reduce((s, it) => s + it.total, 0);
+
+                autoTable(doc, {
+                  startY: 33,
+                  head: [["#", "Product", "Qty", "Unit Price", "Total", "Invoices"]],
+                  body: todayItems.map((it, i) => [
+                    i + 1, it.product_name, it.quantity, it.sell_price.toFixed(2), it.total.toFixed(2), it.invoices.join(", "),
+                  ]),
+                  foot: [["", "TOTAL", String(tQty), "", tAmt.toFixed(2), ""]],
+                  theme: "grid",
+                  headStyles: { fillColor: [15, 52, 96], textColor: 255, fontStyle: "bold", halign: "center", fontSize: 9 },
+                  bodyStyles: { fontSize: 8, halign: "center" },
+                  footStyles: { fillColor: [241, 245, 249], textColor: [15, 52, 96], fontStyle: "bold", fontSize: 9 },
+                  columnStyles: { 0: { cellWidth: 12 }, 1: { halign: "left", cellWidth: 70 }, 2: { cellWidth: 18 }, 3: { cellWidth: 28 }, 4: { cellWidth: 28, fontStyle: "bold" }, 5: { halign: "left", cellWidth: "auto" } },
+                  margin: { left: 14, right: 14 },
+                });
+
+                const { save } = await import("@tauri-apps/plugin-dialog");
+                const path = await save({ title: "Save Items Movement", defaultPath: `items_movement_${itemsDateFrom || "all"}-${itemsDateTo || "all"}.pdf`, filters: [{ name: "PDF", extensions: ["pdf"] }] });
+                if (path) {
+                  const bytes = doc.output("arraybuffer");
+                  await api.writeBinaryFile(path, Array.from(new Uint8Array(bytes)));
+                  notify("تم تصدير التقرير بنجاح", "success");
+                }
+              } catch (e) {
+                notify("فشل التصدير: " + String(e), "error");
+              } finally {
+                setItemsExporting(false);
+              }
+            }}>
+              {itemsExporting ? "⏳ جاري..." : "📥 PDF"}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
+          <div style={{ flex: 1, background: "#f0f4ff", borderRadius: 10, padding: "10px 16px", textAlign: "center" }}>
+            <div style={{ fontSize: 12, color: "#64748b" }}>عدد الأصناف</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#0f3460" }}>{todayItems.length}</div>
+          </div>
+          <div style={{ flex: 1, background: "#f0fdf4", borderRadius: 10, padding: "10px 16px", textAlign: "center" }}>
+            <div style={{ fontSize: 12, color: "#64748b" }}>إجمالي الكمية</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#16a34a" }}>{todayItems.reduce((s, it) => s + it.quantity, 0)}</div>
+          </div>
+          <div style={{ flex: 1, background: "#fefce8", borderRadius: 10, padding: "10px 16px", textAlign: "center" }}>
+            <div style={{ fontSize: 12, color: "#64748b" }}>إجمالي المبلغ</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#ca8a04" }}>{money(todayItems.reduce((s, it) => s + it.total, 0))}</div>
+          </div>
+        </div>
+
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th style={{ width: 40 }}>#</th>
+                <th>الصنف</th>
+                <th style={{ width: 70 }}>الكمية</th>
+                <th style={{ width: 100 }}>السعر</th>
+                <th style={{ width: 100 }}>المبلغ</th>
+                <th>الفواتير</th>
+              </tr>
+            </thead>
+            <tbody>
+              {todayItems.length === 0 && (
+                <tr><td colSpan={6} className="empty">لا توجد أصناف في الفترة المحددة</td></tr>
+              )}
+              {todayItems.map((it, i) => (
+                <tr key={i}>
+                  <td style={{ color: "#94a3b8" }}>{i + 1}</td>
+                  <td style={{ fontWeight: 600 }}>{it.product_name}</td>
+                  <td>{qty(it.quantity)}</td>
+                  <td>{money(it.sell_price)}</td>
+                  <td style={{ fontWeight: 700 }}>{money(it.total)}</td>
+                  <td style={{ fontSize: 11, color: "#666" }}>{it.invoices.join(", ")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page">
@@ -1210,43 +1358,6 @@ export function Sales({
           onClose={() => setShowMovements(false)}
           onViewInvoice={handleViewMovement}
         />
-      )}
-
-      {showTodayItems && (
-        <Modal title="حركة أصناف اليوم" onClose={() => setShowTodayItems(false)} width="760px">
-          <div style={{ marginBottom: 12, fontSize: 13, color: "#666" }}>
-            إجمالي الأصناف المباعة: <b>{todayItems.reduce((s, it) => s + it.quantity, 0)}</b> | عدد الأصناف: <b>{todayItems.length}</b>
-          </div>
-          <div style={{ overflowX: "auto" }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>الصنف</th>
-                  <th>الكمية</th>
-                  <th>السعر</th>
-                  <th>المبلغ</th>
-                  <th>الفواتير</th>
-                </tr>
-              </thead>
-              <tbody>
-                {todayItems.length === 0 && (
-                  <tr><td colSpan={6} className="empty">لا توجد أصناف مباعة اليوم</td></tr>
-                )}
-                {todayItems.map((it, i) => (
-                  <tr key={i}>
-                    <td style={{ color: "#94a3b8" }}>{i + 1}</td>
-                    <td style={{ fontWeight: 600 }}>{it.product_name}</td>
-                    <td>{it.quantity}</td>
-                    <td>{money(it.sell_price)}</td>
-                    <td style={{ fontWeight: 700 }}>{money(it.total)}</td>
-                    <td style={{ fontSize: 11, color: "#666" }}>{it.invoices.join(", ")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Modal>
       )}
 
       {printPreview && settings && (

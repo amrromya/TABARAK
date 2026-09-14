@@ -60,6 +60,7 @@ import type {
   LanSyncStatus,
   LanSyncConfig,
   LanDevice,
+  SyncLogEntry,
   WarehouseStats,
 } from "./types";
 
@@ -462,6 +463,10 @@ export const api = {
   startAutoBackup: (backupPath: string, intervalHours: number) =>
     invoke<void>("start_auto_backup", { backupPath, intervalHours }),
 
+  // استيراد كيان سوفت
+  importKayanSoft: (filePath: string) =>
+    invoke<{ products: number; customers: number; employees: number; warehouses: number; categories: number }>("import_kayan_soft", { filePath }),
+
   // ==================== Cash Register ====================
   getCashSession: () => invoke<CashRegisterSession | null>("get_cash_session"),
   openCashRegister: (openingBalance: number, openedBy?: string) =>
@@ -481,7 +486,7 @@ export const api = {
     invoke<number>("get_audit_log_count", params),
 
   // ==================== LAN Sync ====================
-  startLanSync: (params: { deviceName: string; isPrimary: boolean; port: number; autoSync: boolean; syncIntervalSecs: number }) =>
+  startLanSync: (params: { deviceName: string; isPrimary: boolean; port: number; autoSync: boolean; syncIntervalSecs: number; syncToken: string }) =>
     invoke<LanSyncStatus>("start_lan_sync", params),
   stopLanSync: () => invoke<void>("stop_lan_sync"),
   getLanSyncStatus: () => invoke<LanSyncStatus>("get_lan_sync_status"),
@@ -490,4 +495,5 @@ export const api = {
   saveLanSyncConfig: (configJson: string) => invoke<void>("save_lan_sync_config", { configJson }),
   loadLanSyncConfig: () => invoke<LanSyncConfig>("load_lan_sync_config"),
   removeLanDevice: (deviceId: string) => invoke<void>("remove_lan_device", { deviceId }),
+  getLanSyncLog: () => invoke<SyncLogEntry[]>("get_lan_sync_log"),
 };

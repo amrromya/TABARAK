@@ -565,6 +565,17 @@ pub struct ShiftReport {
     pub work_hours: f64,
 }
 
+// ---------- Import Result ----------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportResult {
+    pub products: i64,
+    pub customers: i64,
+    pub employees: i64,
+    pub warehouses: i64,
+    pub categories: i64,
+}
+
 // ---------- Reports ----------
 
 #[derive(Debug, Clone, Serialize, Default)]

@@ -1365,6 +1365,14 @@ const translations: Record<string, Record<Lang, string>> = {
   cashRegisterItemDesc: { ar: "إظهار قسم الصندوق في القائمة الجانبية", en: "Show cash register section in sidebar" },
   cashRegisterEnabled: { ar: "تم تفعيل الصندوق", en: "Cash register enabled" },
   cashRegisterDisabled: { ar: "تم إخفاء الصندوق", en: "Cash register disabled" },
+  syncEnabled: { ar: "تم تفعيل المزامنة السحابية", en: "Cloud sync enabled" },
+  syncDisabled: { ar: "تم تعطيل المزامنة السحابية", en: "Cloud sync disabled" },
+  branchesEnabled: { ar: "تم تفعيل إدارة الفروع", en: "Branches enabled" },
+  branchesDisabled: { ar: "تم تعطيل إدارة الفروع", en: "Branches disabled" },
+  attendanceUrlEnabled: { ar: "تم تفعيل رابط الحضور", en: "Attendance URL enabled" },
+  attendanceUrlDisabled: { ar: "تم تعطيل رابط الحضور", en: "Attendance URL disabled" },
+  lanSyncEnabled: { ar: "تم تفعيل مزامنة الشبكة المحلية", en: "LAN sync enabled" },
+  lanSyncDisabled: { ar: "تم تعطيل مزامنة الشبكة المحلية", en: "LAN sync disabled" },
 
   // --- Permission labels ---
   perm_view_dashboard: { ar: "عرض لوحة التحكم", en: "View Dashboard" },

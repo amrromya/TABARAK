@@ -681,6 +681,7 @@ export interface LanSyncConfig {
   port: number;
   auto_sync: boolean;
   sync_interval_secs: number;
+  sync_token: string;
   known_devices: LanDevice[];
 }
 
@@ -696,6 +697,18 @@ export interface LanSyncStatus {
   pending_pull: number;
   auto_sync: boolean;
   sync_interval_secs: number;
+  sync_log: SyncLogEntry[];
+}
+
+export interface SyncLogEntry {
+  timestamp: string;
+  peer_ip: string;
+  peer_name: string;
+  pushed: number;
+  pulled: number;
+  direction: string;
+  success: boolean;
+  error: string | null;
 }
 
 // ==================== Maintenance Types ====================

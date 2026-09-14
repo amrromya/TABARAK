@@ -138,10 +138,11 @@ const SECTIONS: { key: SectionKey; icon: string; title: string; color: string; g
 function LanSyncSection() {
   const notify = useToast();
   const [status, setStatus] = useState<LanSyncStatus | null>(null);
-  const [config, setConfig] = useState<LanSyncConfig>({ device_name: "", is_primary: false, port: 9527, auto_sync: false, sync_interval_secs: 15, known_devices: [] });
+  const [config, setConfig] = useState<LanSyncConfig>({ device_name: "", is_primary: false, port: 9527, auto_sync: false, sync_interval_secs: 15, sync_token: "", known_devices: [] });
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ pushed: number; pulled: number } | null>(null);
+  const [showLog, setShowLog] = useState(false);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -159,7 +160,6 @@ function LanSyncSection() {
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
 
-  // Auto-refresh every 10s if running
   useEffect(() => {
     if (!status?.is_running) return;
     const interval = setInterval(loadStatus, 10000);
@@ -175,6 +175,7 @@ function LanSyncSection() {
         port: config.port,
         autoSync: config.auto_sync,
         syncIntervalSecs: config.sync_interval_secs,
+        syncToken: config.sync_token,
       });
       setStatus(result);
       setConfig((c) => ({ ...c, known_devices: result.connected_devices }));
@@ -208,7 +209,6 @@ function LanSyncSection() {
       const [pushed, pulled] = await api.lanSyncNow(ip, port);
       setSyncResult({ pushed, pulled });
       notify(`${t("lanSyncCompleted")} — رفع: ${pushed} | جلب: ${pulled}`);
-      // Reload status after sync
       setTimeout(loadStatus, 500);
     } catch (e) { notify(String(e), "error"); }
     setSyncing(false);
@@ -229,15 +229,14 @@ function LanSyncSection() {
   };
 
   const allDevices = status?.connected_devices?.length ? status.connected_devices : config.known_devices;
+  const syncLog = status?.sync_log || [];
 
   return (
     <div className="print-settings">
-      {/* Status */}
       <div className="print-section">
         <h3>🔗 {t("lanSyncTitle")}</h3>
         <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>{t("lanSyncDesc")}</p>
 
-        {/* Server status */}
         <div style={{
           display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12,
           background: status?.is_running ? "#ecfdf5" : "#f9fafb",
@@ -247,6 +246,7 @@ function LanSyncSection() {
           <div style={{
             width: 10, height: 10, borderRadius: "50%",
             background: status?.is_running ? "#10b981" : "#d1d5db",
+            boxShadow: status?.is_running ? "0 0 6px #10b981" : "none",
           }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600, fontSize: 14 }}>
@@ -255,6 +255,7 @@ function LanSyncSection() {
             {status?.is_running && (
               <div style={{ fontSize: 12, color: "#6b7280" }}>
                 {status.device_name} | المنفذ: {status.port} | {(status.is_primary ? "رئيسي" : "فرعي")} | سجلات معلقة: {status.pending_push}
+                {status.auto_sync && <span style={{ color: "#10b981", fontWeight: 600 }}> | مزامنة تلقائية كل {status.sync_interval_secs} ث</span>}
               </div>
             )}
           </div>
@@ -267,7 +268,6 @@ function LanSyncSection() {
           )}
         </div>
 
-        {/* Config */}
         <div className="print-fields">
           <div className="print-field">
             <label>{t("lanDeviceName")}</label>
@@ -288,11 +288,16 @@ function LanSyncSection() {
             <label>{t("lanSyncInterval")}</label>
             <input type="number" min={5} max={300} value={config.sync_interval_secs} onChange={(e) => setConfig((c) => ({ ...c, sync_interval_secs: Number(e.target.value) }))} />
           </div>
+          <div className="print-field" style={{ gridColumn: "span 2" }}>
+            <label>🔒 رمز المزامنة (Shared Token)</label>
+            <input value={config.sync_token} onChange={(e) => setConfig((c) => ({ ...c, sync_token: e.target.value }))} placeholder="اتركه فارغاً للمزامنة بدون رمز" style={{ fontFamily: "monospace" }} />
+            <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>يجب أن يكون مطابقاً على جميع الأجهزة المتزامنة. يحمي من الاتصال غير المصرح به.</div>
+          </div>
         </div>
         <div className="print-toggles">
           <label className="checkbox-label">
             <input type="checkbox" checked={config.auto_sync} onChange={(e) => setConfig((c) => ({ ...c, auto_sync: e.target.checked }))} />
-            {t("lanAutoSync")}
+            {t("lanAutoSync")} — مزامنة تلقائية كل {config.sync_interval_secs} ثانية
           </label>
         </div>
         <div className="form-actions" style={{ marginTop: 12 }}>
@@ -300,7 +305,6 @@ function LanSyncSection() {
         </div>
       </div>
 
-      {/* Devices */}
       <div className="print-section" style={{ marginTop: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <h3 style={{ margin: 0 }}>📱 {t("lanConnectedDevices")} ({allDevices.length})</h3>
@@ -364,7 +368,6 @@ function LanSyncSection() {
           </div>
         )}
 
-        {/* Sync Result */}
         {syncResult && (
           <div style={{ marginTop: 12, padding: "12px 16px", borderRadius: 10, background: "#ecfdf5", border: "1px solid #86efac" }}>
             <div style={{ fontWeight: 600, fontSize: 13, color: "#065f46", marginBottom: 4 }}>✓ {t("lanSyncCompleted")}</div>
@@ -376,7 +379,63 @@ function LanSyncSection() {
         )}
       </div>
 
-      {/* Info */}
+      <div className="print-section" style={{ marginTop: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <h3 style={{ margin: 0 }}>📋 سجل المزامنة ({syncLog.length})</h3>
+          <button className="btn sm" onClick={() => setShowLog(!showLog)}>
+            {showLog ? "إخفاء" : "عرض"}
+          </button>
+        </div>
+        {showLog && syncLog.length === 0 && (
+          <div style={{ padding: 16, textAlign: "center", color: "#9ca3af", fontSize: 13, background: "#f9fafb", borderRadius: 10 }}>
+            لا يوجد سجل مزامنة بعد
+          </div>
+        )}
+        {showLog && syncLog.length > 0 && (
+          <div style={{ maxHeight: 300, overflow: "auto" }}>
+            <table className="table" style={{ fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th>التاريخ</th>
+                  <th>الجهاز</th>
+                  <th>IP</th>
+                  <th>رفع</th>
+                  <th>جلب</th>
+                  <th>النوع</th>
+                  <th>الحالة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {syncLog.map((entry, i) => (
+                  <tr key={i}>
+                    <td style={{ fontSize: 11 }}>{entry.timestamp}</td>
+                    <td>{entry.peer_name || "—"}</td>
+                    <td style={{ fontFamily: "monospace", fontSize: 11 }}>{entry.peer_ip}</td>
+                    <td>{entry.pushed}</td>
+                    <td>{entry.pulled}</td>
+                    <td>
+                      <span style={{
+                        padding: "2px 8px", borderRadius: 4, fontSize: 11,
+                        background: entry.direction === "auto" ? "#dbeafe" : entry.direction === "manual" ? "#fef3c7" : "#f3e8ff",
+                        color: entry.direction === "auto" ? "#1e40af" : entry.direction === "manual" ? "#92400e" : "#6b21a8",
+                      }}>
+                        {entry.direction === "auto" ? "تلقائي" : entry.direction === "manual" ? "يدوي" : "استقبال"}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ color: entry.success ? "#10b981" : "#ef4444", fontWeight: 600 }}>
+                        {entry.success ? "✓" : "✕"}
+                      </span>
+                      {entry.error && <span style={{ fontSize: 10, color: "#ef4444", marginRight: 4 }}>({entry.error})</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       <div className="print-section" style={{ marginTop: 16 }}>
         <h3>💡 {t("lanHowItWorks")}</h3>
         <div style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.8 }}>
@@ -402,6 +461,8 @@ export function SettingsPage() {
     attendance_url: "",
   });
   const [busy, setBusy] = useState(false);
+  // const [importing, setImporting] = useState(false);
+  // const [importResult, setImportResult] = useState<{ products: number; customers: number; employees: number; warehouses: number; categories: number } | null>(null);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [whName, setWhName] = useState("");
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -533,9 +594,13 @@ export function SettingsPage() {
         attendance: { enabled: t("attendanceEnabled"), disabled: t("attendanceDisabled") },
         dark_mode: { enabled: t("darkModeEnabled"), disabled: t("darkModeDisabled") },
         language: { enabled: t("languageEnabled"), disabled: t("languageDisabled") },
+        sync: { enabled: t("syncEnabled"), disabled: t("syncDisabled") },
+        branches: { enabled: t("branchesEnabled"), disabled: t("branchesDisabled") },
+        attendance_url: { enabled: t("attendanceUrlEnabled"), disabled: t("attendanceUrlDisabled") },
         notifications: { enabled: t("notificationsEnabled"), disabled: t("notificationsDisabled") },
         cash_register: { enabled: t("cashRegisterEnabled"), disabled: t("cashRegisterDisabled") },
         customer_turns: { enabled: t("customerTurnsEnabled"), disabled: t("customerTurnsDisabled") },
+        lan_sync: { enabled: t("lanSyncEnabled"), disabled: t("lanSyncDisabled") },
       };
       notify(next[key] ? labelMap[key].enabled : labelMap[key].disabled);
     } catch (err) {
@@ -1357,6 +1422,42 @@ export function SettingsPage() {
                 💾 {t("saveChanges")}
               </button>
             </div>
+            {/* TODO: Re-enable after Kayan Soft import is fully tested and ready for production
+            <hr style={{ margin: "20px 0", borderTop: "1px solid #e2e8f0" }} />
+            <h3 style={{ margin: "0 0 12px", fontSize: 16 }}>📥 استيراد من برنامج كيان سوفت</h3>
+            <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 12 }}>
+              استيراد البيانات من نسخة احتياطية لبرنامج كيان سوفت (.rgd)
+            </p>
+            {importing && (
+              <div style={{ padding: "12px 16px", borderRadius: 10, background: "#fffbeb", border: "1px solid #fde68a", marginBottom: 12 }}>
+                <span style={{ fontWeight: 600, fontSize: 13 }}>⏳ جاري الاستيراد...</span>
+              </div>
+            )}
+            {importResult && (
+              <div style={{ padding: "12px 16px", borderRadius: 10, background: "#ecfdf5", border: "1px solid #86efac", marginBottom: 12, fontSize: 13 }}>
+                <div style={{ fontWeight: 700, color: "#065f46", marginBottom: 4 }}>✅ تم الاستيراد بنجاح</div>
+                <div>منتجات: {importResult.products} | عملاء: {importResult.customers} | موظفين: {importResult.employees} | مخازن: {importResult.warehouses} | مجموعات: {importResult.categories}</div>
+              </div>
+            )}
+            <button className="btn primary" disabled={importing} onClick={async () => {
+              try {
+                const selected = await open({ multiple: false, filters: [{ name: "Kayan Soft Backup", extensions: ["rgd"] }] });
+                if (!selected) return;
+                if (!window.confirm("سيتم استيراد البيانات من كيان سوفت. قد يستغرق هذا بضع دقائق. متابعة؟")) return;
+                setImporting(true);
+                setImportResult(null);
+                const result = await api.importKayanSoft(selected as string);
+                setImportResult(result);
+                notify("تم الاستيراد بنجاح");
+              } catch (err) {
+                notify(String(err), "error");
+              } finally {
+                setImporting(false);
+              }
+            }}>
+              📥 استيراد من كيان سوفت
+            </button>
+            */}
           </>
         );
 
@@ -1533,6 +1634,7 @@ export function SettingsPage() {
         {SECTIONS.filter((s) => {
           if (s.key === "sync" && !features.sync) return false;
           if (s.key === "branches" && !features.branches) return false;
+          if (s.key === "lan_sync" && !features.lan_sync) return false;
           if (s.key === "attendance_url" && !features.attendance_url) return false;
           return true;
         }).map((s) => (
