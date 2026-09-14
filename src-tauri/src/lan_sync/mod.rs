@@ -34,6 +34,7 @@ pub struct LanSyncConfig {
     pub port: u16,
     pub auto_sync: bool,
     pub sync_interval_secs: u64,
+    #[serde(default)]
     pub sync_token: String,
     pub known_devices: Vec<LanDevice>,
 }
