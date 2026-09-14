@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { api } from "../api";
-import { getPrintSettings, getCompanyLogo, printSale } from "../utils/directPrint";
+import { getPrintSettings, getCompanyLogo } from "../utils/directPrint";
 import { PrintSaleReturn } from "../components/PrintSaleReturn";
 import PrintPreview from "../components/PrintPreview";
 import { ProductCard } from "../components/ProductCard";
@@ -485,13 +485,7 @@ export function Pos({ onBack }: { onBack: () => void }) {
           : `${t("invoiceUpdated")} ${saved.invoice_no}`,
       );
       await afterSave();
-      try {
-        await printSale(saved, settings!);
-        notify(`${t("invoiceRegistered")} ${saved.invoice_no} ✓`, "success");
-      } catch (printErr) {
-        console.error("Print error:", printErr);
-        notify(`${t("invoiceRegistered")} ${saved.invoice_no} - طباعة: ${String(printErr)}`, "success");
-      }
+      showPreview(saved);
     } catch (err) {
       notify(String(err), "error");
     }

@@ -158,8 +158,8 @@ fn write_message(stream: &mut TcpStream, msg: &SyncMessage) -> Result<(), String
 fn get_table_records(conn: &Connection, table: &str, since: &Option<String>) -> Result<Vec<serde_json::Value>, String> {
     let sql = if let Some(ref ts) = since {
         format!(
-            "SELECT * FROM {} WHERE (updated_at > '{}' OR updated_at IS NULL OR sync_status IS NULL) AND deleted_at IS NULL LIMIT 2000",
-            table, ts
+            "SELECT * FROM {} WHERE (updated_at > '{}' OR updated_at IS NULL OR sync_status IS NULL OR (deleted_at IS NOT NULL AND deleted_at > '{}')) LIMIT 2000",
+            table, ts, ts
         )
     } else {
         format!("SELECT * FROM {} WHERE deleted_at IS NULL LIMIT 2000", table)

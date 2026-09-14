@@ -49,6 +49,14 @@ pub fn add_sync_columns(conn: &Connection) -> Result<(), String> {
             value TEXT
         );
         
+        CREATE TABLE IF NOT EXISTS synced_deletions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            table_name TEXT NOT NULL,
+            record_id INTEGER NOT NULL,
+            deleted_at TEXT NOT NULL,
+            synced INTEGER NOT NULL DEFAULT 0
+        );
+        
         INSERT OR IGNORE INTO sync_meta (key, value) VALUES ('last_sync', NULL);
         INSERT OR IGNORE INTO sync_meta (key, value) VALUES ('device_id', hex(randomblob(16)));
         "
@@ -172,6 +180,36 @@ pub fn apply_remote_changes(
         let id = record.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
         
         if id == 0 {
+            continue;
+        }
+        
+        // Check if this record is a deletion (has deleted_at set)
+        let is_deleted = record.get("deleted_at")
+            .and_then(|v| v.as_str())
+            .map(|s| !s.is_empty())
+            .unwrap_or(false);
+        
+        if is_deleted {
+            // Apply deletion: soft-delete locally if record exists
+            let exists: bool = conn
+                .query_row(
+                    &format!("SELECT COUNT(*) FROM {} WHERE id = ? AND (deleted_at IS NULL OR deleted_at = '')", table),
+                    [id],
+                    |row| row.get::<_, i64>(0),
+                )
+                .map(|count| count > 0)
+                .unwrap_or(false);
+            
+            if exists {
+                let deleted_at = record.get("deleted_at")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let sql = format!(
+                    "UPDATE {} SET deleted_at = ?, sync_status = 'synced', device_id = NULL WHERE id = ?",
+                    table
+                );
+                conn.execute(&sql, rusqlite::params![deleted_at, id]).map_err(|e| e.to_string())?;
+            }
             continue;
         }
         

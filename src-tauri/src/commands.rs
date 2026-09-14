@@ -1024,6 +1024,7 @@ pub fn list_customer_payments(
         FROM customer_payments p
         JOIN customers c ON c.id = p.customer_id
         WHERE (?1 IS NULL OR p.customer_id = ?1)
+        AND (p.deleted_at IS NULL OR p.deleted_at = '')
         ORDER BY p.id DESC";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
@@ -1076,8 +1077,12 @@ pub fn create_customer_payment(
 #[tauri::command]
 pub fn delete_customer_payment(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = get_db(&state)?;
-    conn.execute("DELETE FROM customer_payments WHERE id = ?1", params![id])
-        .map_err(|e| e.to_string())?;
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    conn.execute(
+        "UPDATE customer_payments SET deleted_at = ?1, updated_at = ?1, sync_status = 'pending' WHERE id = ?2",
+        params![now, id],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -1097,6 +1102,7 @@ pub fn list_sales(
         LEFT JOIN warehouses w ON w.id = s.warehouse_id
         LEFT JOIN employees e ON e.id = s.employee_id
         WHERE (?1 IS NULL OR s.invoice_no LIKE '%' || ?1 || '%' OR s.customer_name LIKE '%' || ?1 || '%')
+        AND (s.deleted_at IS NULL OR s.deleted_at = '')
         ORDER BY s.id DESC
         LIMIT 500";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
@@ -1722,8 +1728,16 @@ pub fn delete_sale(state: State<AppState>, id: i64) -> Result<(), String> {
         )
         .map_err(|e| e.to_string())?;
     }
-    tx.execute("DELETE FROM sales WHERE id = ?1", params![id])
+    // Hard-delete child sale_items (no need to sync these individually)
+    tx.execute("DELETE FROM sale_items WHERE sale_id = ?1", params![id])
         .map_err(|e| e.to_string())?;
+    // Soft-delete the sale for sync propagation
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    tx.execute(
+        "UPDATE sales SET deleted_at = ?1, updated_at = ?1, sync_status = 'pending' WHERE id = ?2",
+        params![now, id],
+    )
+    .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
     add_system_audit_log(&conn, "delete", "sale", Some(id), None, Some("تم حذف فاتورة بيع"));
     Ok(())
@@ -1738,7 +1752,7 @@ fn get_sale_full(conn: &Connection, id: i64) -> Result<Sale, String> {
              FROM sales s
              LEFT JOIN warehouses w ON w.id = s.warehouse_id
              LEFT JOIN employees e ON e.id = s.employee_id
-             WHERE s.id = ?1",
+             WHERE s.id = ?1 AND (s.deleted_at IS NULL OR s.deleted_at = '')",
             params![id],
             |r| {
                 Ok(Sale {
@@ -2025,6 +2039,7 @@ pub fn list_purchases(
         LEFT JOIN warehouses w ON w.id = p.warehouse_id
         LEFT JOIN employees e ON e.id = p.employee_id
         WHERE (?1 IS NULL OR s.name LIKE '%' || ?1 || '%' OR p.notes LIKE '%' || ?1 || '%')
+        AND (p.deleted_at IS NULL OR p.deleted_at = '')
         ORDER BY p.id DESC
         LIMIT 500";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
@@ -2180,8 +2195,16 @@ pub fn delete_purchase(state: State<AppState>, id: i64) -> Result<(), String> {
         )
         .map_err(|e| e.to_string())?;
     }
-    tx.execute("DELETE FROM purchases WHERE id = ?1", params![id])
+    // Hard-delete child purchase_items
+    tx.execute("DELETE FROM purchase_items WHERE purchase_id = ?1", params![id])
         .map_err(|e| e.to_string())?;
+    // Soft-delete the purchase for sync propagation
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    tx.execute(
+        "UPDATE purchases SET deleted_at = ?1, updated_at = ?1, sync_status = 'pending' WHERE id = ?2",
+        params![now, id],
+    )
+    .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
     add_system_audit_log(&conn, "delete", "purchase", Some(id), None, Some("تم حذف فاتورة شراء"));
     Ok(())
@@ -2282,7 +2305,7 @@ fn get_purchase_full(conn: &Connection, id: i64) -> Result<Purchase, String> {
              LEFT JOIN suppliers s ON s.id = p.supplier_id
              LEFT JOIN warehouses w ON w.id = p.warehouse_id
              LEFT JOIN employees e ON e.id = p.employee_id
-             WHERE p.id = ?1",
+             WHERE p.id = ?1 AND (p.deleted_at IS NULL OR p.deleted_at = '')",
             params![id],
             |r| {
                 Ok(Purchase {
@@ -2925,6 +2948,7 @@ pub fn list_expenses(
         SELECT id, date, description, amount, category
         FROM expenses
         WHERE (?1 IS NULL OR description LIKE '%' || ?1 || '%' OR category LIKE '%' || ?1 || '%')
+        AND (deleted_at IS NULL OR deleted_at = '')
         ORDER BY id DESC
         LIMIT 500";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
@@ -2972,8 +2996,12 @@ pub fn create_expense(state: State<AppState>, input: NewExpense) -> Result<Expen
 #[tauri::command]
 pub fn delete_expense(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = get_db(&state)?;
-    conn.execute("DELETE FROM expenses WHERE id = ?1", params![id])
-        .map_err(|e| e.to_string())?;
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    conn.execute(
+        "UPDATE expenses SET deleted_at = ?1, updated_at = ?1, sync_status = 'pending' WHERE id = ?2",
+        params![now, id],
+    )
+    .map_err(|e| e.to_string())?;
     add_system_audit_log(&conn, "delete", "expense", Some(id), None, Some("تم حذف المصروف"));
     Ok(())
 }
@@ -3112,6 +3140,7 @@ pub fn list_salaries(
         FROM salaries s
         JOIN employees e ON e.id = s.employee_id
         WHERE (?1 IS NULL OR s.employee_id = ?1)
+        AND (s.deleted_at IS NULL OR s.deleted_at = '')
         ORDER BY s.id DESC";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
@@ -3164,8 +3193,12 @@ pub fn create_salary(
 #[tauri::command]
 pub fn delete_salary(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = get_db(&state)?;
-    conn.execute("DELETE FROM salaries WHERE id = ?1", params![id])
-        .map_err(|e| e.to_string())?;
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    conn.execute(
+        "UPDATE salaries SET deleted_at = ?1, updated_at = ?1, sync_status = 'pending' WHERE id = ?2",
+        params![now, id],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -3183,6 +3216,7 @@ pub fn list_vacations(
         FROM vacations v
         JOIN employees e ON e.id = v.employee_id
         WHERE (?1 IS NULL OR v.employee_id = ?1)
+        AND (v.deleted_at IS NULL OR v.deleted_at = '')
         ORDER BY v.id DESC";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
@@ -3303,8 +3337,12 @@ fn get_vacation(conn: &Connection, id: i64) -> Result<Vacation, String> {
 #[tauri::command]
 pub fn delete_vacation(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = get_db(&state)?;
-    conn.execute("DELETE FROM vacations WHERE id = ?1", params![id])
-        .map_err(|e| e.to_string())?;
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    conn.execute(
+        "UPDATE vacations SET deleted_at = ?1, updated_at = ?1, sync_status = 'pending' WHERE id = ?2",
+        params![now, id],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -4401,6 +4439,7 @@ pub fn list_stock_counts(state: State<AppState>) -> Result<Vec<StockCount>, Stri
                     sc.total_deficit, sc.notes,
                     (SELECT COUNT(*) FROM stock_count_items sci WHERE sci.count_id = sc.id)
              FROM stock_counts sc
+             WHERE (sc.deleted_at IS NULL OR sc.deleted_at = '')
              ORDER BY sc.id DESC",
         )
         .map_err(|e| e.to_string())?;
@@ -4635,8 +4674,15 @@ pub fn delete_stock_count(state: State<AppState>, id: i64) -> Result<(), String>
     if status != "draft" {
         return Err("لا يمكن حذف فاتورة جرد مطبّقة".into());
     }
-    conn.execute("DELETE FROM stock_counts WHERE id = ?1", params![id])
-        .map_err(|e| e.to_string())?;
+    // Hard-delete child items
+    conn.execute("DELETE FROM stock_count_items WHERE stock_count_id = ?1", params![id]).map_err(|e| e.to_string())?;
+    // Soft-delete for sync propagation
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    conn.execute(
+        "UPDATE stock_counts SET deleted_at = ?1, updated_at = ?1, sync_status = 'pending' WHERE id = ?2",
+        params![now, id],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
