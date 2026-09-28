@@ -382,8 +382,14 @@ export function Sales({
       notify(`تم تسجيل الفاتورة ${sale.invoice_no}`);
       setShowForm(false);
       load();
-      setSettings(await api.getSettings());
-      setViewingSale(sale);
+      const freshSettings = await api.getSettings();
+      setSettings(freshSettings);
+      setPrintPreview({
+        html: generateInvoiceHtml(sale, freshSettings),
+        title: sale.invoice_no,
+        sale,
+        paperSize: getPrintSettings().receiptPrinter,
+      });
     } catch (err) {
       notify(String(err), "error");
     }
